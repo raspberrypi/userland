@@ -1,0 +1,7 @@
+#/bin/sh
+mkdir -p build/arm-linux/release/
+pushd build/arm-linux/release/
+cmake -DCMAKE_TOOLCHAIN_FILE=../../../makefiles/cmake/toolchains/arm-linux-gnueabihf.cmake -DCMAKE_BUILD_TYPE=Release ../../..
+make -j 6
+popd
+

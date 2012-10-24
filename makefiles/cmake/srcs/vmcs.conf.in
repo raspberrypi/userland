@@ -1,0 +1,5 @@
+
+# dropped into ld.so.conf.d to setup shared library path
+${CMAKE_INSTALL_PREFIX}/lib
+
+
