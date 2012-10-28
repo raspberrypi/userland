@@ -1702,7 +1702,7 @@ static void set_color_data(EGL_SURFACE_ID_T surface_id, KHRN_IMAGE_WRAP_T *image
    int offset = 0;
    int height = image->height;
 
-   if (khrn_image_is_tformat(image->format))
+   if (khrn_image_is_brcm1(image->format))
       lines &= ~63;
 
    vcos_assert(lines > 0);
@@ -1782,7 +1782,7 @@ static void get_color_data(EGL_SURFACE_ID_T surface_id, KHRN_IMAGE_WRAP_T *image
    int offset = 0;
    int height = image->height;
 
-   if (khrn_image_is_tformat(image->format))
+   if (khrn_image_is_brcm1(image->format))
       lines &= ~63;
 
    vcos_assert(lines > 0);

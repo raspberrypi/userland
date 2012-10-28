@@ -625,7 +625,7 @@ static void set_egl_image_color_data(EGLImageKHR egl_image, KHRN_IMAGE_WRAP_T *i
    int offset = 0;
    int height = image->height;
 
-   if (khrn_image_is_tformat(image->format))
+   if (khrn_image_is_brcm1(image->format))
       lines &= ~63;
 
    assert(lines > 0);
