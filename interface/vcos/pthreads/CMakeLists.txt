@@ -42,5 +42,5 @@ else ()
 endif ()
 
 
-install(FILES ${HEADERS} DESTINATION include)
+#install(FILES ${HEADERS} DESTINATION include)
 install(TARGETS vcos DESTINATION lib)

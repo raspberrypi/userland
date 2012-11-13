@@ -1,0 +1,12 @@
+
+To build the test apps, first build the libs:
+make -C libs/ilclient
+make -C libs/vgfont
+
+then by entering each test app directory and run make. E.g.
+  cd hello_world
+  make
+  ./hello_world.bin
+
+Running ./rebuild.sh will rebuild the all libs and and apps.
+

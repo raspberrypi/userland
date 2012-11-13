@@ -50,6 +50,7 @@ typedef enum
    DISPLAY_3D_INTERLEAVED,       // For autosteroscopic displays
    DISPLAY_3D_SBS_FULL_AUTO,     // Side-By-Side, Full Width (also used by some autostereoscopic displays)
    DISPLAY_3D_SBS_HALF_HORIZ,    // Side-By-Side, Half Width, Horizontal Subsampling (see HDMI spec)
+   DISPLAY_3D_TB_HALF,           // Top-bottom 3D
    DISPLAY_3D_FORMAT_MAX
 } DISPLAY_3D_FORMAT_T;
 
@@ -94,6 +95,12 @@ typedef struct
    uint32_t line_rate;
    // Format required for image data for 3D displays
    DISPLAY_3D_FORMAT_T format_3d;
+   // If display requires PV1 (e.g. DSI1), special config is required in HVS
+   uint32_t use_pixelvalve_1;
+   // Set for DSI displays which use video mode.
+   uint32_t dsi_video_mode;
+   // Select HVS channel (usually 0).
+   uint32_t hvs_channel;
 } DISPLAY_INFO_T;
 
 #endif /* __VC_INCLUDE_IMAGE_TYPES_H__ */

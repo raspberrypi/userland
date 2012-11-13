@@ -50,9 +50,9 @@ typedef struct vc_metadata_item_s {
 typedef struct vc_metadata_header_s {
    int size;
 #ifdef VCMODS_LCC
-   char readonly;
+   unsigned char readonly;
 #else
-   char readonly:1;
+   unsigned char readonly:1;
 #endif
    int offset_next;
    RTOS_LATCH_T latch;

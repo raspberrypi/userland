@@ -86,9 +86,16 @@ typedef enum {
    METADATA_FLAT_AREA_A      = ( 'F'<<24)+('L'<<16)+('T'<<8)+('A'), // 'FLTA' : FLAT_AREA_METADATA_T defined in /middleware/camplus/sw/perceptual/flatarea.h
    METADATA_STILL_AREA_A     = ( 'S'<<24)+('T'<<16)+('L'<<8)+('A'), // 'STLA' : FLAT_AREA_METADATA_T defined in /middleware/camplus/sw/perceptual/stillarea.h
    METADATA_DDITHER_A        = ( 'D'<<24)+('D'<<16)+('T'<<8)+('A'), // 'DDTA' : DDITHER_METADATA_T defined in /middleware/camplus/sw/perceptual/...
+   
+#ifdef CONFIG_VC_IMAGE_LINKED_MULTICHANN
+   METADATA_LINKED_MULTICHANN = ( 'I'<<24)+('L'<<16)+('M'<<8)+('C'), // 'ILMC' : VC_IMAGE_LINKED_MULTICHANN_T defined in /helpers/vc_image/vc_image.h
+#endif
 
    METADATA_HDR              = ( 0 <<24)+( 'H'<<16)+('D'<<8)+('R'), // 'HDR' : HDR_METADATA_T defined in /middleware/camplus/sw/hdr/hdr_metadata.h
-
+   METADATA_FOCUS_STATS_PREPROC   = ('F'<<24)+('S'<<16)+('P'<<8)+('M'), // 'FSPM' : FOCUS_STATS_PREPROC_METADATA defined in /middleware/camplus/sw/hdr/focus_stats_preproc/focus_stats_preproc.h
+   METADATA_ACUTE_AWB_LOG        = ('A'<<24)+('E'<<16)+('L'<<8)+('C'), // 'AELC' : ISP_ACUTE_AWB_LOG
+   METADATA_DF               = ( 0 <<24)+(   0<<16)+('D'<<8)+('F'), // '\x00\x00DF' : DF_METADATA_T defined in /middleware/camplus/sw/df/df_metadata.h
+   METADATA_MAGIC_MEASURE    = ('S'<<24)+('S'<<16)+('M'<<8) + ('M'), // 'SSMM' : A statistic from the ISP used to determine the JPEG quality setting for a certain customer.
    METADATA_UNKNOWN        = ('U'<<24)+('N'<<16)+('K'<<8)+('N') // 'UNKN'
 
 } METADATA_CODE_T;

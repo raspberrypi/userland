@@ -65,4 +65,4 @@ if (WIN32)
    configure_file (build_all.bat.in build_all.bat @ONLY)
 endif ()
 
-install (FILES ${HEADERS} DESTINATION include/interface/vcos)
+#install (FILES ${HEADERS} DESTINATION include/interface/vcos)
