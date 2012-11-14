@@ -91,6 +91,10 @@ extern "C" {
   */
 VCOSPRE_ int VCOSPOST_ vcos_have_rtos(void);
 
+/** Return thread_current_key needed by libEGL
+  */
+VCOSPRE_ VCOS_TLS_KEY_T VCOSPOST_ vcos_get_thread_current_key();
+
 /** Create a thread. It must be cleaned up by calling vcos_thread_join().
   *
   * @param thread   Filled in on return with thread

@@ -115,6 +115,7 @@ void *platform_tls_get(PLATFORM_TLS_T tls)
 
 void *platform_tls_get_check(PLATFORM_TLS_T tls)
 {
+   if (!process_attached) tls = vcos_get_thread_current_key();
    return vcos_tls_get(tls);
 }
 
