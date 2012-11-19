@@ -24,14 +24,12 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-
 #define VCOS_VERIFY_BKPTS 1
 
 #define VCOS_LOG_CATEGORY (&log_cat)
 
 #include <stdlib.h>
-
-#include "interface/khronos/common/khrn_client_rpc.h"
+#include <stddef.h>
 
 #include "interface/khronos/include/WF/wfc.h"
 
@@ -57,8 +55,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //!@name
 //! Global mutex
 //!@{
-#define WFC_LOCK()      (vcos_mutex_lock(&wfc_client_state.mutex))
-#define WFC_UNLOCK()    (vcos_mutex_unlock(&wfc_client_state.mutex))
+#define WFC_LOCK()      do {vcos_mutex_lock(&wfc_client_state.mutex);} while (0)
+#define WFC_UNLOCK()    do {vcos_mutex_unlock(&wfc_client_state.mutex);} while (0)
 //!@}
 
 //!@name
@@ -90,6 +88,12 @@ typedef struct
    WFC_LINK_T contexts; //!< Contexts belonging to this device.
 } WFC_DEVICE_T;
 
+#define DEVICE_POOL_COUNT  4
+#define DEVICE_POOL_MAX_SUBPOOLS 4
+
+//! WFCDevice handle modifier
+#define WFC_DEVICE_MOD  0xD0000000
+
 //! WF-C context
 typedef struct
 {
@@ -107,11 +111,15 @@ typedef struct
    WFC_CONTEXT_STATIC_ATTRIB_T static_attributes;  //!< Attributes associated with the context which are fixed on creation.
    WFC_CONTEXT_DYNAMIC_ATTRIB_T dynamic_attributes;//!< Attributes associated with the context which may change.
 
-   //! Asynchronous (KHAN) semaphore for waiting for compositor to take scene.
-   PLATFORM_SEMAPHORE_T wait_sem;
-
+   uint32_t commit_count;           //!< Count of commits made
    WFC_SCENE_T committed_scene;     //!< Last committed scene
 } WFC_CONTEXT_T;
+
+#define CONTEXT_POOL_COUNT 4
+#define CONTEXT_POOL_MAX_SUBPOOLS 4
+
+//! WFCContext handle modifier
+#define WFC_CONTEXT_MOD 0xC0000000
 
 //! WF-C image provider (source or mask)
 typedef struct
@@ -132,6 +140,12 @@ typedef struct
    bool destroy_pending;
 } WFC_SOURCE_OR_MASK_T;
 
+#define SOURCE_POOL_COUNT 16
+#define SOURCE_POOL_MAX_SUBPOOLS 8
+
+//! WFCSource handle modifier
+#define WFC_SOURCE_MOD  0x50000000
+
 //! WF-C element
 typedef struct
 {
@@ -146,23 +160,63 @@ typedef struct
    WFC_ELEMENT_ATTRIB_T attributes;    //!< Element attributes.
 } WFC_ELEMENT_T;
 
+#define ELEMENT_POOL_COUNT 16
+#define ELEMENT_POOL_MAX_SUBPOOLS 8
+
+//! WFCElement handle modifier
+#define WFC_ELEMENT_MOD 0xE0000000
+
 //! Global state
 typedef struct
 {
    bool is_initialised; //!< Set the first time wfcCreateDevice() is called.
    VCOS_MUTEX_T mutex;  //!< Global mutex.
-   VCOS_BLOCKPOOL_T source_pool;
+   VCOS_UNSIGNED handle_mod;           //!< Process specific handle modifier
+   VCOS_BLOCKPOOL_T device_pool;       //!< Devices allocated by this process
+   VCOS_BLOCKPOOL_T context_pool;      //!< Contexts allocated by this process
+   VCOS_BLOCKPOOL_T element_pool;      //!< Elements allocated by this process
+   VCOS_BLOCKPOOL_T source_pool;       //!< Sources allocated by this process
 } WFC_CLIENT_STATE_T;
+
+//! Blockpool information for initialisation
+typedef struct WFC_BLOCKPOOL_INFO_tag
+{
+   VCOS_BLOCKPOOL_T *pool;
+   VCOS_UNSIGNED size;
+   VCOS_UNSIGNED count;
+   VCOS_UNSIGNED max_subpools;
+   const char *name;
+} WFC_BLOCKPOOL_INFO_T;
 
 //==============================================================================
 
+static VCOS_ONCE_T wfc_client_once;          //!< For initialisation
 static WFC_CLIENT_STATE_T wfc_client_state;  //!< Global state
+
+//! Initialisation data for the client blockpools
+static const WFC_BLOCKPOOL_INFO_T wfc_client_blockpool_info[] = {
+   { &wfc_client_state.device_pool,  sizeof(WFC_DEVICE_T),         DEVICE_POOL_COUNT,  DEVICE_POOL_MAX_SUBPOOLS,  "WFC device pool"  },
+   { &wfc_client_state.context_pool, sizeof(WFC_CONTEXT_T),        CONTEXT_POOL_COUNT, CONTEXT_POOL_MAX_SUBPOOLS, "WFC context pool" },
+   { &wfc_client_state.element_pool, sizeof(WFC_ELEMENT_T),        ELEMENT_POOL_COUNT, ELEMENT_POOL_MAX_SUBPOOLS, "WFC element pool" },
+   { &wfc_client_state.source_pool,  sizeof(WFC_SOURCE_OR_MASK_T), SOURCE_POOL_COUNT,  SOURCE_POOL_MAX_SUBPOOLS,  "WFC source pool"  },
+};
 
 static VCOS_LOG_CAT_T log_cat = VCOS_LOG_INIT("wfc_client_func", WFC_LOG_LEVEL);
 
 //==============================================================================
 //!@name Static functions
 //!@{
+
+static void wfc_initialise_client_state(void);
+static WFC_DEVICE_T *wfc_device_from_handle(WFCDevice dev);
+static WFCDevice wfc_device_to_handle(WFC_DEVICE_T *device_ptr);
+static WFC_CONTEXT_T *wfc_context_from_handle(WFCContext ctx);
+static WFCContext wfc_context_to_handle(WFC_CONTEXT_T *context_ptr);
+static WFC_ELEMENT_T *wfc_element_from_handle(WFCElement element);
+static WFCElement wfc_element_to_handle(WFC_ELEMENT_T *element_ptr);
+static WFCElement wfc_element_link_to_handle(WFC_LINK_T *element_link_ptr);
+static WFC_SOURCE_OR_MASK_T *wfc_source_or_mask_from_handle(WFCHandle source_or_mask);
+static WFCHandle wfc_source_or_mask_to_handle(WFC_SOURCE_OR_MASK_T *source_or_mask_ptr);
 
 static WFC_CONTEXT_T *wfc_context_create
    (WFC_DEVICE_T *device_ptr, WFCContextType context_type,
@@ -179,7 +233,7 @@ static void wfc_element_destroy(WFC_ELEMENT_T *element_ptr, void *unused);
 
 static void wfc_commit_iterator(WFC_ELEMENT_T *element_ptr, WFC_SCENE_T *scene);
 
-static void wfc_set_error(WFC_DEVICE_T *device, WFCErrorCode error);
+static void wfc_set_error_with_location(WFC_DEVICE_T *device, WFCErrorCode error, const char *func, int line);
 
 static bool wfc_check_no_attribs(const WFCint *attribList);
 static bool wfc_is_rotation(WFCint value);
@@ -196,6 +250,12 @@ static void wfc_link_iterate(WFC_LINK_T *link, WFC_LINK_CALLBACK_T func, void *a
 
 static void wfc_source_or_mask_destroy_actual
    (WFC_SOURCE_OR_MASK_T *source_or_mask_ptr, void *unused);
+
+static void wfc_client_scene_taken_cb(void *cb_data);
+static void wfc_client_wait_for_scene_taken(VCOS_SEMAPHORE_T *wait_sem, WFCContext ctx,
+      const char *calling_function);
+
+#define wfc_set_error(D, E) wfc_set_error_with_location(D, E, __FILE__, __LINE__)
 
 //!@} // (Static functions)
 
@@ -250,44 +310,30 @@ WFC_API_CALL WFCDevice WFC_APIENTRY
 
    // This function will be called before anything else can be created, so is
    // a good place to initialise the state.
-   if(!wfc_client_state.is_initialised)
-   {
-      if (vcos_blockpool_create_on_heap(&wfc_client_state.source_pool,
-         8, sizeof(WFC_SOURCE_OR_MASK_T), VCOS_BLOCKPOOL_ALIGN_DEFAULT, 0,
-         "WFC source pool") != VCOS_SUCCESS)
-      {
-         return WFC_INVALID_HANDLE;
-      }
-      vcos_blockpool_extend(&wfc_client_state.source_pool, VCOS_BLOCKPOOL_MAX_SUBPOOLS-1, 8);
+   vcos_once(&wfc_client_once, wfc_initialise_client_state);
 
-      wfc_client_state.is_initialised = true;
-      vcos_mutex_create(&wfc_client_state.mutex, NULL);
-      CLIENT_GET_THREAD_STATE();
-
-      // Logging
-      vcos_log_set_level(&log_cat, WFC_LOG_LEVEL);
-      vcos_log_register("wfc_client_func", &log_cat);
-   } // if
+   if (!wfc_client_state.is_initialised)
+      return WFC_INVALID_HANDLE;
 
    WFC_LOCK();
 
    if ((deviceId == WFC_DEFAULT_DEVICE_ID || deviceId == WFC_OUR_DEVICE_ID)
       && wfc_check_no_attribs(attribList))
    {
-      WFC_DEVICE_T *device = khrn_platform_malloc(sizeof(WFC_DEVICE_T), "WFC_DEVICE_T");
+      WFC_DEVICE_T *device = vcos_blockpool_calloc(&wfc_client_state.device_pool);
 
       if(vcos_verify(device != NULL))
       {
          if (wfc_server_connect() != VCOS_SUCCESS)
          {
-            khrn_platform_free(device);
+            vcos_blockpool_free(device);
             vcos_log_error("%s: failed to connect to server", VCOS_FUNCTION);
          }
          else
          {
             device->error = WFC_ERROR_NONE;
             wfc_link_init_empty(&device->contexts);
-            result = (WFCDevice) device;
+            result = wfc_device_to_handle(device);
          }
       } // if
    } // if
@@ -306,10 +352,10 @@ WFC_API_CALL WFCErrorCode WFC_APIENTRY
 
    WFC_LOCK();
 
-   if(vcos_verify(dev != WFC_INVALID_HANDLE))
-   {
-      WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
 
+   if(vcos_verify(device_ptr != NULL))
+   {
       result = device_ptr->error;
       device_ptr->error = WFC_ERROR_NONE;
    } // if
@@ -326,14 +372,19 @@ WFC_API_CALL WFCErrorCode WFC_APIENTRY
 WFC_API_CALL WFCint WFC_APIENTRY
     wfcGetDeviceAttribi(WFCDevice dev, WFCDeviceAttrib attrib) WFC_APIEXIT
 {
-   // Behaviour is unspecified if dev is null, so do something sensible.
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return 0;}
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
-   WFCint result = 0;
-
    WFC_LOCK();
+
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      // Behaviour is unspecified if dev is null, so do something sensible.
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return 0;
+   }
+
+   WFCint result = 0;
 
    switch (attrib)
    {
@@ -361,15 +412,15 @@ WFC_API_CALL WFCErrorCode WFC_APIENTRY
 
    WFC_LOCK();
 
-   if(vcos_verify(dev != WFC_INVALID_HANDLE))
-   {
-      WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
 
+   if(vcos_verify(device_ptr != NULL))
+   {
       // Destroy all of the contexts associated with the device. This will in turn
       // destroy all of the sources, masks and elements associated with each context.
       wfc_link_iterate(&device_ptr->contexts, (WFC_LINK_CALLBACK_T) wfc_context_destroy, NULL);
 
-      khrn_platform_free(device_ptr);
+      vcos_blockpool_free(device_ptr);
 
       wfc_server_disconnect();
 
@@ -391,14 +442,18 @@ WFC_API_CALL WFCContext WFC_APIENTRY
         WFCint screenNumber,
         const WFCint *attribList) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return WFC_INVALID_HANDLE;}
+   WFC_LOCK();
 
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return WFC_INVALID_HANDLE;
+   }
 
    WFCContext context = WFC_INVALID_HANDLE;
-
-   WFC_LOCK();
 
    if (screenNumber < 0 || screenNumber >= WFC_ID_MAX_SCREENS)
       {wfc_set_error(device_ptr, WFC_ERROR_UNSUPPORTED);}
@@ -419,7 +474,7 @@ WFC_API_CALL WFCContext WFC_APIENTRY
       {
          wfc_link_attach(&context_ptr->link, &device_ptr->contexts);
 
-         context = (WFCContext) context_ptr;
+         context = wfc_context_to_handle(context_ptr);
       } // if
       else
          {wfc_set_error(device_ptr, error);}
@@ -437,14 +492,18 @@ WFC_API_CALL WFCContext WFC_APIENTRY
         WFCNativeStreamType stream,
         const WFCint *attribList) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return WFC_INVALID_HANDLE;}
+   WFC_LOCK();
 
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return WFC_INVALID_HANDLE;
+   }
 
    WFCContext context = WFC_INVALID_HANDLE;
-
-   WFC_LOCK();
 
    if(stream == WFC_INVALID_HANDLE)
       {wfc_set_error(device_ptr, WFC_ERROR_ILLEGAL_ARGUMENT);}
@@ -467,7 +526,7 @@ WFC_API_CALL WFCContext WFC_APIENTRY
       {
          wfc_link_attach(&context_ptr->link, &device_ptr->contexts);
 
-         context = (WFCContext) context_ptr;
+         context = wfc_context_to_handle(context_ptr);
 
          wfc_stream_register_off_screen(stream, true);
       } // if
@@ -482,68 +541,23 @@ WFC_API_CALL WFCContext WFC_APIENTRY
 
 //------------------------------------------------------------------------------
 
-/** Called when a scene for composition has been taken
- *
- * @param cb_data Callback data
- */
-static void wfc_client_scene_taken_cb(void *cb_data)
-{
-   VCOS_SEMAPHORE_T *wait_sem = (VCOS_SEMAPHORE_T *)cb_data;
-
-   vcos_assert(wait_sem != NULL);
-   vcos_semaphore_post(wait_sem);
-}
-
-//------------------------------------------------------------------------------
-
-/** Wait for the scene taken callback to have been called. Deletes the semaphore
- * and releases the VideoCore keep alive.
- *
- * @param wait_sem The wait semaphore.
- * @param ctx The handle for the context receiving the scene, used in logging.
- * @param calling_function The calling function name, used in logging.
- */
-static void wfc_client_wait_for_scene_taken(VCOS_SEMAPHORE_T *wait_sem, WFCContext ctx,
-      const char *calling_function)
-{
-   VCOS_STATUS_T status;
-
-#if defined(VCOS_LOGGING_ENABLED)
-   uint64_t pid = vcos_process_id_current();
-
-   vcos_log_trace("%s: wait for compositor to take scene, context 0x%x pid 0x%x%08x",
-         calling_function, ctx, (uint32_t)(pid >> 32), (uint32_t)pid);
-#else
-   vcos_unused(ctx);
-   vcos_unused(calling_function);
-#endif
-
-   status = vcos_semaphore_wait(wait_sem);
-   vcos_assert(status == VCOS_SUCCESS);
-   vcos_unused(status);
-
-   vcos_semaphore_delete(wait_sem);
-   wfc_server_release_keep_alive();
-
-   vcos_log_trace("%s: wait completed", calling_function);
-}
-
-//------------------------------------------------------------------------------
-
 WFC_API_CALL void WFC_APIENTRY
     wfcCommit(WFCDevice dev, WFCContext ctx, WFCboolean wait) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return;}
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
-   WFC_CONTEXT_T *context_ptr = (WFC_CONTEXT_T *) ctx;
-   VCOS_STATUS_T status = VCOS_ENOSYS;
-   VCOS_SEMAPHORE_T wait_sem;
-
    WFC_LOCK();
 
-   vcos_log_trace("wfc_commit: dev 0x%X, ctx 0x%X", dev, ctx);
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_CONTEXT_T *context_ptr = wfc_context_from_handle(ctx);
+   VCOS_STATUS_T status = VCOS_ENOSYS;
+   VCOS_SEMAPHORE_T wait_sem;
+   WFCboolean wait_for_sem = WFC_FALSE;
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return;
+   }
 
    // Send data for all elements
    if(vcos_verify((context_ptr != NULL) && (context_ptr->device_ptr == device_ptr)))
@@ -554,25 +568,31 @@ WFC_API_CALL void WFC_APIENTRY
       // Store scene in committed_scene structure
       memcpy(&scene->context, &context_ptr->dynamic_attributes, sizeof(WFC_CONTEXT_DYNAMIC_ATTRIB_T));
       scene->element_count = 0;
+      scene->commit_count = context_ptr->commit_count++;
       wfc_link_iterate(&context_ptr->elements_in_scene,
          (WFC_LINK_CALLBACK_T) wfc_commit_iterator, scene);
 
+      vcos_log_info("%s: dev 0x%X, ctx 0x%X commit %u", VCOS_FUNCTION, dev, ctx, context_ptr->committed_scene.commit_count);
+
       if (context_ptr->active)
       {
-         context_ptr->committed_scene.wait = (uint32_t)wait;
+         uint32_t commit_flags = WFC_SERVER_COMMIT_COMPOSE;
 
          if (wait)
          {
+            commit_flags |= WFC_SERVER_COMMIT_WAIT;
+
             // Long running operation, so keep VC alive until it completes.
             wfc_server_use_keep_alive();
 
             status = vcos_semaphore_create(&wait_sem, "WFC commit", 0);
             vcos_assert(status == VCOS_SUCCESS);   // On platforms we care about.
+            wait_for_sem = WFC_TRUE;
 
             do
             {
-               status = wfc_server_compose_scene(ctx, &context_ptr->committed_scene,
-                     wfc_client_scene_taken_cb, &wait_sem);
+               status = wfc_server_commit_scene(ctx, &context_ptr->committed_scene,
+                     commit_flags, wfc_client_scene_taken_cb, &wait_sem);
 
                if (status == VCOS_EAGAIN)
                {
@@ -585,14 +605,15 @@ WFC_API_CALL void WFC_APIENTRY
 
             if (status != VCOS_SUCCESS)
             {
+               wait_for_sem = WFC_FALSE;
                wfc_server_release_keep_alive();
                vcos_semaphore_delete(&wait_sem);
             }
          }
          else
          {
-            status = wfc_server_compose_scene(ctx, &context_ptr->committed_scene,
-                  NULL, NULL);
+            status = wfc_server_commit_scene(ctx, &context_ptr->committed_scene,
+                  commit_flags, NULL, NULL);
          }
 
          if (status != VCOS_SUCCESS)
@@ -608,10 +629,12 @@ WFC_API_CALL void WFC_APIENTRY
    WFC_UNLOCK();
 
    // Wait for the scene to be taken outside the lock
-   if (wait && status == VCOS_SUCCESS)
+   if (wait_for_sem)
    {
       wfc_client_wait_for_scene_taken(&wait_sem, ctx, VCOS_FUNCTION);
    }
+
+   vcos_log_trace("%s: complete", VCOS_FUNCTION);
 } // wfcCommit()
 
 //------------------------------------------------------------------------------
@@ -620,15 +643,18 @@ WFC_API_CALL WFCint WFC_APIENTRY
     wfcGetContextAttribi(WFCDevice dev, WFCContext ctx,
         WFCContextAttrib attrib) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return 0;}
+   WFC_LOCK();
 
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
-   WFC_CONTEXT_T *context_ptr = (WFC_CONTEXT_T *) ctx;
-
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_CONTEXT_T *context_ptr = wfc_context_from_handle(ctx);
    WFCint result = 0;
 
-   WFC_LOCK();
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return result;
+   }
 
    if(vcos_verify((context_ptr != NULL) && (context_ptr->device_ptr == device_ptr)))
    {
@@ -655,11 +681,8 @@ WFC_API_CALL WFCint WFC_APIENTRY
             } // if
             else
             {
-               // Move to last element in list.
-               do
-                  {current = current->next;}
-               while(current->next != first);
-               result = (WFCint) current;
+               // First element in list is the lowest.
+               result = (WFCint) wfc_element_link_to_handle(current->next);
             } // else
             break;
          }
@@ -691,13 +714,17 @@ WFC_API_CALL void WFC_APIENTRY
     wfcGetContextAttribfv(WFCDevice dev, WFCContext ctx,
         WFCContextAttrib attrib, WFCint count, WFCfloat *values) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return;}
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
-   WFC_CONTEXT_T *context_ptr = (WFC_CONTEXT_T *) ctx;
-
    WFC_LOCK();
+
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_CONTEXT_T *context_ptr = wfc_context_from_handle(ctx);
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return;
+   }
 
    if(vcos_verify((context_ptr != NULL) && (context_ptr->device_ptr == device_ptr)))
    {
@@ -706,8 +733,9 @@ WFC_API_CALL void WFC_APIENTRY
       switch (attrib)
       {
          case WFC_CONTEXT_BG_COLOR:
-            if(vcos_verify((values != NULL)
-               && (((uint32_t) values && 0x3) == 0) && (count == WFC_BG_CLR_SIZE)))
+            if(vcos_verify(values != NULL) &&
+               vcos_verify(((uint32_t) values & 0x3) == 0) &&
+               vcos_verify(count == WFC_BG_CLR_SIZE))
             {
                for (i = 0; i < WFC_BG_CLR_SIZE; i++)
                   {values[i] = context_ptr->dynamic_attributes.background_clr[i];}
@@ -732,13 +760,17 @@ WFC_API_CALL void WFC_APIENTRY
     wfcSetContextAttribi(WFCDevice dev, WFCContext ctx,
         WFCContextAttrib attrib, WFCint value) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return;}
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
-   WFC_CONTEXT_T *context_ptr = (WFC_CONTEXT_T *) ctx;
-
    WFC_LOCK();
+
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_CONTEXT_T *context_ptr = wfc_context_from_handle(ctx);
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return;
+   }
 
    if(vcos_verify((context_ptr != NULL) && (context_ptr->device_ptr == device_ptr)))
    {
@@ -779,13 +811,17 @@ WFC_API_CALL void WFC_APIENTRY
         WFCContextAttrib attrib,
         WFCint count, const WFCfloat *values) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return;}
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *)dev;
-   WFC_CONTEXT_T *context_ptr = (WFC_CONTEXT_T *)ctx;
-
    WFC_LOCK();
+
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_CONTEXT_T *context_ptr = wfc_context_from_handle(ctx);
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return;
+   }
 
    if(vcos_verify((context_ptr != NULL) && (context_ptr->device_ptr == device_ptr)))
    {
@@ -819,15 +855,19 @@ WFC_API_CALL void WFC_APIENTRY
 WFC_API_CALL void WFC_APIENTRY
     wfcDestroyContext(WFCDevice dev, WFCContext ctx) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return;}
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
-   WFC_CONTEXT_T *context_ptr = (WFC_CONTEXT_T *) ctx;
-
-   vcos_log_trace("wfc_destroy_context: context = 0x%X", ctx);
-
    WFC_LOCK();
+
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_CONTEXT_T *context_ptr = wfc_context_from_handle(ctx);
+
+   vcos_log_trace("%s: context = 0x%X", VCOS_FUNCTION, ctx);
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return;
+   }
 
    if(vcos_verify((context_ptr != NULL) && (context_ptr->device_ptr == device_ptr)))
    {
@@ -862,7 +902,7 @@ WFC_API_CALL WFCSource WFC_APIENTRY wfcCreateSourceFromStream(WFCDevice dev, WFC
 WFC_API_CALL void WFC_APIENTRY
     wfcDestroySource(WFCDevice dev, WFCSource src) WFC_APIEXIT
 {
-   vcos_log_trace("wfc_destroy_source: source = 0x%X", src);
+   vcos_log_trace("%s: source = 0x%X", VCOS_FUNCTION, src);
 
    WFC_LOCK();
    wfc_source_or_mask_destroy(dev, (WFCHandle) src);
@@ -905,35 +945,36 @@ WFC_API_CALL WFCElement WFC_APIENTRY
     wfcCreateElement(WFCDevice dev, WFCContext ctx,
         const WFCint *attribList) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return WFC_INVALID_HANDLE;}
+   WFC_LOCK();
 
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
-   WFC_CONTEXT_T *context_ptr = (WFC_CONTEXT_T *) ctx;
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_CONTEXT_T *context_ptr = wfc_context_from_handle(ctx);
 
    WFCElement element = WFC_INVALID_HANDLE;
 
-   WFC_LOCK();
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return WFC_INVALID_HANDLE;
+   }
 
    if(vcos_verify((context_ptr != NULL) && (context_ptr->device_ptr == device_ptr)))
    {
       if(wfc_check_no_attribs(attribList))
       {
-         WFC_ELEMENT_T *element_ptr =
-            khrn_platform_malloc(sizeof(WFC_ELEMENT_T), "WFC_ELEMENT_T");
+         WFC_ELEMENT_T *element_ptr = vcos_blockpool_calloc(&wfc_client_state.element_pool);
          const WFC_ELEMENT_ATTRIB_T element_attrib_default = WFC_ELEMENT_ATTRIB_DEFAULT;
 
          if(element_ptr != NULL)
          {
-            memset(element_ptr, 0, sizeof(WFC_ELEMENT_T));
-
             wfc_link_init_null(&element_ptr->link);
             element_ptr->context_ptr = context_ptr;
             element_ptr->attributes = element_attrib_default;
 
             wfc_link_attach(&element_ptr->link, &context_ptr->elements_not_in_scene);
 
-            element = (WFCElement) element_ptr;
+            element = wfc_element_to_handle(element_ptr);
          } // if
          else
             {wfc_set_error(device_ptr, WFC_ERROR_OUT_OF_MEMORY);}
@@ -955,15 +996,19 @@ WFC_API_CALL WFCint WFC_APIENTRY
     wfcGetElementAttribi(WFCDevice dev, WFCElement elm,
         WFCElementAttrib attrib) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return 0;}
+   WFC_LOCK();
 
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *)dev;
-   WFC_ELEMENT_T *element_ptr = (WFC_ELEMENT_T *)elm;
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_ELEMENT_T *element_ptr = wfc_element_from_handle(elm);
 
    WFCint result = 0;
 
-   WFC_LOCK();
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return result;
+   }
 
    if(vcos_verify((element_ptr != NULL) && (element_ptr->context_ptr != NULL)
       && (element_ptr->context_ptr->device_ptr == device_ptr)))
@@ -971,7 +1016,7 @@ WFC_API_CALL WFCint WFC_APIENTRY
       switch (attrib)
       {
          case WFC_ELEMENT_SOURCE:
-            result = (WFCint)element_ptr->source_ptr;
+            result = (WFCint)wfc_source_or_mask_to_handle(element_ptr->source_ptr);
             break;
          case WFC_ELEMENT_SOURCE_FLIP:
             result = element_ptr->attributes.flip;
@@ -989,7 +1034,7 @@ WFC_API_CALL WFCint WFC_APIENTRY
             result = wfc_round(element_ptr->attributes.global_alpha * 255.0f);
             break;
          case WFC_ELEMENT_MASK:
-            result = (WFCint)element_ptr->mask_ptr;
+            result = (WFCint)wfc_source_or_mask_to_handle(element_ptr->mask_ptr);
             break;
          default:
             wfc_set_error(device_ptr, WFC_ERROR_BAD_ATTRIBUTE);
@@ -1010,15 +1055,19 @@ WFC_API_CALL WFCfloat WFC_APIENTRY
     wfcGetElementAttribf(WFCDevice dev, WFCElement elm,
         WFCElementAttrib attrib) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return 0;}
+   WFC_LOCK();
 
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *)dev;
-   WFC_ELEMENT_T *element_ptr = (WFC_ELEMENT_T *)elm;
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_ELEMENT_T *element_ptr = wfc_element_from_handle(elm);
 
    WFCfloat result = 0;
 
-   WFC_LOCK();
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return result;
+   }
 
    if(vcos_verify((element_ptr != NULL) && (element_ptr->context_ptr != NULL)
       && (element_ptr->context_ptr->device_ptr == device_ptr)))
@@ -1046,13 +1095,17 @@ WFC_API_CALL void WFC_APIENTRY
     wfcGetElementAttribiv(WFCDevice dev, WFCElement elm,
         WFCElementAttrib attrib, WFCint count, WFCint *values) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return;}
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *)dev;
-   WFC_ELEMENT_T *element_ptr = (WFC_ELEMENT_T *)elm;
-
    WFC_LOCK();
+
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_ELEMENT_T *element_ptr = wfc_element_from_handle(elm);
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return;
+   }
 
    if(vcos_verify((element_ptr != NULL) && (element_ptr->context_ptr != NULL)
       && (element_ptr->context_ptr->device_ptr == device_ptr)))
@@ -1093,13 +1146,17 @@ WFC_API_CALL void WFC_APIENTRY
     wfcGetElementAttribfv(WFCDevice dev, WFCElement elm,
         WFCElementAttrib attrib, WFCint count, WFCfloat *values) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return;}
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *)dev;
-   WFC_ELEMENT_T *element_ptr = (WFC_ELEMENT_T *)elm;
-
    WFC_LOCK();
+
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_ELEMENT_T *element_ptr = wfc_element_from_handle(elm);
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return;
+   }
 
    if(vcos_verify((element_ptr != NULL) && (element_ptr->context_ptr != NULL)
       && (element_ptr->context_ptr->device_ptr == device_ptr)))
@@ -1143,13 +1200,17 @@ WFC_API_CALL void WFC_APIENTRY
     wfcSetElementAttribi(WFCDevice dev, WFCElement elm,
         WFCElementAttrib attrib, WFCint value) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return;}
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *)dev;
-   WFC_ELEMENT_T *element_ptr = (WFC_ELEMENT_T *)elm;
-
    WFC_LOCK();
+
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_ELEMENT_T *element_ptr = wfc_element_from_handle(elm);
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return;
+   }
 
    if(vcos_verify((element_ptr != NULL) && (element_ptr->context_ptr != NULL)
       && (element_ptr->context_ptr->device_ptr == device_ptr)))
@@ -1158,7 +1219,7 @@ WFC_API_CALL void WFC_APIENTRY
       {
          case WFC_ELEMENT_SOURCE:
          {
-            WFC_SOURCE_OR_MASK_T *new_source_ptr = (WFC_SOURCE_OR_MASK_T *) value;
+            WFC_SOURCE_OR_MASK_T *new_source_ptr = wfc_source_or_mask_from_handle(value);
 
             if
             (
@@ -1166,9 +1227,9 @@ WFC_API_CALL void WFC_APIENTRY
                || (new_source_ptr == NULL)
             )
             {
+               wfc_source_or_mask_acquire(new_source_ptr);
                wfc_source_or_mask_release(element_ptr->source_ptr);
                element_ptr->source_ptr = new_source_ptr;
-               wfc_source_or_mask_acquire(element_ptr->source_ptr);
 
                element_ptr->attributes.source_stream =
                   element_ptr->source_ptr ? element_ptr->source_ptr->stream : WFC_INVALID_HANDLE;
@@ -1224,7 +1285,7 @@ WFC_API_CALL void WFC_APIENTRY
          }
          case WFC_ELEMENT_MASK:
          {
-            WFC_SOURCE_OR_MASK_T *new_mask_ptr = (WFC_SOURCE_OR_MASK_T *) value;
+            WFC_SOURCE_OR_MASK_T *new_mask_ptr = wfc_source_or_mask_from_handle(value);
 
             if
             (
@@ -1260,13 +1321,17 @@ WFC_API_CALL void WFC_APIENTRY
     wfcSetElementAttribf(WFCDevice dev, WFCElement elm,
         WFCElementAttrib attrib, WFCfloat value) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return;}
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *)dev;
-   WFC_ELEMENT_T *element_ptr = (WFC_ELEMENT_T *)elm;
-
    WFC_LOCK();
+
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_ELEMENT_T *element_ptr = wfc_element_from_handle(elm);
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return;
+   }
 
    if(vcos_verify((element_ptr != NULL) && (element_ptr->context_ptr != NULL)
       && (element_ptr->context_ptr->device_ptr == device_ptr)))
@@ -1297,13 +1362,17 @@ WFC_API_CALL void WFC_APIENTRY
         WFCElementAttrib attrib,
         WFCint count, const WFCint *values) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return;}
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *)dev;
-   WFC_ELEMENT_T *element_ptr = (WFC_ELEMENT_T *)elm;
-
    WFC_LOCK();
+
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_ELEMENT_T *element_ptr = wfc_element_from_handle(elm);
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return;
+   }
 
    if(vcos_verify((element_ptr != NULL) && (element_ptr->context_ptr != NULL)
       && (element_ptr->context_ptr->device_ptr == device_ptr)))
@@ -1348,13 +1417,17 @@ WFC_API_CALL void WFC_APIENTRY
         WFCElementAttrib attrib,
         WFCint count, const WFCfloat *values) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return;}
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *)dev;
-   WFC_ELEMENT_T *element_ptr = (WFC_ELEMENT_T *)elm;
-
    WFC_LOCK();
+
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_ELEMENT_T *element_ptr = wfc_element_from_handle(elm);
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return;
+   }
 
    if(vcos_verify((element_ptr != NULL) && (element_ptr->context_ptr != NULL)
       && (element_ptr->context_ptr->device_ptr == device_ptr)))
@@ -1400,14 +1473,18 @@ WFC_API_CALL void WFC_APIENTRY
 WFC_API_CALL void WFC_APIENTRY
     wfcInsertElement(WFCDevice dev, WFCElement elm, WFCElement subordinate) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return;}
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
-   WFC_ELEMENT_T *element_ptr = (WFC_ELEMENT_T *) elm;
-   WFC_ELEMENT_T *subordinate_ptr = (WFC_ELEMENT_T *) subordinate;
-
    WFC_LOCK();
+
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_ELEMENT_T *element_ptr = wfc_element_from_handle(elm);
+   WFC_ELEMENT_T *subordinate_ptr = wfc_element_from_handle(subordinate);
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return;
+   }
 
    if(vcos_verify
    (
@@ -1426,8 +1503,12 @@ WFC_API_CALL void WFC_APIENTRY
          // Insert element after subordinate.
          if((element_ptr->context_ptr == subordinate_ptr->context_ptr) && subordinate_ptr->is_in_scene)
          {
-            wfc_link_attach(&element_ptr->link, &subordinate_ptr->link);
-            element_ptr->is_in_scene = true;
+            // Insert element in front of itself has no effect.
+            if (elm != subordinate)
+            {
+               wfc_link_attach(&element_ptr->link, &subordinate_ptr->link);
+               element_ptr->is_in_scene = true;
+            }
          }
          else
             {wfc_set_error(device_ptr, WFC_ERROR_ILLEGAL_ARGUMENT);}
@@ -1450,13 +1531,17 @@ WFC_API_CALL void WFC_APIENTRY
 WFC_API_CALL void WFC_APIENTRY
     wfcRemoveElement(WFCDevice dev, WFCElement elm) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return;}
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
-   WFC_ELEMENT_T *element_ptr = (WFC_ELEMENT_T *) elm;
-
    WFC_LOCK();
+
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_ELEMENT_T *element_ptr = wfc_element_from_handle(elm);
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return;
+   }
 
    if(vcos_verify((element_ptr != NULL) && (element_ptr->context_ptr != NULL)
       && (element_ptr->context_ptr->device_ptr == device_ptr)))
@@ -1475,15 +1560,19 @@ WFC_API_CALL void WFC_APIENTRY
 WFC_API_CALL WFCElement WFC_APIENTRY
     wfcGetElementAbove(WFCDevice dev, WFCElement elm) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return WFC_INVALID_HANDLE;}
+   WFC_LOCK();
 
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *)dev;
-   WFC_ELEMENT_T *element_ptr = (WFC_ELEMENT_T *)elm;
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_ELEMENT_T *element_ptr = wfc_element_from_handle(elm);
 
    WFCElement result = WFC_INVALID_HANDLE;
 
-   WFC_LOCK();
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return result;
+   }
 
    if(vcos_verify((element_ptr != NULL) && (element_ptr->context_ptr != NULL)
       && (element_ptr->context_ptr->device_ptr == device_ptr)))
@@ -1491,7 +1580,7 @@ WFC_API_CALL WFCElement WFC_APIENTRY
       if (element_ptr->is_in_scene)
       {
          if (element_ptr->link.next != &element_ptr->context_ptr->elements_in_scene)
-            {result = (WFCElement)element_ptr->link.next;}
+            {result = wfc_element_link_to_handle(element_ptr->link.next);}
       }
       else
          {wfc_set_error(device_ptr, WFC_ERROR_ILLEGAL_ARGUMENT);}
@@ -1509,15 +1598,19 @@ WFC_API_CALL WFCElement WFC_APIENTRY
 WFC_API_CALL WFCElement WFC_APIENTRY
     wfcGetElementBelow(WFCDevice dev, WFCElement elm) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return WFC_INVALID_HANDLE;}
+   WFC_LOCK();
 
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
-   WFC_ELEMENT_T *element_ptr = (WFC_ELEMENT_T *) elm;
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_ELEMENT_T *element_ptr = wfc_element_from_handle(elm);
 
    WFCElement result = WFC_INVALID_HANDLE;
 
-   WFC_LOCK();
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return result;
+   }
 
    if(vcos_verify((element_ptr != NULL) && (element_ptr->context_ptr != NULL)
       && (element_ptr->context_ptr->device_ptr == device_ptr)))
@@ -1525,7 +1618,7 @@ WFC_API_CALL WFCElement WFC_APIENTRY
       if (element_ptr->is_in_scene)
       {
          if (element_ptr->link.prev != &element_ptr->context_ptr->elements_in_scene)
-            {result = (WFCElement) element_ptr->link.prev;}
+            {result = wfc_element_link_to_handle(element_ptr->link.prev);}
       }
       else
          {wfc_set_error(device_ptr, WFC_ERROR_ILLEGAL_ARGUMENT);}
@@ -1543,15 +1636,19 @@ WFC_API_CALL WFCElement WFC_APIENTRY
 WFC_API_CALL void WFC_APIENTRY
     wfcDestroyElement(WFCDevice dev, WFCElement elm) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return;}
-
-   vcos_log_trace("wfc_destroy_element: element = 0x%X", elm);
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
-   WFC_ELEMENT_T *element_ptr = (WFC_ELEMENT_T *) elm;
+   vcos_log_trace("%s: element = 0x%X", VCOS_FUNCTION, elm);
 
    WFC_LOCK();
+
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_ELEMENT_T *element_ptr = wfc_element_from_handle(elm);
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return;
+   }
 
    if(vcos_verify((element_ptr != NULL) && (element_ptr->context_ptr != NULL)
       && (element_ptr->context_ptr->device_ptr == device_ptr)))
@@ -1568,33 +1665,31 @@ WFC_API_CALL void WFC_APIENTRY
 WFC_API_CALL void WFC_APIENTRY
     wfcActivate(WFCDevice dev, WFCContext ctx) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return;}
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *)dev;
-   WFC_CONTEXT_T *context_ptr = (WFC_CONTEXT_T *)ctx;
-   VCOS_STATUS_T status = VCOS_ENOSYS;
-   VCOS_SEMAPHORE_T wait_sem;
-
    WFC_LOCK();
+
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_CONTEXT_T *context_ptr = wfc_context_from_handle(ctx);
+   VCOS_STATUS_T status = VCOS_ENOSYS;
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return;
+   }
 
    if(vcos_verify((context_ptr != NULL) && (context_ptr->device_ptr == device_ptr)))
    {
       wfc_server_activate(ctx);
 
       context_ptr->active = true;
-      context_ptr->committed_scene.wait = 1;    // Wait for scene to be taken
-
-      // Long running operation, so keep VC alive until it completes.
-      wfc_server_use_keep_alive();
-
-      status = vcos_semaphore_create(&wait_sem, "WFC activate", 0);
-      vcos_assert(status == VCOS_SUCCESS);      // On platforms we care about.
 
       do
       {
-         status = wfc_server_compose_scene(ctx, &context_ptr->committed_scene,
-               wfc_client_scene_taken_cb, &wait_sem);
+         vcos_log_info("%s: dev 0x%X, ctx 0x%X commit %u", VCOS_FUNCTION, dev, ctx, context_ptr->committed_scene.commit_count);
+
+         status = wfc_server_commit_scene(ctx, &context_ptr->committed_scene,
+               0, NULL, NULL);
 
          if (status == VCOS_EAGAIN)
          {
@@ -1607,8 +1702,6 @@ WFC_API_CALL void WFC_APIENTRY
 
       if (status != VCOS_SUCCESS)
       {
-         vcos_semaphore_delete(&wait_sem);
-         wfc_server_release_keep_alive();
          wfc_set_error(device_ptr, WFC_ERROR_BAD_HANDLE);
       }
    } //if
@@ -1616,12 +1709,6 @@ WFC_API_CALL void WFC_APIENTRY
       {wfc_set_error(device_ptr, WFC_ERROR_BAD_HANDLE);}
 
    WFC_UNLOCK();
-
-   // Wait for the scene to be taken outside the lock
-   if (status == VCOS_SUCCESS)
-   {
-      wfc_client_wait_for_scene_taken(&wait_sem, ctx, VCOS_FUNCTION);
-   }
 } // wfcActivate()
 
 //------------------------------------------------------------------------------
@@ -1629,13 +1716,17 @@ WFC_API_CALL void WFC_APIENTRY
 WFC_API_CALL void WFC_APIENTRY
     wfcDeactivate(WFCDevice dev, WFCContext ctx) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return;}
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *)dev;
-   WFC_CONTEXT_T *context_ptr = (WFC_CONTEXT_T *)ctx;
-
    WFC_LOCK();
+
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_CONTEXT_T *context_ptr = wfc_context_from_handle(ctx);
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return;
+   }
 
    if(vcos_verify((context_ptr != NULL) && (context_ptr->device_ptr == device_ptr)))
    {
@@ -1653,15 +1744,19 @@ WFC_API_CALL void WFC_APIENTRY
 WFC_API_CALL void WFC_APIENTRY
     wfcCompose(WFCDevice dev, WFCContext ctx, WFCboolean wait) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return;}
+   WFC_LOCK();
 
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
-   WFC_CONTEXT_T *context_ptr = (WFC_CONTEXT_T *) ctx;
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_CONTEXT_T *context_ptr = wfc_context_from_handle(ctx);
    VCOS_STATUS_T status = VCOS_ENOSYS;
    VCOS_SEMAPHORE_T wait_sem;
 
-   WFC_LOCK();
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return;
+   }
 
    if(vcos_verify((context_ptr != NULL) && (context_ptr->device_ptr == device_ptr)))
    {
@@ -1669,10 +1764,14 @@ WFC_API_CALL void WFC_APIENTRY
       // be automatically composed on commit when active
       if(!context_ptr->active)
       {
-         context_ptr->committed_scene.wait = (uint32_t)wait;
+         uint32_t commit_flags = WFC_SERVER_COMMIT_COMPOSE;
+
+         vcos_log_info("%s: dev 0x%X, ctx 0x%X commit %u", VCOS_FUNCTION, dev, ctx, context_ptr->committed_scene.commit_count);
 
          if (wait)
          {
+            commit_flags |= WFC_SERVER_COMMIT_WAIT;
+
             // Long running operation, so keep VC alive until it completes.
             wfc_server_use_keep_alive();
 
@@ -1681,8 +1780,8 @@ WFC_API_CALL void WFC_APIENTRY
 
             do
             {
-               status = wfc_server_compose_scene(ctx, &context_ptr->committed_scene,
-                     wfc_client_scene_taken_cb, &wait_sem);
+               status = wfc_server_commit_scene(ctx, &context_ptr->committed_scene,
+                     commit_flags, wfc_client_scene_taken_cb, &wait_sem);
 
                if (status == VCOS_EAGAIN)
                {
@@ -1701,8 +1800,8 @@ WFC_API_CALL void WFC_APIENTRY
          }
          else
          {
-            status = wfc_server_compose_scene(ctx, &context_ptr->committed_scene,
-                  NULL, NULL);
+            status = wfc_server_commit_scene(ctx, &context_ptr->committed_scene,
+                  commit_flags, NULL, NULL);
          }
 
          if (status != VCOS_SUCCESS)
@@ -1732,13 +1831,20 @@ WFC_API_CALL void WFC_APIENTRY
     wfcFence(WFCDevice dev, WFCContext ctx, WFCEGLDisplay dpy,
         WFCEGLSync sync) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return;}
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
-   WFC_CONTEXT_T *context_ptr = (WFC_CONTEXT_T *) ctx;
+   vcos_unused(dpy);
+   vcos_unused(sync);
 
    WFC_LOCK();
+
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_CONTEXT_T *context_ptr = wfc_context_from_handle(ctx);
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return;
+   }
 
    // TODO wfcFence()
    vcos_assert(0);
@@ -1766,13 +1872,17 @@ WFC_API_CALL WFCint WFC_APIENTRY
         const char **strings,
         WFCint stringsCount) WFC_APIEXIT
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return 0;}
+   WFC_LOCK();
 
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
    const char *name_string = NULL;
 
-   WFC_LOCK();
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return 0;
+   }
 
    switch(name)
    {
@@ -1790,6 +1900,7 @@ WFC_API_CALL WFCint WFC_APIENTRY
          break;
       default:
          wfc_set_error(device_ptr, WFC_ERROR_ILLEGAL_ARGUMENT);
+         WFC_UNLOCK();
          return 0;
    } // switch
 
@@ -1806,7 +1917,7 @@ WFC_API_CALL WFCint WFC_APIENTRY
    else
    {
       wfc_set_error(device_ptr, WFC_ERROR_ILLEGAL_ARGUMENT);
-   } // ekse
+   } // else
 
    WFC_UNLOCK();
 
@@ -1818,6 +1929,8 @@ WFC_API_CALL WFCint WFC_APIENTRY
 WFC_API_CALL WFCboolean WFC_APIENTRY
     wfcIsExtensionSupported(WFCDevice dev, const char *string) WFC_APIEXIT
 {
+   vcos_unused(string);
+
    // TODO wfcIsExtensionSupported()
    vcos_assert(0);
 
@@ -1830,6 +1943,161 @@ WFC_API_CALL WFCboolean WFC_APIENTRY
 //!@} // (OpenWF-C API functions)
 //==============================================================================
 
+static void wfc_initialise_client_state(void)
+{
+   size_t pool_index;
+   const WFC_BLOCKPOOL_INFO_T *pool_info = wfc_client_blockpool_info;
+   uint64_t pid = vcos_process_id_current();
+
+   // Logging
+   vcos_log_set_level(&log_cat, WFC_LOG_LEVEL);
+   vcos_log_register("wfc_client_func", &log_cat);
+
+   vcos_log_error("%s: entered", VCOS_FUNCTION);
+
+   // Allocate all the pools
+   for (pool_index = 0; pool_index < countof(wfc_client_blockpool_info); pool_index++, pool_info++)
+   {
+      if (vcos_blockpool_create_on_heap(pool_info->pool, pool_info->count, pool_info->size,
+            VCOS_BLOCKPOOL_ALIGN_DEFAULT, 0, pool_info->name) != VCOS_SUCCESS)
+         goto fail;
+
+      vcos_blockpool_extend(pool_info->pool, pool_info->max_subpools - 1, pool_info->count);
+   }
+
+   vcos_mutex_create(&wfc_client_state.mutex, NULL);
+
+   // Set up a handle modifier that is generally process specific. The shifting
+   // around should put the ID on Linux in an otherwise fairly unused bit of the
+   // handle, which makes debugging easier.
+   wfc_client_state.handle_mod = (VCOS_UNSIGNED)((pid << 16) ^ (pid >> 16) ^ (pid >> 48));
+
+   wfc_client_state.is_initialised = true;
+
+   vcos_log_error("%s: success", VCOS_FUNCTION);
+   // Success
+   return;
+
+fail:
+   vcos_log_error("%s: failed to allocate memory pools", VCOS_FUNCTION);
+
+   // pool_index and pool_info refer to the one that failed to allocate. Free
+   // any pools already allocated.
+   while (pool_index-- > 0)
+   {
+      pool_info--;
+      vcos_blockpool_delete(pool_info->pool);
+   }
+}
+
+//------------------------------------------------------------------------------
+
+static WFC_DEVICE_T *wfc_device_from_handle(WFCDevice dev)
+{
+   VCOS_UNSIGNED handle_mod = WFC_DEVICE_MOD ^ wfc_client_state.handle_mod;
+
+   if (dev == WFC_INVALID_HANDLE)
+      return NULL;
+   return vcos_blockpool_elem_from_handle(&wfc_client_state.device_pool, dev ^ handle_mod);
+}
+
+//------------------------------------------------------------------------------
+
+static WFCDevice wfc_device_to_handle(WFC_DEVICE_T *device_ptr)
+{
+   VCOS_UNSIGNED handle_mod = WFC_DEVICE_MOD ^ wfc_client_state.handle_mod;
+   VCOS_UNSIGNED handle = vcos_blockpool_elem_to_handle(device_ptr);
+
+   if (handle == VCOS_BLOCKPOOL_INVALID_HANDLE)
+      return WFC_INVALID_HANDLE;
+
+   return (WFCDevice)(handle ^ handle_mod);
+}
+
+//------------------------------------------------------------------------------
+
+static WFC_CONTEXT_T *wfc_context_from_handle(WFCContext ctx)
+{
+   VCOS_UNSIGNED handle_mod = WFC_CONTEXT_MOD ^ wfc_client_state.handle_mod;
+
+   if (ctx == WFC_INVALID_HANDLE)
+      return NULL;
+
+   return vcos_blockpool_elem_from_handle(&wfc_client_state.context_pool, ctx ^ handle_mod);
+}
+
+//------------------------------------------------------------------------------
+
+static WFCContext wfc_context_to_handle(WFC_CONTEXT_T *context_ptr)
+{
+   VCOS_UNSIGNED handle_mod = WFC_CONTEXT_MOD ^ wfc_client_state.handle_mod;
+   VCOS_UNSIGNED handle = vcos_blockpool_elem_to_handle(context_ptr);
+
+   if (handle == VCOS_BLOCKPOOL_INVALID_HANDLE)
+      return WFC_INVALID_HANDLE;
+
+   return (WFCContext)(handle ^ handle_mod);
+}
+
+//------------------------------------------------------------------------------
+
+static WFC_ELEMENT_T *wfc_element_from_handle(WFCElement element)
+{
+   VCOS_UNSIGNED handle_mod = WFC_ELEMENT_MOD ^ wfc_client_state.handle_mod;
+
+   if (element == WFC_INVALID_HANDLE)
+      return NULL;
+
+   return vcos_blockpool_elem_from_handle(&wfc_client_state.element_pool, element ^ handle_mod);
+}
+
+//------------------------------------------------------------------------------
+
+static WFCElement wfc_element_to_handle(WFC_ELEMENT_T *element_ptr)
+{
+   VCOS_UNSIGNED handle_mod = WFC_ELEMENT_MOD ^ wfc_client_state.handle_mod;
+   VCOS_UNSIGNED handle = vcos_blockpool_elem_to_handle(element_ptr);
+
+   if (handle == VCOS_BLOCKPOOL_INVALID_HANDLE)
+      return WFC_INVALID_HANDLE;
+
+   return (WFCElement)(handle ^ handle_mod);
+}
+
+//------------------------------------------------------------------------------
+
+static WFCElement wfc_element_link_to_handle(WFC_LINK_T *element_link_ptr)
+{
+   return wfc_element_to_handle((WFC_ELEMENT_T *)((char *)element_link_ptr - offsetof(WFC_ELEMENT_T, link)));
+}
+
+//------------------------------------------------------------------------------
+
+static WFC_SOURCE_OR_MASK_T *wfc_source_or_mask_from_handle(WFCHandle source_or_mask)
+{
+   VCOS_UNSIGNED handle_mod = WFC_SOURCE_MOD ^ wfc_client_state.handle_mod;
+
+   if (source_or_mask == WFC_INVALID_HANDLE)
+      return NULL;
+
+   return vcos_blockpool_elem_from_handle(&wfc_client_state.source_pool, source_or_mask ^ handle_mod);
+}
+
+//------------------------------------------------------------------------------
+
+static WFCHandle wfc_source_or_mask_to_handle(WFC_SOURCE_OR_MASK_T *source_or_mask_ptr)
+{
+   VCOS_UNSIGNED handle_mod = WFC_SOURCE_MOD ^ wfc_client_state.handle_mod;
+   VCOS_UNSIGNED handle = vcos_blockpool_elem_to_handle(source_or_mask_ptr);
+
+   if (handle == VCOS_BLOCKPOOL_INVALID_HANDLE)
+      return WFC_INVALID_HANDLE;
+
+   return (WFCHandle)(handle ^ handle_mod);
+}
+
+//------------------------------------------------------------------------------
+
 //!@name
 //! Macros used in wfc_context_create() to extract data returned from wfc_server_create_context().
 //!@{
@@ -1841,68 +2109,49 @@ static WFC_CONTEXT_T *wfc_context_create
    (WFC_DEVICE_T *device_ptr, WFCContextType context_type,
       uint32_t screen_or_stream_num, WFCErrorCode *error)
 {
-   WFC_CONTEXT_T *context_ptr =
-      khrn_platform_malloc(sizeof(WFC_CONTEXT_T), "WFC_CONTEXT_T");
+   WFC_CONTEXT_T *context_ptr = vcos_blockpool_calloc(&wfc_client_state.context_pool);
    const WFC_CONTEXT_DYNAMIC_ATTRIB_T ctx_dyn_attrib_default = WFC_CONTEXT_DYNAMIC_ATTRIB_DEFAULT;
 
    if(context_ptr != NULL)
    {
-      CLIENT_THREAD_STATE_T *thread = CLIENT_GET_THREAD_STATE();
       uint64_t pid = vcos_process_id_current();
       uint32_t pid_lo = (uint32_t) pid;
       uint32_t pid_hi = (uint32_t) (pid >> 32);
-      int sem_name[3] = {pid_lo, pid_hi, (uint32_t)context_ptr};
-      VCOS_STATUS_T status;
 
-      memset(context_ptr, 0, sizeof(WFC_CONTEXT_T));
-      status = khronos_platform_semaphore_create(&context_ptr->wait_sem, sem_name, 0);
+      uint32_t response = wfc_server_create_context(wfc_context_to_handle(context_ptr),
+            context_type, screen_or_stream_num, pid_lo, pid_hi);
 
-      if (status == VCOS_SUCCESS)
+      uint32_t height_or_err = WFC_CONTEXT_HEIGHT_OR_ERR(response);
+      uint32_t width = WFC_CONTEXT_WIDTH(response);
+
+      if(width != 0)
       {
-         uint32_t response = wfc_server_create_context((WFCContext)context_ptr,
-               context_type, screen_or_stream_num, pid_lo, pid_hi);
+         wfc_link_init_null(&context_ptr->link);
 
-         uint32_t height_or_err = WFC_CONTEXT_HEIGHT_OR_ERR(response);
-         uint32_t width = WFC_CONTEXT_WIDTH(response);
+         context_ptr->device_ptr = device_ptr;
+         wfc_link_init_empty(&context_ptr->sources);
+         wfc_link_init_empty(&context_ptr->masks);
 
-         if(width != 0)
+         wfc_link_init_empty(&context_ptr->elements_not_in_scene);
+         wfc_link_init_empty(&context_ptr->elements_in_scene);
+         context_ptr->active = false;
+
+         context_ptr->dynamic_attributes = ctx_dyn_attrib_default;
+         context_ptr->static_attributes.type = context_type;
+         context_ptr->static_attributes.height = height_or_err;
+         context_ptr->static_attributes.width = width;
+
+         if(context_type == WFC_CONTEXT_TYPE_OFF_SCREEN)
          {
-            wfc_link_init_null(&context_ptr->link);
-
-            context_ptr->device_ptr = device_ptr;
-            wfc_link_init_empty(&context_ptr->sources);
-            wfc_link_init_empty(&context_ptr->masks);
-
-            wfc_link_init_empty(&context_ptr->elements_not_in_scene);
-            wfc_link_init_empty(&context_ptr->elements_in_scene);
-            context_ptr->active = false;
-
-            context_ptr->dynamic_attributes = ctx_dyn_attrib_default;
-            context_ptr->static_attributes.type = context_type;
-            context_ptr->static_attributes.height = height_or_err;
-            context_ptr->static_attributes.width = width;
-
-            if(context_type == WFC_CONTEXT_TYPE_OFF_SCREEN)
-            {
-               context_ptr->output_stream = screen_or_stream_num;
-            }
+            context_ptr->output_stream = screen_or_stream_num;
          }
-         else
-         {
-            khronos_platform_semaphore_destroy(&context_ptr->wait_sem);
-            khrn_platform_free(context_ptr);
-            context_ptr = NULL;
-            *error = (WFCErrorCode) response;
-         }
-      } // if
+      }
       else
       {
-         khrn_platform_free(context_ptr);
-
+         vcos_blockpool_free(context_ptr);
          context_ptr = NULL;
-
-         *error = WFC_ERROR_OUT_OF_MEMORY;
-      } // else
+         *error = (WFCErrorCode) response;
+      }
    } // if
    else
       {*error = WFC_ERROR_OUT_OF_MEMORY;}
@@ -1914,9 +2163,6 @@ static WFC_CONTEXT_T *wfc_context_create
 
 static void wfc_context_destroy(WFC_CONTEXT_T *context_ptr)
 {
-   // Destroy compositor wait semaphore
-   khronos_platform_semaphore_destroy(&context_ptr->wait_sem);
-
    // Detach output stream for off-screen contexts.
    wfc_stream_register_off_screen(context_ptr->output_stream, false);
 
@@ -1929,9 +2175,9 @@ static void wfc_context_destroy(WFC_CONTEXT_T *context_ptr)
    wfc_link_iterate(&context_ptr->sources, (WFC_LINK_CALLBACK_T) wfc_source_or_mask_destroy_actual, NULL);
    wfc_link_iterate(&context_ptr->masks, (WFC_LINK_CALLBACK_T) wfc_source_or_mask_destroy_actual, NULL);
 
-   wfc_server_destroy_context((WFCContext)context_ptr);
+   wfc_server_destroy_context(wfc_context_to_handle(context_ptr));
 
-   khrn_platform_free(context_ptr);
+   vcos_blockpool_free(context_ptr);
 } // wfc_context_destroy()
 
 //==============================================================================
@@ -1944,13 +2190,16 @@ static WFCHandle wfc_source_or_mask_create(
 //! wfcCreateSourceFromStream() and wfcCreateMaskFromStream() are essentially
 //! wrappers for this function.
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return WFC_INVALID_HANDLE;}
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
-   WFC_CONTEXT_T *context_ptr = (WFC_CONTEXT_T *) ctx;
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_CONTEXT_T *context_ptr = wfc_context_from_handle(ctx);
 
    WFCHandle handle = WFC_INVALID_HANDLE;
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      return handle;
+   }
 
    if(vcos_verify((context_ptr != NULL) && (context_ptr->device_ptr == device_ptr)))
    {
@@ -1962,7 +2211,12 @@ static WFCHandle wfc_source_or_mask_create(
       {
          // Verify that context isn't an input for this stream
          wfc_set_error(device_ptr, WFC_ERROR_IN_USE);
-      } // else if
+      }
+      else if (!wfc_stream_register_source_or_mask(stream, true))
+      {
+         vcos_log_error("%s: failed to register stream 0x%x", VCOS_FUNCTION, stream);
+         wfc_set_error(device_ptr, WFC_ERROR_BAD_HANDLE);
+      }
       else
       {
          WFC_SOURCE_OR_MASK_T *source_or_mask_ptr = vcos_blockpool_calloc(&wfc_client_state.source_pool);
@@ -1986,12 +2240,12 @@ static WFCHandle wfc_source_or_mask_create(
             {
                wfc_link_attach(&source_or_mask_ptr->link, &context_ptr->masks);
             }
-            handle = (WFCHandle) source_or_mask_ptr;
-
-            wfc_stream_register_source_or_mask(stream, true);
+            handle = wfc_source_or_mask_to_handle(source_or_mask_ptr);
          }
          else
          {
+            wfc_stream_register_source_or_mask(stream, false);
+            vcos_log_error("%s: failed to allocate source/mask info for stream 0x%x", VCOS_FUNCTION, stream);
             wfc_set_error(device_ptr, WFC_ERROR_OUT_OF_MEMORY);
          }
       }
@@ -2011,13 +2265,14 @@ static void wfc_source_or_mask_destroy(WFCDevice dev, WFCHandle source_or_mask)
 //!
 //! wfcDestroySource() and wfcDestroyMask() are essentially wrappers for this function.
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_SOURCE_OR_MASK_T *source_or_mask_ptr = wfc_source_or_mask_from_handle(source_or_mask);
+
+   if (!vcos_verify(device_ptr != NULL))
    {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
       return;
    }
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *) dev;
-   WFC_SOURCE_OR_MASK_T *source_or_mask_ptr = (WFC_SOURCE_OR_MASK_T *) source_or_mask;
 
    if((source_or_mask_ptr != NULL) && (source_or_mask_ptr->context_ptr != NULL)
       && (source_or_mask_ptr->context_ptr->device_ptr == device_ptr))
@@ -2035,7 +2290,7 @@ static void wfc_source_or_mask_destroy(WFCDevice dev, WFCHandle source_or_mask)
 static void wfc_source_or_mask_acquire(WFC_SOURCE_OR_MASK_T *source_or_mask_ptr)
 //! Indicate that the image provider is now linked to an element.
 {
-   vcos_log_trace("%s: %X refcount %d", VCOS_FUNCTION, (uint32_t)source_or_mask_ptr,
+   vcos_log_trace("%s: %p refcount %d", VCOS_FUNCTION, source_or_mask_ptr,
          source_or_mask_ptr ? source_or_mask_ptr->refcount : 0);
    if(source_or_mask_ptr != NULL)
       {source_or_mask_ptr->refcount++;}
@@ -2046,7 +2301,7 @@ static void wfc_source_or_mask_acquire(WFC_SOURCE_OR_MASK_T *source_or_mask_ptr)
 static void wfc_source_or_mask_release(WFC_SOURCE_OR_MASK_T *source_or_mask_ptr)
 //! Indicate the the image provider is no longer linked to an element; destroy if previously requested.
 {
-   vcos_log_trace("%s: %X refcount %d", VCOS_FUNCTION, (uint32_t)source_or_mask_ptr,
+   vcos_log_trace("%s: %p refcount %d", VCOS_FUNCTION, source_or_mask_ptr,
          source_or_mask_ptr ? source_or_mask_ptr->refcount : 0);
    if(source_or_mask_ptr != NULL)
    {
@@ -2072,8 +2327,8 @@ static void wfc_source_or_mask_destroy_actual(WFC_SOURCE_OR_MASK_T *source_or_ma
 
    if(source_or_mask_ptr->refcount == 0)
    {
-      vcos_log_info("wfc_source_or_mask_destroy_actual: %X",
-         (uint32_t) source_or_mask_ptr);
+      vcos_log_trace("%s: %p source 0x%x stream 0x%x", VCOS_FUNCTION, source_or_mask_ptr,
+            wfc_source_or_mask_to_handle(source_or_mask_ptr), source_or_mask_ptr->stream);
 
       wfc_stream_register_source_or_mask(source_or_mask_ptr->stream, false);
 
@@ -2085,8 +2340,7 @@ static void wfc_source_or_mask_destroy_actual(WFC_SOURCE_OR_MASK_T *source_or_ma
    }
    else
    {
-      vcos_log_info("wfc_source_or_mask_destroy_actual: pending: %X refcount: %d",
-         (uint32_t) source_or_mask_ptr, source_or_mask_ptr->refcount);
+      vcos_log_trace("%s: pending: %p refcount: %d", VCOS_FUNCTION, source_or_mask_ptr, source_or_mask_ptr->refcount);
    }
 }
 
@@ -2094,7 +2348,7 @@ static void wfc_source_or_mask_destroy_actual(WFC_SOURCE_OR_MASK_T *source_or_ma
 
 static void wfc_element_destroy(WFC_ELEMENT_T *element_ptr, void *unused)
 {
-   vcos_log_info("wfc_element_destroy: %X", (uint32_t) element_ptr);
+   vcos_log_trace("%s: %p", VCOS_FUNCTION, element_ptr);
 
    // Release source and mask (if present); destroy if previously requested.
    wfc_source_or_mask_release(element_ptr->source_ptr);
@@ -2105,7 +2359,7 @@ static void wfc_element_destroy(WFC_ELEMENT_T *element_ptr, void *unused)
 
    wfc_link_detach(&element_ptr->link);
 
-   khrn_platform_free(element_ptr);
+   vcos_blockpool_free(element_ptr);
 } // wfc_element_destroy()
 
 //==============================================================================
@@ -2137,9 +2391,10 @@ static void wfc_commit_iterator(WFC_ELEMENT_T *element_ptr, WFC_SCENE_T *scene)
 
 //==============================================================================
 
-static void wfc_set_error(WFC_DEVICE_T *device, WFCErrorCode error)
+static void wfc_set_error_with_location(WFC_DEVICE_T *device, WFCErrorCode error, const char *func, int line)
 //! Update device's error code (but only if previously cleared).
 {
+   vcos_log_error("%s: device %p error 0x%x at line %d", func, device, error, line);
    if((device != NULL) && (device->error == WFC_ERROR_NONE))
       {device->error = error;}
 } // wfc_set_error()
@@ -2265,15 +2520,21 @@ static void wfc_link_iterate(WFC_LINK_T *link, WFC_LINK_CALLBACK_T func, void *a
    }
 }
 
+//------------------------------------------------------------------------------
+
 void wfc_set_deferral_stream(WFCDevice dev, WFCContext ctx, WFCNativeStreamType stream)
 {
-   if(!vcos_verify(dev != WFC_INVALID_HANDLE))
-      {return;}
-
-   WFC_DEVICE_T *device_ptr = (WFC_DEVICE_T *)dev;
-   WFC_CONTEXT_T *context_ptr = (WFC_CONTEXT_T *)ctx;
-
    WFC_LOCK();
+
+   WFC_DEVICE_T *device_ptr = wfc_device_from_handle(dev);
+   WFC_CONTEXT_T *context_ptr = wfc_context_from_handle(ctx);
+
+   if (!vcos_verify(device_ptr != NULL))
+   {
+      vcos_log_error("%s: invalid device handle 0x%x", VCOS_FUNCTION, dev);
+      WFC_UNLOCK();
+      return;
+   }
 
    if(vcos_verify((context_ptr != NULL) && (context_ptr->device_ptr == device_ptr)))
    {
@@ -2283,6 +2544,54 @@ void wfc_set_deferral_stream(WFCDevice dev, WFCContext ctx, WFCNativeStreamType 
       {wfc_set_error(device_ptr, WFC_ERROR_BAD_HANDLE);}
 
    WFC_UNLOCK();
+}
+
+//------------------------------------------------------------------------------
+
+/** Called when a scene for composition has been taken
+ *
+ * @param cb_data Callback data
+ */
+static void wfc_client_scene_taken_cb(void *cb_data)
+{
+   VCOS_SEMAPHORE_T *wait_sem = (VCOS_SEMAPHORE_T *)cb_data;
+
+   vcos_assert(wait_sem != NULL);
+   vcos_semaphore_post(wait_sem);
+}
+
+//------------------------------------------------------------------------------
+
+/** Wait for the scene taken callback to have been called. Deletes the semaphore
+ * and releases the VideoCore keep alive.
+ *
+ * @param wait_sem The wait semaphore.
+ * @param ctx The handle for the context receiving the scene, used in logging.
+ * @param calling_function The calling function name, used in logging.
+ */
+static void wfc_client_wait_for_scene_taken(VCOS_SEMAPHORE_T *wait_sem, WFCContext ctx,
+      const char *calling_function)
+{
+   VCOS_STATUS_T status;
+
+#if defined(VCOS_LOGGING_ENABLED)
+   uint64_t pid = vcos_process_id_current();
+
+   vcos_log_trace("%s: wait for compositor to take scene, context 0x%x pid 0x%x%08x",
+         calling_function, ctx, (uint32_t)(pid >> 32), (uint32_t)pid);
+#else
+   vcos_unused(ctx);
+   vcos_unused(calling_function);
+#endif
+
+   status = vcos_semaphore_wait(wait_sem);
+   vcos_assert(status == VCOS_SUCCESS);
+   vcos_unused(status);
+
+   vcos_semaphore_delete(wait_sem);
+   wfc_server_release_keep_alive();
+
+   vcos_log_trace("%s: wait completed", calling_function);
 }
 
 //==============================================================================

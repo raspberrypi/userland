@@ -90,6 +90,10 @@ extern "C" {
 /** The connection is tunnelled. Buffer headers do not transit via the client but
  * directly from the output port to the input port. */
 #define MMAL_CONNECTION_FLAG_TUNNELLING 0x1
+/** Force the pool of buffer headers used by the connection to be allocated on the input port. */
+#define MMAL_CONNECTION_FLAG_ALLOCATION_ON_INPUT 0x2
+/** Force the pool of buffer headers used by the connection to be allocated on the output port. */
+#define MMAL_CONNECTION_FLAG_ALLOCATION_ON_OUTPUT 0x4
 /* @} */
 
 /** Forward type definition for a connection */

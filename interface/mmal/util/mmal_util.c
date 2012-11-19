@@ -113,6 +113,22 @@ uint32_t mmal_encoding_width_to_stride(uint32_t encoding, uint32_t width)
    return pixel_pitch[i].pitch_num * width / pixel_pitch[i].pitch_den;
 }
 
+const char* mmal_port_type_to_string(MMAL_PORT_TYPE_T type)
+{
+   const char *str;
+
+   switch (type)
+   {
+   case MMAL_PORT_TYPE_INPUT:   str = "in";  break;
+   case MMAL_PORT_TYPE_OUTPUT:  str = "out"; break;
+   case MMAL_PORT_TYPE_CLOCK:   str = "clk"; break;
+   case MMAL_PORT_TYPE_CONTROL: str = "ctr"; break;
+   default:                     str = "invalid"; break;
+   }
+
+   return str;
+}
+
 MMAL_PARAMETER_HEADER_T *mmal_port_parameter_alloc_get(MMAL_PORT_T *port,
    uint32_t id, uint32_t size, MMAL_STATUS_T *p_status)
 {
@@ -289,6 +305,11 @@ MMAL_PORT_T *mmal_util_get_port(MMAL_COMPONENT_T *comp, MMAL_PORT_TYPE_T type, u
       list = comp->output;
       break;
 
+   case MMAL_PORT_TYPE_CLOCK:
+      num = comp->clock_num;
+      list = comp->clock;
+      break;
+
    case MMAL_PORT_TYPE_CONTROL:
       num = 1;
       list = &comp->control;
@@ -319,7 +340,7 @@ char *mmal_4cc_to_string(char *buf, size_t len, uint32_t fourcc)
    }
    else
    {
-      strcpy(buf, "<0>");
+      snprintf(buf, len, "<0>");
    }
    return buf;
 }

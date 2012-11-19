@@ -77,4 +77,7 @@ typedef struct MMAL_CORE_PORT_STATISTICS_T
    MMAL_CORE_STATISTICS_T tx;
 } MMAL_CORE_PORT_STATISTICS_T;
 
+/** Unsigned 16.16 fixed point value, also known as Q16.16 */
+typedef uint32_t MMAL_FIXED_16_16_T;
+
 #endif /* MMAL_COMMON_H */

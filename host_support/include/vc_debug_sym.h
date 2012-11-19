@@ -43,6 +43,10 @@ typedef struct
 
 } VC_DEBUG_SYMBOL_T;
 
+/*
+ * Debug header+params are constructed by makefiles/internals/memorymap.mk
+ * (first .text section) and stored in the VC binary
+ */
 typedef struct
 {
     uint32_t    symbolTableOffset;
@@ -52,7 +56,7 @@ typedef struct
 
 typedef struct
 {
-    uint32_t    vcMemBase;
+    uint32_t    vcMemBase; /* base address of loaded binary */
     uint32_t    vcMemSize;
     uint32_t    vcEntryPoint;
     uint32_t    symbolTableLength;
@@ -63,7 +67,7 @@ typedef struct
 // Offset within the videocore memory map to get the address of the debug header.
 #define VC_DEBUG_HEADER_OFFSET 0x2800
 
-#if defined( __VC4_BIG_ISLAND__ ) || defined (PLATFORM_RASPBERRYPI)
+#if (defined( __VC4_BIG_ISLAND__ ) || defined (PLATFORM_RASPBERRYPI)) && !defined( __COVERITY__ )
 
     /* Use of the debug symbols only makes sense on machines which have
      * some type of shared memory architecture.
@@ -75,9 +79,9 @@ typedef struct
 #endif
 
 #if USE_VC_DEBUG_SYMS
-#   define  PRAGMA(foo) pragma foo
+#   define  VCDBG_PRAGMA(foo) pragma foo
 #else
-#   define  PRAGMA(foo)
+#   define  VCDBG_PRAGMA(foo)
 #endif
 
 /*
@@ -87,9 +91,9 @@ typedef struct
 
 #if USE_VC_DEBUG_SYMS
 #define VC_DEBUG_SYMBOL(name,label,addr,size) \
-    PRAGMA( Data(LIT, ".init.vc_debug_sym" ); ) \
+    VCDBG_PRAGMA( Data(LIT, ".init.vc_debug_sym" ); ) \
     static const VC_DEBUG_SYMBOL_T vc_sym_##name = { label, (uint32_t)addr, size }; \
-    PRAGMA( Data )
+    VCDBG_PRAGMA( Data )
 #else
 #define VC_DEBUG_SYMBOL(name,label,addr,size)
 #endif
@@ -115,30 +119,34 @@ typedef struct
  */
 
 #define VC_DEBUG_DECLARE_UNCACHED_VAR(var_type,var_name,var_init) \
-    PRAGMA( Data(".ucdata"); ) \
+    VCDBG_PRAGMA( Data(".ucdata"); ) \
     var_type var_name = (var_init); \
-    PRAGMA( Data(); ) \
+    VCDBG_PRAGMA( Data(); ) \
     var_type *vc_var_ptr_##var_name = &var_name; \
     VC_DEBUG_VAR(var_name)
 
+#define VC_DEBUG_EXTERN_UNCACHED_VAR(var_type,var_name) \
+    extern var_type var_name; \
+    static var_type *vc_var_ptr_##var_name = &var_name
+
 #define VC_DEBUG_DECLARE_UNCACHED_STATIC_VAR(var_type,var_name,var_init) \
-    PRAGMA( Data(".ucdata"); ) \
+    VCDBG_PRAGMA( Data(".ucdata"); ) \
     static var_type var_name = (var_init); \
-    PRAGMA( Data(); ) \
+    VCDBG_PRAGMA( Data(); ) \
     static var_type *vc_var_ptr_##var_name = &var_name; \
     VC_DEBUG_VAR(var_name)
 
 #define VC_DEBUG_DECLARE_UNCACHED_VAR_ZERO(var_type,var_name) \
-    PRAGMA( Data(".ucdata"); ) \
+    VCDBG_PRAGMA( Data(".ucdata"); ) \
     var_type var_name = {0}; \
-    PRAGMA( Data(); ) \
+    VCDBG_PRAGMA( Data(); ) \
     var_type *vc_var_ptr_##var_name = &var_name; \
     VC_DEBUG_VAR(var_name)
 
 #define VC_DEBUG_DECLARE_UNCACHED_STATIC_VAR_ZERO(var_type,var_name) \
-    PRAGMA( Data(".ucdata"); ) \
+    VCDBG_PRAGMA( Data(".ucdata"); ) \
     static var_type var_name = {0}; \
-    PRAGMA( Data(); ) \
+    VCDBG_PRAGMA( Data(); ) \
     static var_type *vc_var_ptr_##var_name = &var_name; \
     VC_DEBUG_VAR(var_name)
 
@@ -160,9 +168,9 @@ typedef struct
  */
 
 #define VC_DEBUG_DECLARE_UNCACHED_STATIC_VAR_NO_PTR(var_type,var_name,var_init) \
-    PRAGMA( Data(".init.ucdata"); ) \
+    VCDBG_PRAGMA( Data(".init.ucdata"); ) \
     static var_type var_name = (var_init); \
-    PRAGMA( Data(); ) \
+    VCDBG_PRAGMA( Data(); ) \
     VC_DEBUG_VAR(var_name)
 
 /* ---- Variable Externs ------------------------------------------------- */

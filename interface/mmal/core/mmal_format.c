@@ -132,7 +132,12 @@ uint32_t mmal_format_compare(MMAL_ES_FORMAT_T *fmt1, MMAL_ES_FORMAT_T *fmt2)
          result |= MMAL_ES_FORMAT_COMPARE_FLAG_VIDEO_ASPECT_RATIO;
       if (memcmp(&video1->frame_rate, &video2->frame_rate, sizeof(video1->frame_rate)))
          result |= MMAL_ES_FORMAT_COMPARE_FLAG_VIDEO_FRAME_RATE;
-      if (memcmp(&video1->par, &video2->par, sizeof(*video1) - offsetof(MMAL_VIDEO_FORMAT_T, par)))
+      if (video1->color_space != video2->color_space)
+         result |= MMAL_ES_FORMAT_COMPARE_FLAG_VIDEO_COLOR_SPACE;
+      /* coverity[overrun-buffer-arg] We're comparing the rest of the video format structure */
+      if (memcmp(((char*)&video1->color_space) + sizeof(video1->color_space),
+                 ((char*)&video2->color_space) + sizeof(video2->color_space),
+                 sizeof(*video1) - offsetof(MMAL_VIDEO_FORMAT_T, color_space) - sizeof(video1->color_space)))
          result |= MMAL_ES_FORMAT_COMPARE_FLAG_ES_OTHER;
       break;
    case MMAL_ES_TYPE_AUDIO:
@@ -166,6 +171,7 @@ MMAL_STATUS_T mmal_format_extradata_alloc(MMAL_ES_FORMAT_T *format, unsigned int
       private->extradata = vcos_malloc(size, "mmal format extradata");
       if(!private->extradata)
          return MMAL_ENOMEM;
+      private->extradata_size = size;
    }
 
    /* Set the fields in the actual format structure */

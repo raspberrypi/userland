@@ -141,7 +141,8 @@ void vc_vchi_gencmd_init (VCHI_INSTANCE_T initialise_instance, VCHI_CONNECTION_T
    for (i=0; i<gencmd_client.num_connections; i++) {
 
       // Create a 'LONG' service on the each of the connections
-      SERVICE_CREATION_T gencmd_parameters = { MAKE_FOURCC("GCMD"),      // 4cc service code
+      SERVICE_CREATION_T gencmd_parameters = { VCHI_VERSION(VC_GENCMD_VER),
+                                               MAKE_FOURCC("GCMD"),      // 4cc service code
                                                connections[i],           // passed in fn ptrs
                                                0,                        // tx fifo size (unused)
                                                0,                        // tx fifo size (unused)
@@ -465,8 +466,10 @@ int vc_gencmd_number_property(char *text, const char *property, int *number) {
       return 0;
    temp = value[length];
    value[length] = 0;
+   /* coverity[secure_coding] - this is not insecure */
    retval = sscanf(value, "0x%x", (unsigned int*)number);
    if (retval != 1)
+      /* coverity[secure_coding] - this is not insecure */
       retval = sscanf(value, "%d", number);
    value[length] = temp;
    return retval;

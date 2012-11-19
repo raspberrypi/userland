@@ -141,6 +141,7 @@ ILCS_SERVICE_T *ilcs_init(VCHIQ_STATE_T *state, void **connection, ILCS_CONFIG_T
    int32_t i;
    VCOS_THREAD_ATTR_T thread_attrs;
    ILCS_SERVICE_T *st;
+   VCHIQ_SERVICE_PARAMS_T params;
 
    st = vcos_malloc(sizeof(ILCS_SERVICE_T), "ILCS State");
    if(!st)
@@ -191,16 +192,24 @@ ILCS_SERVICE_T *ilcs_init(VCHIQ_STATE_T *state, void **connection, ILCS_CONFIG_T
    /* VCHIQ_ARM distinguishes between servers and clients. Use use_memmgr
       parameter to detect usage by the client.
     */
+
+   memset(&params,0,sizeof(params));
+   params.fourcc = st->fourcc;
+   params.callback = ilcs_callback;
+   params.userdata = st;
+   params.version = VC_ILCS_VERSION;
+   params.version_min = VC_ILCS_VERSION;
+
    if (use_memmgr == 0)
    {
       // Host side, which will connect to a listening VideoCore side
-      if (vchiq_open_service(st->vchiq, st->fourcc, ilcs_callback, st, &st->service) != VCHIQ_SUCCESS)
+      if (vchiq_open_service(st->vchiq, &params, &st->service) != VCHIQ_SUCCESS)
          goto fail_service;
    }
    else
    {
       // VideoCore side, a listening service not connected
-      if (vchiq_add_service(st->vchiq, st->fourcc, ilcs_callback, st, &st->service) != VCHIQ_SUCCESS)
+      if (vchiq_add_service(st->vchiq, &params, &st->service) != VCHIQ_SUCCESS)
          goto fail_service;
 
       // On VC shutdown we defer calling vchiq_remove_service until after the callback has
@@ -223,7 +232,7 @@ ILCS_SERVICE_T *ilcs_init(VCHIQ_STATE_T *state, void **connection, ILCS_CONFIG_T
    vcos_thread_attr_init(&thread_attrs);
    vcos_thread_attr_setstacksize(&thread_attrs, 4096);
 
-   sprintf(st->name, "ILCS_%s", use_memmgr ? "VC" : "HOST");
+   snprintf(st->name, sizeof(st->name), "ILCS_%s", use_memmgr ? "VC" : "HOST");
 
    if(vcos_thread_create(&st->thread, st->name, &thread_attrs, ilcs_task, st) != VCOS_SUCCESS)
       goto fail_thread;

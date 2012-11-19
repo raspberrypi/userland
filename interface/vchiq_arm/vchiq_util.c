@@ -69,6 +69,11 @@ int vchiu_queue_is_empty(VCHIU_QUEUE_T *queue)
    return queue->read == queue->write;
 }
 
+int vchiu_queue_is_full(VCHIU_QUEUE_T *queue)
+{
+   return queue->write == queue->read + queue->size;
+}
+
 void vchiu_queue_push(VCHIU_QUEUE_T *queue, VCHIQ_HEADER_T *header)
 {
    while (queue->write == queue->read + queue->size)

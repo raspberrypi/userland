@@ -31,6 +31,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MMAL_VIDEO_DECODE  "video_decode"
 #define MMAL_VIDEO_ENCODE  "video_encode"
 #define MMAL_VIDEO_RENDER  "video_render"
+#define MMAL_AUDIO_DECODE  "audio_decode"
+#define MMAL_AUDIO_ENCODE  "audio_encode"
+#define MMAL_AUDIO_RENDER  "audio_render"
 #define MMAL_CAMERA        "camera"
 
 #if defined(__GNUC__) && (__GNUC__ > 2)

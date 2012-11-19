@@ -148,6 +148,8 @@ static VCOS_MSGQUEUE_T *vcos_msgq_find_helper(const char *name, int wait)
 
          /* we're now on the list, so can safely go to sleep */
          vcos_mutex_unlock(&lock);
+
+         /* coverity[lock] This is a semaphore, not a mutex */
          vcos_semaphore_wait(&waiter.sem);
          /* It should now be on the list, but it could in theory be deleted
           * between waking up and going to look for it. So may have to wait

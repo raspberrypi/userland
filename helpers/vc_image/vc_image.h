@@ -135,6 +135,7 @@ extern "C" {
       VC_IMAGE_YUVINFO_CSC_SMPTE_240M      = 5,   /* Society of Motion Picture and Television Engineers 240M (1999) */
       VC_IMAGE_YUVINFO_CSC_ITUR_BT470_2_M  = 6,  /* ITU-R BT.470-2 System M */
       VC_IMAGE_YUVINFO_CSC_ITUR_BT470_2_BG = 7,  /* ITU-R BT.470-2 System B,G */
+      VC_IMAGE_YUVINFO_CSC_JPEG_JFIF_Y16_255 = 8, /* JPEG JFIF, but with 16..255 luma */
       VC_IMAGE_YUVINFO_CSC_CUSTOM          = 15,  /* Custom colour matrix follows header */
       VC_IMAGE_YUVINFO_CSC_SMPTE_170M      = VC_IMAGE_YUVINFO_CSC_ITUR_BT601,
 
@@ -157,7 +158,7 @@ extern "C" {
       bits should be zero and enforce this in vc_image functions to catch people
       who aren't initialising the VC_IMAGE_T structure nicely; update when other
       bits are added */
-#define VC_IMAGE_INFO_VALIDBITS    0x9F07
+#define VC_IMAGE_INFO_VALIDBITS    0x9F0F
    /* Define the bits of info used to denote the colourspace */
 #define VC_IMAGE_INFO_COLOURSPACE  0x0F
 

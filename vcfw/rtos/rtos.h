@@ -37,6 +37,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vcinclude/common.h"
 #include "vcfw/drivers/driver.h"
 
+#ifdef _VIDEOCORE
+#include "host_support/include/vc_debug_sym.h"
+#endif
+
 #include <stdlib.h>
 
 #ifdef __cplusplus
@@ -114,7 +118,7 @@ extern void rtos_restore_interrupts( const uint32_t previous_state );
 
 
 //Routine to query if interrupts are enable or not
-#ifdef __HIGHC__
+#ifdef __VIDEOCORE__
 static inline uint32_t rtos_interrupts_enabled( void )
 {
    return !!(_vasm("mov %D,%sr") & (1<<30));
@@ -351,7 +355,23 @@ extern int32_t rtos_timer_cancel( RTOS_TIMER_T *timer );
 #define RTOS_PRIORITY_EXTERNAL         0 // must be in external memory
 #define RTOS_PRIORITY_UNIMPORTANT      1
 
-#ifdef __VIDEOCORE4__
+#if defined(__VIDEOCORE5__)
+
+#define RTOS_PRIORITY_SHIFT            30
+#define RTOS_ALIAS_NORMAL(x)               (x) // normal cached data (uses main 128K L2 cache)
+#define RTOS_ALIAS_L1_NONALLOCATING(x)     (x) // coherent with L1, allocating in L2
+#define RTOS_ALIAS_COHERENT(x)             (x) // cache coherent but non-allocating
+#define RTOS_ALIAS_DIRECT(x)               (x) // uncached
+#define RTOS_IS_ALIAS_NOT_L1(x)            (0)
+#define RTOS_IS_ALIAS_DIRECT(x)            (0)
+
+#define RTOS_PRIORITY_L1_NONALLOCATING         (0 << RTOS_PRIORITY_SHIFT)
+#define RTOS_PRIORITY_L1L2_NONALLOCATING       (0 << RTOS_PRIORITY_SHIFT)
+#define RTOS_PRIORITY_COHERENT         RTOS_PRIORITY_L1L2_NONALLOCATING
+#define RTOS_PRIORITY_DIRECT           (0 << RTOS_PRIORITY_SHIFT)
+
+#elif defined(__VIDEOCORE4__)
+
 #define RTOS_PRIORITY_SHIFT            30
 #define RTOS_ALIAS_NORMAL(x)               ((void*)(((unsigned)(x)&~0xc0000000)|0x00000000)) // normal cached data (uses main 128K L2 cache)
 #define RTOS_ALIAS_L1_NONALLOCATING(x)     ((void*)(((unsigned)(x)&~0xc0000000)|0x40000000)) // coherent with L1, allocating in L2
@@ -364,7 +384,16 @@ extern int32_t rtos_timer_cancel( RTOS_TIMER_T *timer );
 #define RTOS_ALIAS_DIRECT(x)               ((void*)(((unsigned)(x)&~0xc0000000)|0xc0000000)) // uncached
 #define RTOS_IS_ALIAS_NOT_L1(x)            (((((unsigned)(x)>>30)&0x3)==1) || (((unsigned)(x)>>29)>=3))
 #define RTOS_IS_ALIAS_DIRECT(x)            ((((unsigned)(x)>>30)&0x3)==3)
-#else
+
+// RTOS_PRIORITY_L1_NONALLOCATING will skip the L1 cache, but still allocate in L2
+// this is needed if VPU is communicating with hardware via memory
+#define RTOS_PRIORITY_L1_NONALLOCATING         (1 << RTOS_PRIORITY_SHIFT)
+#define RTOS_PRIORITY_L1L2_NONALLOCATING       (2 << RTOS_PRIORITY_SHIFT)
+#define RTOS_PRIORITY_COHERENT         RTOS_PRIORITY_L1L2_NONALLOCATING
+#define RTOS_PRIORITY_DIRECT           (3 << RTOS_PRIORITY_SHIFT)
+
+#else // defined (__VIDEOCORE4__)
+
 #define RTOS_PRIORITY_SHIFT            28
 #define RTOS_ALIAS_NORMAL(x)               ((void*)(((unsigned)(x)&~0xf0000000)|0x00000000)) // normal cached data (uses main 128K L2 cache)
 #define RTOS_ALIAS_L1_NONALLOCATING(x)     (x)                                               // coherent with L1, allocating in L2
@@ -372,17 +401,13 @@ extern int32_t rtos_timer_cancel( RTOS_TIMER_T *timer );
 #define RTOS_ALIAS_DIRECT(x)               ((void*)(((unsigned)(x)&~0xf0000000)|0x30000000)) // uncached
 #define RTOS_IS_ALIAS_NOT_L1(x)            (1)              // compatibility with vc4
 #define RTOS_IS_ALIAS_DIRECT(x)            ((((unsigned)(x)>>28)&0xf)==3)
-#endif
-#ifdef __VIDEOCORE4__
-// RTOS_PRIORITY_L1_NONALLOCATING will skip the L1 cache, but still allocate in L2
-// this is needed if VPU is communicating with hardware via memory
-#define RTOS_PRIORITY_L1_NONALLOCATING         (1 << RTOS_PRIORITY_SHIFT)
-#else
+
 #define RTOS_PRIORITY_L1_NONALLOCATING         (0 << RTOS_PRIORITY_SHIFT)
-#endif
 #define RTOS_PRIORITY_L1L2_NONALLOCATING       (2 << RTOS_PRIORITY_SHIFT)
 #define RTOS_PRIORITY_COHERENT         RTOS_PRIORITY_L1L2_NONALLOCATING
 #define RTOS_PRIORITY_DIRECT           (3 << RTOS_PRIORITY_SHIFT)
+
+#endif
 
 #ifdef __VIDEOCORE__
 #define RTOS_WRITE_BARRIER(x) _vasm("ld %D, (%r)\nadd %D, 0", x)
@@ -435,6 +460,13 @@ extern uint32_t rtos_get_total_mem(const rtos_mempool_t pool);
  */
 #define rtos_default_malloc_name() (char const *)_vasm("bitset %D, %lr, 31")
 #define RTOS_MALLOC_NAME_IS_CODE_FLAG                            (1u << 31)
+
+VC_DEBUG_EXTERN_UNCACHED_VAR(uint32_t,boot_state);
+VC_DEBUG_EXTERN_UNCACHED_VAR(uint32_t,boot_state_info);
+
+#define BOOT_STATE(c0,c1,c2,c3) VC_DEBUG_ACCESS_UNCACHED_VAR(boot_state) = (c0+(c1<<8)+(c2<<16)+(c3<<24))
+#define BOOT_STATE_INFO(v) VC_DEBUG_ACCESS_UNCACHED_VAR(boot_state_info) = (v)
+#define BOOT_STATE_EQUALS(c0,c1,c2,c3) (VC_DEBUG_ACCESS_UNCACHED_VAR(boot_state) == (c0+(c1<<8)+(c2<<16)+(c3<<24)))
 
 #else //ifdef _VIDEOCORE
 

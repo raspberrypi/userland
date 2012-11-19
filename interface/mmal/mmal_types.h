@@ -88,6 +88,9 @@ typedef struct
 #define MMAL_TIME_UNKNOWN (INT64_C(1)<<63)  /**< Special value signalling that time is not known */
 /* @} */
 
+/** Four Character Code type */
+typedef uint32_t MMAL_FOURCC_T;
+
 /* @} */
 
 #ifdef __cplusplus

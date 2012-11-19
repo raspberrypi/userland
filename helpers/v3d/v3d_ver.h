@@ -45,8 +45,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    #elif defined(__BCM2708B0__)
       /* 2708 b0 */
       #define V3D_REVISION 2
+   #elif defined(__BCM2708C0__) || defined(__BCM2708C1__)
+      /* 2708 c0/1 */
+      #define V3D_REVISION 3
    #else
-      /* fiji */
+      /* capri */
       #define V3D_REVISION 6
    #endif
 #endif

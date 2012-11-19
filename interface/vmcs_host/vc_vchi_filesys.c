@@ -178,6 +178,7 @@ int vc_vchi_filesys_init (VCHI_INSTANCE_T initialise_instance, VCHI_CONNECTION_T
    vc_filesys_client.bulk_buffer = vcos_malloc_aligned(FILESERV_MAX_BULK, 16, "HFilesys bulk_recv");
    vc_filesys_client.cur_xid = 0;
 
+   memset(&filesys_parameters, 0, sizeof(filesys_parameters));
    filesys_parameters.service_id = FILESERV_4CC;   // 4cc service code
    filesys_parameters.connection = connections[0]; // passed in fn ptrs
    filesys_parameters.rx_fifo_size = 0;            // rx fifo size (unused)
@@ -187,6 +188,8 @@ int vc_vchi_filesys_init (VCHI_INSTANCE_T initialise_instance, VCHI_CONNECTION_T
    filesys_parameters.want_unaligned_bulk_rx = 0;
    filesys_parameters.want_unaligned_bulk_tx = 0;
    filesys_parameters.want_crc = 0;
+   filesys_parameters.version.version = VC_FILESERV_VER;
+   filesys_parameters.version.version_min = VC_FILESERV_VER;
 
    success = vchi_service_open( initialise_instance, &filesys_parameters, &vc_filesys_client.open_handle );
    vcos_assert( success == 0 );
@@ -224,7 +227,8 @@ static void *filesys_task_func(void *arg)
       // read the message - should we really "peek" this
       success = vchi_msg_dequeue(vc_filesys_client.open_handle, &vc_filesys_client.vc_msg,
                                  sizeof(vc_filesys_client.vc_msg), &msg_len, VCHI_FLAGS_NONE);
-      
+
+      /* coverity[tainted_string_argument] */
       success = (int32_t) vc_fs_message_handler(&vc_filesys_client.vc_msg, msg_len);
       (void)success;
       vchi_service_release(vc_filesys_client.open_handle);
@@ -364,7 +368,8 @@ static int vc_filesys_single_string(uint32_t param, const char *str, uint32_t fn
    if(len < FILESERV_MAX_DATA && lock_obtain() == 0)
    {
       vc_filesys_client.fileserv_msg.params[0] = param;
-      strcpy((char*)vc_filesys_client.fileserv_msg.data, str);
+      /* coverity[buffer_size_warning] - the length of str has already been checked */
+      strncpy((char*)vc_filesys_client.fileserv_msg.data, str, FILESERV_MAX_DATA);
     
       if (vchi_msg_stub(&vc_filesys_client.fileserv_msg, fn, len+1+16) == FILESERV_RESP_OK)
       {
@@ -491,16 +496,21 @@ RETURNS
 int vc_filesys_mount(const char *device, const char *mountpoint, const char *options)
 {
    int set = -1, len;
+   int a = strlen(device);
+   int b = strlen(mountpoint);
+   int c = strlen(options);
 
-   if(strlen(device) + strlen(mountpoint) + strlen(options) + 3 < FILESERV_MAX_DATA && lock_obtain() == 0)
+   if(a + b + c + 3 < FILESERV_MAX_DATA && lock_obtain() == 0)
    {
-      strcpy((char*)vc_filesys_client.fileserv_msg.data, device);
-      len = (int)strlen(device)+1;
-      strcpy((char*)vc_filesys_client.fileserv_msg.data+len, mountpoint);
-      len += (int)strlen(mountpoint)+1;
-      strcpy((char*)vc_filesys_client.fileserv_msg.data+len, options);
-      len += (int)strlen(options)+1;
-      len += (int)(((FILESERV_MSG_T *)0)->data);
+      char *str = (char *) vc_filesys_client.fileserv_msg.data;
+
+      memcpy(str, device, a);
+      str[a] = 0;
+      memcpy(str+a+1, mountpoint, b);
+      str[a+1+b] = 0;
+      memcpy(str+a+b+2, options, c);
+      str[a+b+c+2] = 0;
+      len = a + b + c + 3 + (int)(((FILESERV_MSG_T *)0)->data);
       len = ((len + (VCHI_BULK_GRANULARITY-1)) & ~(VCHI_BULK_GRANULARITY-1)) + VCHI_BULK_GRANULARITY;
       
       if (vchi_msg_stub(&vc_filesys_client.fileserv_msg, VC_FILESYS_MOUNT, len) == FILESERV_RESP_OK)
@@ -632,12 +642,15 @@ static int vc_vchi_msg_bulk_read(FILESERV_MSG_T* msg, uint16_t cmd_id, uint32_t 
       return (int) num_bytes_read;
    }
 
+// Make this code conditional to stop Coverity complaining about dead code
+#if VCHI_BULK_ALIGN > 1
    //copy host_align_bytes bytes to recv_addr, now ready for bulk
    if(host_align_bytes) {
       memcpy(recv_addr, msg->data, host_align_bytes);
       recv_addr += host_align_bytes;
       transfer_len -= host_align_bytes;
    }
+#endif
 
    //receive bulk from host
    if(msg->cmd_code == FILESERV_BULK_WRITE){
@@ -784,6 +797,8 @@ static int vc_vchi_msg_bulk_write(FILESERV_MSG_T* msg, uint16_t cmd_id, uint32_t
       //required to make send_addr for bulk
       align_bytes = VCHI_BULK_ALIGN_NBYTES(send_addr);
 
+// Make this code conditional to stop Coverity complaining about dead code
+#if VCHI_BULK_ALIGN > 1
       //copy vc_align bytes to msg->data, send_addr ready for bulk
       if(align_bytes) {
          msg->params[3] = align_bytes;
@@ -793,6 +808,7 @@ static int vc_vchi_msg_bulk_write(FILESERV_MSG_T* msg, uint16_t cmd_id, uint32_t
          msg_len += align_bytes;
       }
       else
+#endif
          msg->params[3] = 0;
 
       // need to ensure we have the appropriate alignment
@@ -1218,8 +1234,8 @@ int vc_filesys_rename(const char *oldfile, const char *newfile)
    // Ensure the pathnames aren't too long
    if ((a = strlen(oldfile)) < FS_MAX_PATH && (b = strlen(newfile)) < FS_MAX_PATH && lock_obtain() == 0)
    {
-      strcpy((char *)vc_filesys_client.fileserv_msg.data, oldfile);
-      strcpy((char *)&vc_filesys_client.fileserv_msg.data[a+1], newfile);
+      strncpy((char *)vc_filesys_client.fileserv_msg.data, oldfile, FS_MAX_PATH);
+      strncpy((char *)&vc_filesys_client.fileserv_msg.data[a+1], newfile, FS_MAX_PATH);
       
       if (vchi_msg_stub(&vc_filesys_client.fileserv_msg, VC_FILESYS_RENAME, 16+a+1+b+1) == FILESERV_RESP_OK)
          success = 0;
@@ -1579,19 +1595,23 @@ RETURNS
 ******************************************************************************/
 int vc_filesys_read_sectors(const char *path, uint32_t sector_num, char *sectors, uint32_t num_sectors, uint32_t *sectors_read)
 {
+#if VCHI_BULK_ALIGN > 1
    uint32_t align_bytes = 0;
+#endif
    char* bulk_addr = sectors;
    int len;
    int ret = -1;
 
    if((len = (int)strlen(path)) < FS_MAX_PATH && lock_obtain() == 0)
    {
-      strcpy((char *)vc_filesys_client.fileserv_msg.data, path);
+      strncpy((char *)vc_filesys_client.fileserv_msg.data, path, FS_MAX_PATH);
       vc_filesys_client.fileserv_msg.params[0] = sector_num;
       vc_filesys_client.fileserv_msg.params[1] = num_sectors;
 
+#if VCHI_BULK_ALIGN > 1
       //required to make buffer aligned for bulk
       align_bytes = VCHI_BULK_ALIGN_NBYTES(sectors);
+#endif
       //note for read we are currently doing memcpy on host to tell 2727 align is 0
       vc_filesys_client.fileserv_msg.params[2] = 0;
       
@@ -1601,14 +1621,21 @@ int vc_filesys_read_sectors(const char *path, uint32_t sector_num, char *sectors
          while(num_sectors)
          {
             uint32_t bulk_sectors = (num_sectors > FILESERV_MAX_BULK_SECTOR) ? (uint32_t)FILESERV_MAX_BULK_SECTOR : num_sectors;
-            if(vchi_bulk_queue_receive( vc_filesys_client.open_handle, align_bytes ? vc_filesys_client.bulk_buffer : bulk_addr,
+            if(vchi_bulk_queue_receive( vc_filesys_client.open_handle,
+#if VCHI_BULK_ALIGN > 1
+                                        align_bytes ? vc_filesys_client.bulk_buffer : bulk_addr,
+#else
+                                        bulk_addr,
+#endif
                                         (bulk_sectors*FILESERV_SECTOR_LENGTH), VCHI_FLAGS_BLOCK_UNTIL_OP_COMPLETE, NULL) != 0)
                break;
 
+#if VCHI_BULK_ALIGN > 1
             if(align_bytes) {
                //this is bad but will do for now..
                memcpy( bulk_addr, vc_filesys_client.bulk_buffer, (bulk_sectors*FILESERV_SECTOR_LENGTH));
             }
+#endif
             bulk_addr += (bulk_sectors*FILESERV_SECTOR_LENGTH);
             num_sectors -= bulk_sectors;
          }
@@ -1665,7 +1692,7 @@ int vc_filesys_write_sectors(const char *path, uint32_t sector_num, char *sector
       vc_filesys_client.fileserv_msg.params[2] = align_bytes;
       
       //copy path at end of any alignbytes
-      strcpy(((char *)vc_filesys_client.fileserv_msg.data), path);
+      strncpy(((char *)vc_filesys_client.fileserv_msg.data), path, FS_MAX_PATH);
       
       //we send write request
       if (vchi_msg_stub_noblock(&vc_filesys_client.fileserv_msg, VC_FILESYS_WRITE_SECTORS, 16+len+1) == 0)

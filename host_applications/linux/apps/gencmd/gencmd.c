@@ -40,7 +40,7 @@ int main( int argc, char **argv )
 {
    int instNum = 0;
    VCHI_INSTANCE_T vchi_instance;
-   VCHI_CONNECTION_T *vchi_connection;
+   VCHI_CONNECTION_T *vchi_connection = NULL;
 
    if ( argc > 1 )
    {
@@ -73,32 +73,33 @@ int main( int argc, char **argv )
     {
       int i = 1;
       char buffer[ 1024 ];
+      size_t buffer_offset = 0;
       clock_t before=0, after=0;
       double time_diff;
       uint32_t show_time = 0;
       int ret;
 
       //reset the string
-      strcpy( buffer, "" );
+      buffer[0] = '\0';
 
       //first, strip out a potential leading -t
       if( strcmp( argv[1], "-t" ) == 0 )
       {
          show_time = 1;
          i++;
-      }     
+      }
 
       for (; i <= argc-1; i++)
       {
-         strcat( buffer, argv[i] );
-         strcat( buffer, " " );
+         buffer_offset = vcos_safe_strcpy( buffer, argv[i], sizeof(buffer), buffer_offset );
+         buffer_offset = vcos_safe_strcpy( buffer, " ", sizeof(buffer), buffer_offset );
       }
 
       if( show_time )
          before = clock();
 
       //send the gencmd for the argument
-      if (( ret = vc_gencmd_send( buffer )) != 0 )
+      if (( ret = vc_gencmd_send( "%s", buffer )) != 0 )
       {
           printf( "vc_gencmd_send returned %d\n", ret );
       }

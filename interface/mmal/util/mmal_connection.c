@@ -73,6 +73,7 @@ static MMAL_BOOL_T mmal_connection_bh_release_cb(MMAL_POOL_T *pool, MMAL_BUFFER_
    MMAL_CONNECTION_T *connection = (MMAL_CONNECTION_T *)userdata;
    MMAL_PARAM_UNUSED(pool);
 
+   /* Queue the buffer produced by the output port */
    mmal_queue_put(pool->queue, buffer);
 
    if (connection->callback)
@@ -140,7 +141,7 @@ MMAL_STATUS_T mmal_connection_create(MMAL_CONNECTION_T **cx,
    char *name;
 
    /* Sanity checking */
-   if (!cx || out->type != MMAL_PORT_TYPE_OUTPUT || in->type != MMAL_PORT_TYPE_INPUT)
+   if (!cx)
       return MMAL_EINVAL;
 
    private = vcos_malloc(size, "mmal connection");
@@ -151,15 +152,11 @@ MMAL_STATUS_T mmal_connection_create(MMAL_CONNECTION_T **cx,
    private->refcount = 1;
    name = (char *)&private[1];
 
-   snprintf(name, name_size - 1, CONNECTION_NAME_FORMAT,
+   vcos_snprintf(name, name_size - 1, CONNECTION_NAME_FORMAT,
             out->component->name,
-            out->type == MMAL_PORT_TYPE_CONTROL ? "ctr" :
-               out->type == MMAL_PORT_TYPE_INPUT ? "in" :
-               out->type == MMAL_PORT_TYPE_OUTPUT ? "out" : "invalid", (int)out->index,
+            mmal_port_type_to_string(out->type), (int)out->index,
             in->component->name,
-            in->type == MMAL_PORT_TYPE_CONTROL ? "ctr" :
-               in->type == MMAL_PORT_TYPE_INPUT ? "in" :
-               in->type == MMAL_PORT_TYPE_OUTPUT ? "out" : "invalid", (int)in->index);
+            mmal_port_type_to_string(in->type), (int)in->index);
 
    LOG_TRACE("out %p, in %p, flags %x, %s", out, in, flags, name);
 
@@ -207,6 +204,10 @@ MMAL_STATUS_T mmal_connection_create(MMAL_CONNECTION_T **cx,
 
    /* Create empty pool of buffer headers for now (will be resized later on) */
    private->pool_port = (in->capabilities & MMAL_PORT_CAPABILITY_ALLOCATION) ? in : out;
+   if (flags & MMAL_CONNECTION_FLAG_ALLOCATION_ON_INPUT)
+      private->pool_port = in;
+   if (flags & MMAL_CONNECTION_FLAG_ALLOCATION_ON_OUTPUT)
+      private->pool_port = out;
    connection->pool = mmal_port_pool_create(private->pool_port, 0, 0);
    if (!connection->pool)
       goto error;
@@ -222,7 +223,7 @@ MMAL_STATUS_T mmal_connection_create(MMAL_CONNECTION_T **cx,
    in->userdata = (void *)connection;
    connection->time_setup = vcos_getmicrosecs() - connection->time_setup;
    *cx = connection;
-   return MMAL_SUCCESS;
+   return status;
 
  error:
    mmal_connection_destroy_internal(connection);
@@ -287,7 +288,7 @@ MMAL_STATUS_T mmal_connection_enable(MMAL_CONNECTION_T *connection)
       goto done;
    }
 
-   /* Set the buffering properties on both port */
+   /* Set the buffering properties on both ports */
    buffer_num = MMAL_MAX(out->buffer_num, in->buffer_num);
    buffer_size = MMAL_MAX(out->buffer_size, in->buffer_size);
    out->buffer_num = in->buffer_num = buffer_num;
@@ -322,6 +323,23 @@ MMAL_STATUS_T mmal_connection_enable(MMAL_CONNECTION_T *connection)
       LOG_ERROR("input port couldn't be enabled");
       mmal_port_disable(out);
       goto done;
+   }
+
+   /* Clock ports need buffers to send clock updates, so
+    * populate both connected clock ports */
+   if ((out->type == MMAL_PORT_TYPE_CLOCK) && (in->type == MMAL_PORT_TYPE_CLOCK))
+   {
+      MMAL_BUFFER_HEADER_T *buffer = mmal_queue_get(connection->pool->queue);
+      while (buffer)
+      {
+         mmal_port_send_buffer(out, buffer);
+         buffer = mmal_queue_get(connection->pool->queue);
+         if (buffer)
+         {
+            mmal_port_send_buffer(in, buffer);
+            buffer = mmal_queue_get(connection->pool->queue);
+         }
+      }
    }
 
  done:

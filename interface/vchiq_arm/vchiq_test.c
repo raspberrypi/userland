@@ -41,6 +41,17 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define PAGE_SIZE 4096
 #endif
 
+#define INIT_PARAMS(sp_, fourcc_, cb_, userdata_, ver_) \
+   do {                                \
+      memset((sp_), 0, sizeof(*(sp_)));   \
+      (sp_)->fourcc = fourcc_;            \
+      (sp_)->callback = cb_;              \
+      (sp_)->userdata = userdata_;        \
+      (sp_)->version = ver_;              \
+      (sp_)->version_min = ver_;          \
+   } while (0)
+
+
 static struct test_params g_params = { MSG_CONFIG, 64, 100, 1, 1, 1, 0, 0, 0, 0 };
 static const char *g_servname = "echo";
 
@@ -79,6 +90,7 @@ static VCHIQ_STATUS_T vchiq_bulk_test(void);
 static VCHIQ_STATUS_T vchiq_ctrl_test(void);
 static VCHIQ_STATUS_T vchiq_functional_test(void);
 static VCHIQ_STATUS_T vchiq_ping_test(void);
+static VCHIQ_STATUS_T vchiq_signal_test(void);
 
 static VCHIQ_STATUS_T do_functional_test(void);
 static void do_ping_test(VCHIQ_SERVICE_HANDLE_T service, int size, int async, int oneway, int iters);
@@ -105,6 +117,42 @@ static void usage(void);
 static void check_timer(void);
 static char *buf_align(char *buf, int align_size, int align);
 
+#ifdef ANDROID
+
+static int g_timeout_ms = 0;
+static pid_t main_process_pid;
+static void kill_timeout_handler(int cause, siginfo_t *how, void *ucontext);
+static int setup_auto_kill(int timeout_ms);
+
+#endif
+
+#ifdef __linux__
+
+#include <fcntl.h>
+#include "interface/vmcs_host/vc_cma.h"
+
+static void reserve_test(int reserve, int delay)
+{
+   int fd = open("/dev/vc-cma", O_RDWR);
+   int rc = -1;
+   if (fd >= 0)
+   {
+      rc = ioctl(fd, VC_CMA_IOC_RESERVE, reserve);
+      if (rc == 0)
+      {
+         printf("Sleeping for %d seconds...\n", delay);
+         sleep(delay);
+      }
+      else
+         printf("* failed to ioctl /dev/vc-cma - rc %d\n", rc);
+      close(fd);
+   }
+   else
+      printf("* failed to open /dev/vc-cma - rc %d\n", fd);
+}
+
+#endif
+
 static int vchiq_test(int argc, char **argv)
 {
    VCHIQ_STATUS_T status;
@@ -112,6 +160,7 @@ static int vchiq_test(int argc, char **argv)
    int run_ctrl_test = 0;
    int run_functional_test = 0;
    int run_ping_test = 0;
+   int run_signal_test = 0;
    int verbose = 0;
    int argn;
  
@@ -155,6 +204,10 @@ static int vchiq_test(int argc, char **argv)
       {
          usage();
       }
+      else if (strcmp(arg, "-i") == 0)
+      {
+         run_signal_test = 1;
+      }
       else if (strcmp(arg, "-m") == 0)
       {
          g_params.client_message_quota = atoi(argv[argn++]);
@@ -170,8 +223,39 @@ static int vchiq_test(int argc, char **argv)
       }
       else if (strcmp(arg, "-q") == 0)
       {
+         /* coverity[missing_lock : FALSE] - g_server_reply is not used for mutual exclusion */
          g_params.verify = 0;
       }
+#ifdef __linux__
+      else if (strcmp(arg, "-r") == 0)
+      {
+         int reserve, delay;
+         if (argn+1 < argc)
+         {
+            reserve = atoi(argv[argn++]);
+            delay = atoi(argv[argn++]);
+            reserve_test(reserve, delay);
+            exit(0);
+         }
+         else
+         {
+            printf("not enough arguments (-r reserve delay)\n");
+            exit(-1);
+         }
+      }
+#endif
+#ifdef ANDROID
+      else if (strcmp(arg, "-K") == 0)
+      {
+         if (argn < argc)
+            g_timeout_ms = atoi(argv[argn++]);
+         else
+         {
+            printf("not enough arguments (-K timeout)\n");
+            exit(-1);
+         }
+      }
+#endif
       else if (strcmp(arg, "-t") == 0)
       {
          check_timer();
@@ -196,7 +280,7 @@ static int vchiq_test(int argc, char **argv)
       }
    }
 
-   if ((run_ctrl_test + run_bulk_test + run_functional_test + run_ping_test) != 1)
+   if ((run_ctrl_test + run_bulk_test + run_functional_test + run_ping_test + run_signal_test) != 1)
       usage();
 
    if (argn < argc)
@@ -241,6 +325,8 @@ static int vchiq_test(int argc, char **argv)
       status = vchiq_functional_test();
    else if (run_ping_test)
       status = vchiq_ping_test();
+   else if (run_signal_test)
+      status = vchiq_signal_test();
 
    return (status == VCHIQ_SUCCESS) ? 0 : -1;
 }
@@ -285,7 +371,12 @@ vchiq_bulk_test(void)
       memset(bulk_rx_data[i], 0xff, g_params.blocksize);
    }
 
-//   fprintf(stderr, "vchiq_test: opening vchiq\n");
+#ifdef ANDROID
+   if (g_timeout_ms)
+   {
+      setup_auto_kill(g_timeout_ms);
+   }
+#endif
 
    if (vchiq_initialise(&vchiq_instance) != VCHIQ_SUCCESS)
    {
@@ -297,13 +388,12 @@ vchiq_bulk_test(void)
 
    memset(&service_params, 0, sizeof(service_params));
 
+   service_params.version = service_params.version_min = VCHIQ_TEST_VER;
    service_params.fourcc = VCHIQ_MAKE_FOURCC(g_servname[0], g_servname[1], g_servname[2], g_servname[3]);
    service_params.callback = clnt_callback;
    service_params.userdata = "clnt userdata";
-   service_params.version = 0;
-   service_params.version_min = 0;
 
-   if (vchiq_open_service_params(vchiq_instance, &service_params, &vchiq_service) != VCHIQ_SUCCESS)
+   if (vchiq_open_service(vchiq_instance, &service_params, &vchiq_service) != VCHIQ_SUCCESS)
    {
       printf("* failed to open service - already in use?\n");
       return VCHIQ_ERROR;
@@ -311,12 +401,13 @@ vchiq_bulk_test(void)
 
    printf("Bulk test - service:%s, block size:%d, iters:%d\n", g_servname, g_params.blocksize, g_params.iters);
 
+   /* coverity[missing_lock : FALSE] - g_server_reply is not used for mutual exclusion */
    g_params.echo = want_echo;
    element = elements;
    element->data = &g_params;
    element->size = sizeof(g_params);
    element++;
-
+   
    vchiq_queue_message(vchiq_service, elements, element - elements);
 
    vcos_event_wait(&g_server_reply);
@@ -405,6 +496,13 @@ vchiq_ctrl_test(void)
       }
    }
 
+#ifdef ANDROID
+   if (g_timeout_ms)
+   {
+      setup_auto_kill(g_timeout_ms);
+   }
+#endif
+
    if (vchiq_initialise(&vchiq_instance) != VCHIQ_SUCCESS)
    {
       printf("* failed to open vchiq instance\n");
@@ -418,10 +516,10 @@ vchiq_ctrl_test(void)
    service_params.fourcc = VCHIQ_MAKE_FOURCC(g_servname[0], g_servname[1], g_servname[2], g_servname[3]);
    service_params.callback = clnt_callback;
    service_params.userdata = "clnt userdata";
-   service_params.version = 0;
-   service_params.version_min = 0;
+   service_params.version = VCHIQ_TEST_VER;
+   service_params.version_min = VCHIQ_TEST_VER;
 
-   if (vchiq_open_service_params(vchiq_instance, &service_params, &vchiq_service) != VCHIQ_SUCCESS)
+   if (vchiq_open_service(vchiq_instance, &service_params, &vchiq_service) != VCHIQ_SUCCESS)
    {
       printf("* failed to open service - already in use?\n");
       return VCHIQ_ERROR;
@@ -505,6 +603,7 @@ vchiq_ping_test(void)
    VCHIQ_SERVICE_HANDLE_T vchiq_service;
    VCHI_SERVICE_HANDLE_T vchi_service;
    SERVICE_CREATION_T service_params;
+   VCHIQ_SERVICE_PARAMS_T vchiq_service_params;
    int fourcc;
 
    static int sizes[] = { 0, 1024, 2048, VCHIQ_MAX_MSG_SIZE };
@@ -512,7 +611,14 @@ vchiq_ping_test(void)
 
    fourcc = VCHIQ_MAKE_FOURCC(g_servname[0], g_servname[1], g_servname[2], g_servname[3]);
 
-   printf("Ping test - service:%s, iters:%d\n", g_servname, g_params.iters);
+   printf("Ping test - service:%s, iters:%d, version %d\n", g_servname, g_params.iters, VCHIQ_TEST_VER);
+
+#ifdef ANDROID
+   if (g_timeout_ms)
+   {
+      setup_auto_kill(g_timeout_ms);
+   }
+#endif
 
    if (vchiq_initialise(&vchiq_instance) != VCHIQ_SUCCESS)
    {
@@ -522,6 +628,8 @@ vchiq_ping_test(void)
 
    vchiq_connect(vchiq_instance);
 
+   memset(&service_params, 0, sizeof(service_params));
+   service_params.version.version = service_params.version.version_min = VCHIQ_TEST_VER;
    service_params.service_id = fourcc;
    service_params.callback = vchi_clnt_callback;
    service_params.callback_param = &vchi_service;
@@ -560,7 +668,8 @@ vchiq_ping_test(void)
 
    vchi_service_close(vchi_service);
 
-   if (vchiq_open_service(vchiq_instance, fourcc, clnt_callback, "clnt userdata", &vchiq_service) != VCHIQ_SUCCESS)
+   INIT_PARAMS(&vchiq_service_params, fourcc, clnt_callback, "clnt userdata", VCHIQ_TEST_VER);
+   if (vchiq_open_service(vchiq_instance, &vchiq_service_params, &vchiq_service) != VCHIQ_SUCCESS)
    {
       printf("* failed to open service - already in use?\n");
       return VCHIQ_ERROR;
@@ -592,7 +701,52 @@ vchiq_ping_test(void)
       do_ping_test(vchiq_service, sizes[i], 1000, 1000, iter_count/50);
    }
 
-   vchiq_remove_service(vchiq_service);
+   vchiq_close_service(vchiq_service);
+
+   return VCHIQ_SUCCESS;
+}
+
+static VCHIQ_STATUS_T
+vchiq_signal_test(void)
+{
+   /* Measure message round trip time for various sizes*/
+   VCHIQ_INSTANCE_T vchiq_instance;
+   VCHIQ_SERVICE_HANDLE_T vchiq_service;
+   VCHIQ_SERVICE_PARAMS_T vchiq_service_params;
+   int fourcc;
+
+   static int sizes[] = { 0, 1024, 2048, VCHIQ_MAX_MSG_SIZE };
+   unsigned int i;
+
+   fourcc = VCHIQ_MAKE_FOURCC(g_servname[0], g_servname[1], g_servname[2], g_servname[3]);
+
+   printf("signal test - service:%s, iters:%d, version %d\n", g_servname, g_params.iters, VCHIQ_TEST_VER);
+
+#ifdef ANDROID
+   if (g_timeout_ms)
+   {
+      setup_auto_kill(g_timeout_ms);
+   }
+#endif
+
+   if (vchiq_initialise(&vchiq_instance) != VCHIQ_SUCCESS)
+   {
+      printf("* failed to open vchiq instance\n");
+      return VCHIQ_ERROR;
+   }
+
+   vchiq_connect(vchiq_instance);
+
+   INIT_PARAMS(&vchiq_service_params, fourcc, clnt_callback, "clnt userdata", VCHIQ_TEST_VER);
+   if (vchiq_open_service(vchiq_instance, &vchiq_service_params, &vchiq_service) != VCHIQ_SUCCESS)
+   {
+      printf("* failed to open service - already in use?\n");
+      return VCHIQ_ERROR;
+   }
+
+   vchiq_bulk_transmit(vchiq_service, &sizes, 16, 0, VCHIQ_BULK_MODE_BLOCKING);
+
+   vchiq_close_service(vchiq_service);
 
    return VCHIQ_SUCCESS;
 }
@@ -609,6 +763,13 @@ do_functional_test(void)
 
    vcos_event_create(&func_test_sync, "test_sync");
 
+#ifdef ANDROID
+   if (g_timeout_ms)
+   {
+      setup_auto_kill(g_timeout_ms);
+   }
+#endif
+
    if (func_data_test_start != -1)
       goto bulk_tests_only;
 
@@ -617,9 +778,16 @@ do_functional_test(void)
    EXPECT(vchiq_get_config(instance, sizeof(config) + 1, &config), VCHIQ_ERROR);   // too large
    EXPECT(vchiq_get_config(instance, sizeof(config), &config), VCHIQ_SUCCESS);    // just right
    EXPECT(config.max_msg_size, VCHIQ_MAX_MSG_SIZE);
-   EXPECT(vchiq_add_service(instance, FUNC_FOURCC, func_clnt_callback, (void *)1, &service), VCHIQ_SUCCESS);
-   EXPECT(vchiq_add_service(instance, FUNC_FOURCC, func_clnt_callback, (void *)2, &service2), VCHIQ_SUCCESS);
-   EXPECT(vchiq_add_service(instance, FUNC_FOURCC, clnt_callback, (void *)3, &service3), VCHIQ_ERROR); // callback doesn't match
+
+   INIT_PARAMS(&service_params, FUNC_FOURCC, func_clnt_callback, (void *)1, VCHIQ_TEST_VER);
+   EXPECT(vchiq_add_service(instance, &service_params, &service), VCHIQ_SUCCESS);
+
+   INIT_PARAMS(&service_params, FUNC_FOURCC, func_clnt_callback, (void *)2, VCHIQ_TEST_VER);
+   EXPECT(vchiq_add_service(instance, &service_params, &service2), VCHIQ_SUCCESS);
+
+   INIT_PARAMS(&service_params, FUNC_FOURCC, clnt_callback, (void *)3, VCHIQ_TEST_VER);
+   EXPECT(vchiq_add_service(instance, &service_params, &service3), VCHIQ_ERROR); // callback doesn't match
+
    EXPECT(vchiq_set_service_option(service, VCHIQ_SERVICE_OPTION_AUTOCLOSE, 0), VCHIQ_SUCCESS);
    EXPECT(vchiq_set_service_option(service, VCHIQ_SERVICE_OPTION_AUTOCLOSE, 1), VCHIQ_SUCCESS);
    EXPECT(vchiq_set_service_option(service, 42, 1), VCHIQ_ERROR); // invalid option
@@ -628,33 +796,43 @@ do_functional_test(void)
    EXPECT(vchiq_remove_service(service2), VCHIQ_SUCCESS);
    EXPECT(vchiq_queue_message(service, NULL, 0), VCHIQ_ERROR); // service not valid
    EXPECT(vchiq_set_service_option(service, VCHIQ_SERVICE_OPTION_AUTOCLOSE, 0), VCHIQ_ERROR); // service not valid
-   EXPECT(vchiq_add_service(instance, FUNC_FOURCC, clnt_callback, (void *)3, &service3), VCHIQ_SUCCESS);
+
+   INIT_PARAMS(&service_params, FUNC_FOURCC, clnt_callback, (void *)3, VCHIQ_TEST_VER);
+   EXPECT(vchiq_add_service(instance, &service_params, &service3), VCHIQ_SUCCESS);
+
    EXPECT(vchiq_queue_message(service, NULL, 0), VCHIQ_ERROR); // service not open
    EXPECT(vchiq_queue_bulk_transmit(service, clnt_service1_data, sizeof(clnt_service1_data), (void *)1), VCHIQ_ERROR); // service not open
    EXPECT(vchiq_queue_bulk_receive(service2, clnt_service2_data, sizeof(clnt_service2_data), (void *)2), VCHIQ_ERROR); // service not open
    EXPECT(vchiq_queue_bulk_receive(service, 0, sizeof(clnt_service1_data), (void *)1), VCHIQ_ERROR); // invalid buffer
    EXPECT(vchiq_shutdown(instance), VCHIQ_SUCCESS);
    EXPECT(vchiq_initialise(&instance), VCHIQ_SUCCESS);
-   EXPECT(vchiq_open_service(instance, FUNC_FOURCC, func_clnt_callback, (void*)1, &service), VCHIQ_ERROR); // not connected
+   INIT_PARAMS(&service_params, FUNC_FOURCC, func_clnt_callback, (void*)1, 0);
+   EXPECT(vchiq_open_service(instance, &service_params, &service), VCHIQ_ERROR); // not connected
    EXPECT(vchiq_connect(instance), VCHIQ_SUCCESS);
-   EXPECT(vchiq_open_service(instance, FUNC_FOURCC, func_clnt_callback, (void*)1, &service), VCHIQ_ERROR); // wrong version number
+   EXPECT(vchiq_open_service(instance, &service_params, &service), VCHIQ_ERROR); // wrong version number
    memset(&service_params, 0, sizeof(service_params));
    service_params.fourcc = FUNC_FOURCC;
    service_params.callback = func_clnt_callback;
    service_params.userdata = (void*)1;
    service_params.version = 1;
    service_params.version_min = 1;
-   EXPECT(vchiq_open_service_params(instance, &service_params, &service), VCHIQ_ERROR); // Still the wrong version number
-   service_params.version = 4;
-   service_params.version_min = 4;
-   EXPECT(vchiq_open_service_params(instance, &service_params, &service), VCHIQ_ERROR); // Still the wrong version number
-   service_params.version_min = 2;
-   EXPECT(vchiq_open_service_params(instance, &service_params, &service), VCHIQ_SUCCESS); // That's better
-   EXPECT(vchiq_open_service(instance, VCHIQ_MAKE_FOURCC('n','o','n','e'), func_clnt_callback, (void*)2, &service2), VCHIQ_ERROR); // no listener
-   EXPECT(vchiq_open_service(instance, FUNC_FOURCC, func_clnt_callback, (void*)2, &service2), VCHIQ_SUCCESS);
-   EXPECT(vchiq_open_service(instance, FUNC_FOURCC, func_clnt_callback, (void*)3, &service3), VCHIQ_ERROR); // no more listeners
+   EXPECT(vchiq_open_service(instance, &service_params, &service), VCHIQ_ERROR); // Still the wrong version number
+   service_params.version = VCHIQ_TEST_VER + 1;
+   service_params.version_min = VCHIQ_TEST_VER + 1;
+   EXPECT(vchiq_open_service(instance, &service_params, &service), VCHIQ_ERROR); // Still the wrong version number
+   service_params.version = VCHIQ_TEST_VER;
+   service_params.version_min = VCHIQ_TEST_VER;
+   EXPECT(vchiq_open_service(instance, &service_params, &service), VCHIQ_SUCCESS); // That's better
+
+   INIT_PARAMS(&service_params, VCHIQ_MAKE_FOURCC('n','o','n','e'), func_clnt_callback, (void*)2, VCHIQ_TEST_VER);
+   EXPECT(vchiq_open_service(instance, &service_params, &service2), VCHIQ_ERROR); // no listener
+   INIT_PARAMS(&service_params, FUNC_FOURCC, func_clnt_callback, (void*)2, VCHIQ_TEST_VER);
+   EXPECT(vchiq_open_service(instance, &service_params, &service2), VCHIQ_SUCCESS);
+   INIT_PARAMS(&service_params, FUNC_FOURCC, func_clnt_callback, (void*)3, VCHIQ_TEST_VER);
+   EXPECT(vchiq_open_service(instance, &service_params, &service3), VCHIQ_ERROR); // no more listeners
    EXPECT(vchiq_remove_service(service2), VCHIQ_SUCCESS);
-   EXPECT(vchiq_open_service(instance, FUNC_FOURCC, func_clnt_callback, (void*)2, &service2), VCHIQ_SUCCESS);
+   INIT_PARAMS(&service_params, FUNC_FOURCC, func_clnt_callback, (void*)2, VCHIQ_TEST_VER);
+   EXPECT(vchiq_open_service(instance, &service_params, &service2), VCHIQ_SUCCESS);
 
    elements[0].data = "a";
    elements[0].size = 1;
@@ -681,8 +859,9 @@ do_functional_test(void)
 
    vcos_event_wait(&func_test_sync);
 
-   EXPECT(vchiq_open_service(instance, FUNC_FOURCC, func_clnt_callback, (void*)0, &service), VCHIQ_ERROR); /* Instance not initialised */
-   EXPECT(vchiq_add_service(instance, FUNC_FOURCC, func_clnt_callback, (void*)0, &service), VCHIQ_ERROR); /* Instance not initialised */
+   INIT_PARAMS(&service_params, FUNC_FOURCC, func_clnt_callback, NULL, VCHIQ_TEST_VER);
+   EXPECT(vchiq_open_service(instance, &service_params, &service), VCHIQ_ERROR); /* Instance not initialised */
+   EXPECT(vchiq_add_service(instance, &service_params, &service), VCHIQ_ERROR); /* Instance not initialised */
    EXPECT(vchiq_connect(instance), VCHIQ_ERROR); /* Instance not initialised */
 
 bulk_tests_only:
@@ -692,7 +871,11 @@ bulk_tests_only:
 
    func_data_test_iter = 0;
 
-   EXPECT(vchiq_open_service(instance, FUN2_FOURCC, fun2_clnt_callback, (void*)0, &service), VCHIQ_SUCCESS);
+   INIT_PARAMS(&service_params, FUN2_FOURCC, fun2_clnt_callback, NULL, VCHIQ_TEST_VER);
+   EXPECT(vchiq_open_service(instance, &service_params, &service), VCHIQ_SUCCESS);
+
+   if (func_data_test_end < func_data_test_start)
+      goto skip_bulk_tests;
 
    for (size = 1; size < 64; size++)
    {
@@ -726,6 +909,8 @@ bulk_tests_only:
          }
       }
    }
+
+skip_bulk_tests:
 
    EXPECT(vchiq_shutdown(instance), VCHIQ_SUCCESS);
 
@@ -1049,7 +1234,7 @@ func_data_test(VCHIQ_SERVICE_HANDLE_T service, int datalen, int align, int serve
 
    for (i = 0; i < PROLOGUE_SIZE; i++)
    {
-      if (prologue[i] != ((i == PROLOGUE_SIZE - 1) ? '\xfe' : '\xff'))
+      if (prologue[i] != (uint8_t)((i == PROLOGUE_SIZE - 1) ? '\xfe' : '\xff'))
       {
          vcos_log_error("%d: Prologue corrupted at %x (datalen %x, align %x, server_align %x) -> %02x", func_data_test_iter, i, datalen, align, server_align, prologue[i]);
          VCOS_BKPT;
@@ -1059,7 +1244,7 @@ func_data_test(VCHIQ_SERVICE_HANDLE_T service, int datalen, int align, int serve
    }
    for (i = 0; i < EPILOGUE_SIZE; i++)
    {
-      if (epilogue[i] != ((i == 0) ? '\xfe' : '\xff'))
+      if (epilogue[i] != (uint8_t)((i == 0) ? '\xfe' : '\xff'))
       {
          vcos_log_error("%d: Epilogue corrupted at %x (datalen %x, align %x, server_align %x) -> %02x", func_data_test_iter, i, datalen, align, server_align, epilogue[i]);
          VCOS_BKPT;
@@ -1140,6 +1325,7 @@ clnt_callback(VCHIQ_REASON_T reason, VCHIQ_HEADER_T *header,
             ctrl_received++;
          if (g_server_error || (ctrl_received == g_params.iters))
             vcos_event_signal(&g_shutdown);
+         vchiq_release_message(service, header);
       }
       else if (header->size != 0)
          g_server_error = header->data;
@@ -1407,6 +1593,8 @@ static void usage(void)
    printf("    -q          disable data verification\n");
    printf("    -s ????     service (any 4 characters)\n");
    printf("    -v          enable more verbose output\n");
+   printf("    -r <b> <s>  reserve <b> bytes for <s> seconds\n");
+   printf("    -K <t>      send a SIGKILL after <t> ms\n");
    printf("  and <mode> is one of:\n");
    printf("    -c <size>   control test (size in bytes)\n");
    printf("    -b <size>   bulk test (size in kilobytes)\n");
@@ -1440,6 +1628,60 @@ static char *buf_align(char *buf, int align_size, int align)
       aligned += align_size;
    return aligned;
 }
+
+#ifdef ANDROID
+
+static void kill_timeout_handler(int cause, siginfo_t *how, void *ucontext)
+{
+   printf("Sending signal SIGKILL\n");
+   kill(main_process_pid, SIGKILL);
+}
+
+static int setup_auto_kill(int timeout_ms)
+{
+   long timeout;
+   struct timeval interval;
+
+   if (timeout_ms <= 0)
+   {
+      return -1;
+   }
+   timeout = 1000 * timeout_ms;
+
+   /* install a signal handler for the alarm */
+   struct sigaction sa;
+   memset(&sa, 0, sizeof(struct sigaction));
+   sa.sa_sigaction = kill_timeout_handler;
+   sigemptyset(&sa.sa_mask);
+   sa.sa_flags = SA_SIGINFO;
+   if (sigaction(SIGALRM, &sa, 0))
+   {
+      perror("sigaction");
+      exit(1);
+   }
+
+   /* when to expire */
+   interval.tv_sec = timeout / 1000000;
+   interval.tv_usec = timeout % 1000000;
+
+   struct itimerval alarm_spec = {
+     .it_interval = {0,0},
+     .it_value = interval
+   };
+
+   int rc = setitimer(ITIMER_REAL, &alarm_spec, NULL);
+   if (rc < 0)
+   {
+      perror("setitimer failed");
+      exit(1);
+   }
+
+   return 0;
+}
+
+
+
+#endif
 
 #ifdef VCOS_APPLICATION_INITIALIZE
 
@@ -1480,6 +1722,10 @@ void VCOS_APPLICATION_INITIALIZE(void *first_available_memory)
 
 int main(int argc, char **argv)
 {
+#ifdef ANDROID
+   main_process_pid = getpid();
+#endif
+
    vcos_init();
    vcos_use_android_log = 0;
    return vchiq_test(argc, argv);

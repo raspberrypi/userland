@@ -3,7 +3,11 @@ cmake_minimum_required(VERSION 2.8)
 project(vmcs_host_apps)
 
 set(BUILD_MMAL TRUE)
-set(BUILD_MMAL_APPS FALSE)
+if (ALL_APPS)
+ set(BUILD_MMAL_APPS TRUE)
+else()
+ set(BUILD_MMAL_APPS FALSE)
+endif()
 set(vmcs_root ${PROJECT_SOURCE_DIR})
 get_filename_component(VIDEOCORE_ROOT . ABSOLUTE)
 
@@ -39,7 +43,7 @@ add_definitions(-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE)
 
 # do we actually need this?
 add_definitions(-D__VIDEOCORE4__)
-
+add_definitions(-DTV_SUPPORTED_MODE_NO_DEPRECATED)
 
 # add_definitions(-DKHRONOS_CLIENT_LOGGING)
 
@@ -59,8 +63,10 @@ if(BUILD_MMAL)
    include_directories(interface/mmal)
    add_subdirectory(interface/mmal)
 endif()
+if(BUILD_MMAL_APPS)
+   add_subdirectory(containers)
+endif()
 
-#add_subdirectory(containers)
 add_subdirectory(middleware/openmaxil)
 
 # 3d demo code
@@ -84,7 +90,9 @@ add_subdirectory(interface/usbdk)
 
 # VMCS Host Applications
 #add_subdirectory(host_applications/framework)
-#add_subdirectory(host_applications/vmcs)
+if(BUILD_MMAL_APPS)
+   add_subdirectory(host_applications/vmcs)
+endif()
 
 # add_subdirectory(interface/vchiq/test/win32)
 
@@ -94,6 +102,10 @@ add_subdirectory(interface/usbdk)
 
 # add linux apps
 add_subdirectory(host_applications/linux)
+
+# Debug sym for mmal-vc-diag and vcdbg
+#add_subdirectory(host_applications/linux/libs/debug_sym)
+
 
 set(vmcs_host_apps_VERSION_MAJOR 1)
 set(vmcs_host_apps_VERSION_MINOR 0)

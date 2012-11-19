@@ -1,4 +1,4 @@
-add_library(mmal_vc_client SHARED mmal_vc_client.c mmal_vc_shm.c mmal_vc_api.c mmal_vc_opaque_alloc.c mmal_vc_msgnames.c)
+add_library(mmal_vc_client SHARED mmal_vc_client.c mmal_vc_shm.c mmal_vc_api.c mmal_vc_opaque_alloc.c mmal_vc_msgnames.c mmal_vc_api_drm.c)
 target_link_libraries(mmal_vc_client vchiq_arm vcos)
 
 if(BUILD_MMAL_APPS)

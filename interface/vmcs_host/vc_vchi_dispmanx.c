@@ -37,7 +37,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/vchi/common/endian.h"
 #include "interface/vchi/message_drivers/message.h"
 #include "vc_vchi_dispmanx.h"
-
 /******************************************************************************
 Local types and defines.
 ******************************************************************************/
@@ -167,7 +166,8 @@ void vc_vchi_dispmanx_init (VCHI_INSTANCE_T initialise_instance, VCHI_CONNECTION
       VCOS_THREAD_ATTR_T attrs;
 
       // Create a 'Client' service on the each of the connections
-      SERVICE_CREATION_T dispmanx_parameters = { DISPMANX_CLIENT_NAME,     // 4cc service code
+      SERVICE_CREATION_T dispmanx_parameters = { VCHI_VERSION(VC_DISPMANX_VERSION),
+                                                 DISPMANX_CLIENT_NAME,     // 4cc service code
                                                  connections[i],           // passed in fn ptrs
                                                  0,                        // tx fifo size (unused)
                                                  0,                        // tx fifo size (unused)
@@ -178,7 +178,8 @@ void vc_vchi_dispmanx_init (VCHI_INSTANCE_T initialise_instance, VCHI_CONNECTION
                                                  VC_FALSE,                  // want_crc
                                                  };
 
-      SERVICE_CREATION_T dispmanx_parameters2 = { DISPMANX_NOTIFY_NAME,   // 4cc service code
+      SERVICE_CREATION_T dispmanx_parameters2 = { VCHI_VERSION(VC_DISPMANX_VERSION),
+                                                  DISPMANX_NOTIFY_NAME,   // 4cc service code
                                                   connections[i],           // passed in fn ptrs
                                                   0,                        // tx fifo size (unused)
                                                   0,                        // tx fifo size (unused)

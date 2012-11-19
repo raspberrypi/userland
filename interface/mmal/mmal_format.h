@@ -59,6 +59,11 @@ typedef struct
    MMAL_RATIONAL_T frame_rate;   /**< Frame rate */
    MMAL_RATIONAL_T par;          /**< Pixel aspect ratio */
 
+   MMAL_FOURCC_T   color_space;  /**< FourCC specifying the color space of the
+                                   * video stream. See the \ref MmalColorSpace
+                                   * "pre-defined color spaces" for some examples.
+                                   */
+
 } MMAL_VIDEO_FORMAT_T;
 
 /** Definition of an audio format.
@@ -103,20 +108,31 @@ typedef union
 /* @} */
 
 /** \name Undefined encoding value.
- * The value indicates an unknown encoding
- * \attention Should this be in the mmal_encodings.h file?
+ * This value indicates an unknown encoding
  */
 /* @{ */
 #define MMAL_ENCODING_UNKNOWN            0
+/* @} */
+
+/** \name Default encoding variant value.
+ * This value indicates the default encoding variant is used
+ */
+/* @{ */
+#define MMAL_ENCODING_VARIANT_DEFAULT    0
 /* @} */
 
 /** Definition of an elementary stream format */
 typedef struct MMAL_ES_FORMAT_T
 {
    MMAL_ES_TYPE_T type;           /**< Type of the elementary stream */
-   uint32_t encoding;             /**< FourCC specifying the encoding of the elementary stream.
+
+   MMAL_FOURCC_T encoding;        /**< FourCC specifying the encoding of the elementary stream.
                                     * See the \ref MmalEncodings "pre-defined encodings" for some
                                     * examples.
+                                    */
+   MMAL_FOURCC_T encoding_variant;/**< FourCC specifying the specific encoding variant of
+                                    * the elementary stream. See the \ref MmalEncodingVariants
+                                    * "pre-defined encoding variants" for some examples.
                                     */
 
    MMAL_ES_SPECIFIC_FORMAT_T *es; /**< Type specific information for the elementary stream */
@@ -183,6 +199,7 @@ MMAL_STATUS_T mmal_format_full_copy(MMAL_ES_FORMAT_T *format_dest, MMAL_ES_FORMA
 #define MMAL_ES_FORMAT_COMPARE_FLAG_VIDEO_CROPPING     0x0200 /**< The video cropping is different */
 #define MMAL_ES_FORMAT_COMPARE_FLAG_VIDEO_FRAME_RATE   0x0400 /**< The video frame rate is different */
 #define MMAL_ES_FORMAT_COMPARE_FLAG_VIDEO_ASPECT_RATIO 0x0800 /**< The video aspect ratio is different */
+#define MMAL_ES_FORMAT_COMPARE_FLAG_VIDEO_COLOR_SPACE  0x1000 /**< The video color space is different */
 
 #define MMAL_ES_FORMAT_COMPARE_FLAG_ES_OTHER  0x10000000 /**< Other ES specific parameters are different */
 /* @} */

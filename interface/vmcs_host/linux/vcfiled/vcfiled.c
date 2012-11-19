@@ -175,11 +175,11 @@ int main(int argc, char *const *argv)
    }
    if ( lock_prefix_set )
    {
-      sprintf( lockfile, "%s/%s", lock_prefix, VCFILED_LOCKFILE );
+      vcos_safe_sprintf( lockfile, sizeof(lockfile), 0, "%s/%s", lock_prefix, VCFILED_LOCKFILE );
    }
    else
    {
-      sprintf( lockfile, "%s", VCFILED_LOCKFILE );
+      vcos_safe_sprintf( lockfile, sizeof(lockfile), 0, "%s", VCFILED_LOCKFILE );
    }
    success = vcfiled_lock(lockfile, logmsg);
    if (success != 0)

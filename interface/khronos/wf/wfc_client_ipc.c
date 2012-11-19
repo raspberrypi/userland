@@ -148,10 +148,12 @@ static WFC_WAITER_T *wfc_client_ipc_get_waiter(WFC_CLIENT_IPC_T *client)
          break;
    }
 
-   vcos_assert(i != WFC_CLIENT_IPC_MAX_WAITERS);   /* If we get here, semaphore isn't working */
-
-   waiter = client->waitpool.waiters + i;
-   waiter->inuse = 1;
+   /* If this fails, the semaphore isn't working */
+   if (vcos_verify(i != WFC_CLIENT_IPC_MAX_WAITERS))
+   {
+      waiter = client->waitpool.waiters + i;
+      waiter->inuse = 1;
+   }
    vcos_mutex_unlock(&client->lock);
 
    return waiter;
@@ -199,6 +201,7 @@ static VCHIQ_STATUS_T wfc_client_ipc_vchiq_callback(VCHIQ_REASON_T reason,
                /* Call the client function */
                (*cb_func)(callback_msg->callback_data.ptr);
             }
+            vchiq_release_message(service, vchiq_header);
          }
          else
          {
@@ -228,12 +231,18 @@ static VCHIQ_STATUS_T wfc_client_ipc_vchiq_callback(VCHIQ_REASON_T reason,
    case VCHIQ_BULK_RECEIVE_ABORTED:
    case VCHIQ_BULK_TRANSMIT_ABORTED:
       {
-         vcos_assert(!"bulk messages not used");
+         vcos_assert_msg(0, "bulk messages not used");
          vchiq_release_message(service, vchiq_header);
       }
       break;
+   case VCHIQ_SERVICE_OPENED:
+      vcos_log_trace("%s: service %p opened", VCOS_FUNCTION, service);
+      break;
+   case VCHIQ_SERVICE_CLOSED:
+      vcos_log_trace("%s: service %p closed", VCOS_FUNCTION, service);
+      break;
    default:
-      vcos_assert(!"unexpected message reason");
+      vcos_assert_msg(0, "unexpected message reason");
       break;
    }
    return VCHIQ_SUCCESS;
@@ -391,25 +400,13 @@ VCOS_STATUS_T wfc_client_ipc_init(void)
    vchiq_params.fourcc = WFC_IPC_CONTROL_FOURCC();
    vchiq_params.callback = wfc_client_ipc_vchiq_callback;
    vchiq_params.userdata = &wfc_client_ipc;
-   vchiq_params.version = WFC_IPC_VER_MAJOR;
+   vchiq_params.version = WFC_IPC_VER_CURRENT;
    vchiq_params.version_min = WFC_IPC_VER_MINIMUM;
 
-   vchiq_status = vchiq_open_service_params(wfc_client_ipc_vchiq_instance, &vchiq_params, &wfc_client_ipc.service);
+   vchiq_status = vchiq_open_service(wfc_client_ipc_vchiq_instance, &vchiq_params, &wfc_client_ipc.service);
    if (vchiq_status != VCHIQ_SUCCESS)
    {
       vcos_log_error("%s: could not open vchiq service: %d", VCOS_FUNCTION, vchiq_status);
-      goto error;
-   }
-
-   if (wfc_client_ipc.service == NULL)
-   {
-      vcos_log_error("%s: vchiq service is NULL, but open returned VCHIQ_SUCCESS?", VCOS_FUNCTION);
-      goto error;
-   }
-
-   if (wfc_client_ipc.service == NULL)
-   {
-      vcos_log_error("%s: vchiq service is NULL, but open returned VCHIQ_SUCCESS?", VCOS_FUNCTION);
       goto error;
    }
    service_initialised = true;

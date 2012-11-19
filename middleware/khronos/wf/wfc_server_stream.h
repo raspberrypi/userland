@@ -29,42 +29,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define WFC_SERVER_STREAM_H
 
 #include "interface/khronos/include/WF/wfc.h"
+#include "interface/khronos/wf/wfc_int.h"
 #include "helpers/vc_image/vc_image.h"
 #include "interface/khronos/common/khrn_int_common.h"
 #include "interface/khronos/include/EGL/eglext.h"
-#include "interface/khronos/wf/wfc_server_api.h"
 
+#ifdef ANDROID
 // Special SurfaceFlinger stream ID (cf SF_DISPMANX_ID in khrn_client_platform_android.c)
 #define SF_STREAM_ID 0x2000000F
+#endif
 
-//==============================================================================
-
-typedef enum
-{
-   WFC_IMAGE_NO_FLAGS         = 0,
-   WFC_IMAGE_FLIP_VERT        = (1 << 0), //< Vertically flip image
-   WFC_IMAGE_DISP_NOTHING     = (1 << 1), //< Display nothing on screen
-   WFC_IMAGE_CB_ON_NO_CHANGE  = (1 << 2), //< Callback, even if the image is the same
-   WFC_IMAGE_CB_ON_COMPOSE    = (1 << 3), //< Callback on composition, instead of when not in use
-
-   WFC_IMAGE_SENTINEL         = 0x7FFFFFFF
-} WFC_IMAGE_FLAGS_T;
-
-// Callback function types.
-
-/** Called when the buffer of a stream is no longer in use.
- *
- * @param The client stream handle.
- * @param The value passed in when the buffer was set as the front buffer.
- */
-typedef void (*WFC_SERVER_STREAM_CALLBACK_T)(WFCNativeStreamType stream, void *cb_data);
-
-//==============================================================================
-
-//------------------------------------------------------------------------------
-// Functions called by renderer server (for elements).
-
-// Queue image in stream's buffer. Returns an error code.
 #define WFC_QUEUE_OK                   0
 #define WFC_QUEUE_NO_IMAGE             (1 << 0)
 #define WFC_QUEUE_WRONG_DIMENSIONS     (1 << 1)
@@ -118,3 +92,4 @@ void wfc_server_stream_update_rects(WFCNativeStreamType stream,
 bool wfc_server_stream_is_empty(void);
 
 #endif /* WFC_SERVER_STREAM_H_ */
+

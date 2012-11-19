@@ -44,6 +44,11 @@ typedef uint32_t MMAL_OPAQUE_IMAGE_HANDLE_T;
  */
 MMAL_OPAQUE_IMAGE_HANDLE_T mmal_vc_opaque_alloc(void);
 
+/** Allocate an opaque image on VideoCore, providing a description.
+ * @return allocated handle, or zero if allocation failed.
+ */
+MMAL_OPAQUE_IMAGE_HANDLE_T mmal_vc_opaque_alloc_desc(const char *description);
+
 /** Release an opaque image.
  *
  * @param handle  handle allocated earlier

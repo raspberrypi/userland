@@ -45,6 +45,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MMAL_PARAMETER_GROUP_CAMERA            (1<<16)
 /** Video-specific parameter ID group. */
 #define MMAL_PARAMETER_GROUP_VIDEO             (2<<16)
+/** Audio-specific parameter ID group. */
+#define MMAL_PARAMETER_GROUP_AUDIO             (3<<16)
+/** Clock-specific parameter ID group. */
+#define MMAL_PARAMETER_GROUP_CLOCK             (4<<16)
+/** Miracast-specific parameter ID group. */
+#define MMAL_PARAMETER_GROUP_MIRACAST       (5<<16)
+
 
 /**@}*/
 
@@ -62,6 +69,9 @@ enum {
    MMAL_PARAMETER_CORE_STATISTICS,        /**< Takes a MMAL_PARAMETER_CORE_STATISTICS_T */
    MMAL_PARAMETER_MEM_USAGE,              /**< Takes a MMAL_PARAMETER_MEM_USAGE_T */
    MMAL_PARAMETER_BUFFER_FLAG_FILTER,     /**< Takes a MMAL_PARAMETER_UINT32_T */
+   MMAL_PARAMETER_SEEK,                   /**< Takes a MMAL_PARAMETER_SEEK_T */
+   MMAL_PARAMETER_POWERMON_ENABLE,        /**< Takes a MMAL_PARAMETER_BOOLEAN_T */
+   MMAL_PARAMETER_LOGGING,                /**< Takes a MMAL_PARAMETER_LOGGING_T */
 };
 
 /**@}*/
@@ -104,6 +114,21 @@ typedef struct MMAL_PARAMETER_BUFFER_REQUIREMENTS_T
                                           A value of zero means no special recommendation. */
 } MMAL_PARAMETER_BUFFER_REQUIREMENTS_T;
 
+/** Seek request parameter type.
+ * This is used to issue a seek request to a source component.
+ */
+typedef struct MMAL_PARAMETER_SEEK_T
+{
+   MMAL_PARAMETER_HEADER_T hdr;
+
+   int64_t offset;  /**< Offset (in microseconds) to seek to */
+   uint32_t flags;  /**< Seeking flags */
+
+#define MMAL_PARAM_SEEK_FLAG_PRECISE 0x1 /**< Choose precise seeking even if slower */
+#define MMAL_PARAM_SEEK_FLAG_FORWARD 0x2 /**< Seek to the next keyframe following the specified offset */
+
+} MMAL_PARAMETER_SEEK_T;
+
 /** Port statistics for debugging/test purposes.
  * Ports may support query of this parameter to return statistics for debugging or
  * test purposes. Not all values may be relevant for a given port.
@@ -125,7 +150,8 @@ typedef struct MMAL_PARAMETER_STATISTICS_T
 typedef enum
 {
    MMAL_CORE_STATS_RX,
-   MMAL_CORE_STATS_TX
+   MMAL_CORE_STATS_TX,
+   MMAL_CORE_STATS_MAX = 0x7fffffff /* Force 32 bit size for this enum */
 } MMAL_CORE_STATS_DIR;
 
 /** MMAL core statistics. These are collected by the core itself.
@@ -147,6 +173,16 @@ typedef struct MMAL_PARAMETER_MEM_USAGE_T
    /**< The amount of memory allocated in image pools by the component */
    uint32_t pool_mem_alloc_size;
 } MMAL_PARAMETER_MEM_USAGE_T;
+
+/**
+ * Logging control.
+ */
+typedef struct MMAL_PARAMETER_LOGGING_T
+{
+   MMAL_PARAMETER_HEADER_T hdr;
+   uint32_t set;     /**< Logging bits to set */
+   uint32_t clear;   /**< Logging bits to clear */
+} MMAL_PARAMETER_LOGGING_T;
 
 #endif /* MMAL_PARAMETERS_COMMON_H */
 

@@ -188,9 +188,28 @@ void vc_vchi_khronos_init()
       exit(1);
    }
 
-   if (vchiq_open_service(khrn_vchiq_instance, FOURCC_KHAN, khan_callback, NULL, &vchiq_khan_service) != VCHIQ_SUCCESS ||
-       vchiq_open_service(khrn_vchiq_instance, FOURCC_KHRN, khrn_callback, NULL, &vchiq_khrn_service) != VCHIQ_SUCCESS ||
-       vchiq_open_service(khrn_vchiq_instance, FOURCC_KHHN, khhn_callback, NULL, &vchiq_khhn_service) != VCHIQ_SUCCESS)
+   VCHIQ_STATUS_T khan_return, khrn_return, khhn_return;
+   VCHIQ_SERVICE_PARAMS_T params;
+
+   params.userdata = NULL;
+   params.version = VC_KHRN_VERSION;
+   params.version_min = VC_KHRN_VERSION;
+
+   params.fourcc = FOURCC_KHAN;
+   params.callback = khan_callback;
+   khan_return = vchiq_open_service(khrn_vchiq_instance, &params, &vchiq_khan_service);
+
+   params.fourcc = FOURCC_KHRN;
+   params.callback = khrn_callback;
+   khrn_return = vchiq_open_service(khrn_vchiq_instance, &params, &vchiq_khrn_service);
+
+   params.fourcc = FOURCC_KHHN;
+   params.callback = khhn_callback;
+   khhn_return = vchiq_open_service(khrn_vchiq_instance, &params, &vchiq_khhn_service);
+
+   if (khan_return != VCHIQ_SUCCESS ||
+       khrn_return != VCHIQ_SUCCESS ||
+       khhn_return != VCHIQ_SUCCESS)
    {
       vcos_log_error("* failed to add service - already in use?");
       

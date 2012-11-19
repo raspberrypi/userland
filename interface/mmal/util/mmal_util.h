@@ -66,6 +66,13 @@ uint32_t mmal_encoding_stride_to_width(uint32_t encoding, uint32_t stride);
  */
 uint32_t mmal_encoding_width_to_stride(uint32_t encoding, uint32_t width);
 
+/** Convert a port type to a string.
+ *
+ * @param type The MMAL port type.
+ * @return A NULL-terminated string describing the port type.
+ */
+const char* mmal_port_type_to_string(MMAL_PORT_TYPE_T type);
+
 /** Get a parameter from a port allocating the required amount of memory
  * for the parameter (i.e. for variable length parameters like URI or arrays).
  * The size field will be set on output to the actual size of the
@@ -149,7 +156,8 @@ MMAL_PORT_T *mmal_util_get_port(MMAL_COMPONENT_T *comp, MMAL_PORT_TYPE_T type, u
 /** Convert a 4cc into a string.
  *
  * @param buf    Destination for result
- * @param magic  4CC
+ * @param len    Size of result buffer
+ * @param fourcc 4cc to be converted
  * @return converted string (buf)
  *
  */

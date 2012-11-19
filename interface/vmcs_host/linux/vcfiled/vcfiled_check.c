@@ -119,6 +119,7 @@ int vcfiled_lock(const char *lockfile, VCFILED_LOGMSG_T logmsg)
    ret = 0;
 finish:
    free(lockdir);
+   /* coverity[leaked_handle] - fd left open on purpose */
    return ret;
 }
 
@@ -160,6 +161,7 @@ int vcfiled_is_running(const char *filename)
          ret = 1;
       }
    }
+   /* coverity[leaked_handle] - fd left open on purpose */
    return ret;
 }
 
