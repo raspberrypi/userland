@@ -39,6 +39,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "interface/vmcs_host/vc_tvservice.h"
 
+#define TV_SUPPORTED_MODE_T TV_SUPPORTED_MODE_NEW_T
+#define vc_tv_hdmi_get_supported_modes vc_tv_hdmi_get_supported_modes_new
+#define vc_tv_hdmi_power_on_explicit vc_tv_hdmi_power_on_explicit_new
+
 // ---- Public Variables ----------------------------------------------------
 
 // ---- Private Constants and Types -----------------------------------------
@@ -104,11 +108,11 @@ static void show_usage( void )
 {
    LOG_STD( "Usage: tvservice [OPTION]..." );
    LOG_STD( "  -p, --preferred              Power on HDMI with preferred settings" );
-   LOG_STD( "  -e, --explicit=\"GROUP MODE\"  Power on HDMI with explicit GROUP (CEA, DMT, CEA_3D)\n"
+   LOG_STD( "  -e, --explicit=\"GROUP MODE\"  Power on HDMI with explicit GROUP (CEA, DMT, CEA_3D_SBS, CEA_3D_TAB)\n"
             "                               and MODE (see --modes)" );
    LOG_STD( "  -n, --sdtvon=\"MODE ASPECT\"   Power on SDTV with MODE (PAL or NTSC) and ASPECT (4:3 14:9 or 16:9)" );
    LOG_STD( "  -o, --off                    Power off the display" );
-   LOG_STD( "  -m, --modes=GROUP            Get supported modes for GROUP (CEA, DMT, CEA_3D)" );
+   LOG_STD( "  -m, --modes=GROUP            Get supported modes for GROUP (CEA, DMT)" );
    LOG_STD( "  -M, --monitor                Monitor HDMI events" );
    LOG_STD( "  -s, --status                 Get HDMI status" );
    LOG_STD( "  -a, --audio                  Get supported audio information" );
@@ -692,7 +696,7 @@ int main( int argc, char **argv )
                power_on_explicit_group = HDMI_RES_GROUP_CEA;
                opt_3d = 1;
             }
-            else if ( vcos_strcasecmp( "CEA_3D_TB", group_str ) == 0 )
+            else if ( vcos_strcasecmp( "CEA_3D_TAB", group_str ) == 0 )
             {
                power_on_explicit_group = HDMI_RES_GROUP_CEA;
                opt_3d = 2;
@@ -777,10 +781,6 @@ int main( int argc, char **argv )
             else if ( vcos_strcasecmp( "DMT", optarg ) == 0 )
             {
                get_modes_group = HDMI_RES_GROUP_DMT;
-            }
-            else if ( vcos_strcasecmp( "CEA_3D", optarg ) == 0 )
-            {
-               get_modes_group = HDMI_RES_GROUP_CEA; //CEA modes ALWAYS show 3D support
             }
             else
             {

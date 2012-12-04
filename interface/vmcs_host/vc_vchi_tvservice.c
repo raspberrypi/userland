@@ -59,7 +59,7 @@ typedef struct {
    uint32_t is_valid;
    uint32_t max_modes; //How big the table have we allocated
    uint32_t num_modes; //How many valid entries are there
-   TV_SUPPORTED_MODE_T *modes;
+   TV_SUPPORTED_MODE_NEW_T *modes;
 } TVSERVICE_MODE_CACHE_T;
 
 //TV service host side state (mostly the same as Videocore side - TVSERVICE_STATE_T)
@@ -974,12 +974,13 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_best_3d(uint32_t width, uint32_t height
  *          if successful, there will be a callback when the power on is complete
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_explicit(HDMI_MODE_T mode, HDMI_RES_GROUP_T group, uint32_t code) {
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_explicit_new(HDMI_MODE_T mode, HDMI_RES_GROUP_T group, uint32_t code) {
    TV_HDMI_ON_EXPLICIT_PARAM_T param;
    int success;
 
    vcos_log_trace("[%s] mode %d group %d code %d", VCOS_FUNCTION,
          mode, group, code);
+
    param.hdmi_mode = mode;
    param.group = group;
    param.mode = code;
@@ -1048,8 +1049,8 @@ VCHPRE_ int VCHPOST_ vc_tv_power_off( void ) {
  *          of supported modes if passed in a null array). (< 0 for error)
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes(HDMI_RES_GROUP_T group,
-                                                    TV_SUPPORTED_MODE_T *supported_modes,
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes_new(HDMI_RES_GROUP_T group,
+                                                    TV_SUPPORTED_MODE_NEW_T *supported_modes,
                                                     uint32_t max_supported_modes,
                                                     HDMI_RES_GROUP_T *preferred_group,
                                                     uint32_t *preferred_mode) {
@@ -1091,15 +1092,15 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes(HDMI_RES_GROUP_T group,
                }
             } else {
                vcos_assert(cache->modes);
-               memset(cache->modes, 0, cache->max_modes * sizeof(TV_SUPPORTED_MODE_T));
+               memset(cache->modes, 0, cache->max_modes * sizeof(TV_SUPPORTED_MODE_NEW_T));
             }
             if(cache->modes == NULL) {
-               cache->modes = vcos_calloc(cache->max_modes, sizeof(TV_SUPPORTED_MODE_T), "cached modes");
+               cache->modes = vcos_calloc(cache->max_modes, sizeof(TV_SUPPORTED_MODE_NEW_T), "cached modes");
             }
             //Download the modes from Videocore
             if(vcos_verify(cache->modes)) {
                cache->num_modes = response.num_supported_modes;
-               error = tvservice_wait_for_bulk_receive(cache->modes, cache->num_modes * sizeof(TV_SUPPORTED_MODE_T));
+               error = tvservice_wait_for_bulk_receive(cache->modes, cache->num_modes * sizeof(TV_SUPPORTED_MODE_NEW_T));
             } else {
                error = -1;
                vcos_log_error("Failed to allocate memory for %s cache in [%s]", HDMI_RES_GROUP_NAME(group), VCOS_FUNCTION);
@@ -1123,7 +1124,7 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes(HDMI_RES_GROUP_T group,
    if(cache->is_valid) {
       if(supported_modes && max_supported_modes) {
          modes_copied = _min(max_supported_modes, cache->num_modes);
-         memcpy(supported_modes, cache->modes, modes_copied*sizeof(TV_SUPPORTED_MODE_T));
+         memcpy(supported_modes, cache->modes, modes_copied*sizeof(TV_SUPPORTED_MODE_NEW_T));
       } else {
          //If we pass in a null pointer, return the size of table instead
          modes_copied = cache->num_modes;
@@ -1506,18 +1507,18 @@ VCHPRE_ const char* vc_tv_notification_name(VC_HDMI_NOTIFY_T reason)
 }
 
 // temporary: maintain backwards compatibility
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes_deprecated(HDMI_RES_GROUP_T group,
-                                                    TV_SUPPORTED_MODE_DEPRECATED_T *supported_modes_deprecated,
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes(HDMI_RES_GROUP_T group,
+                                                    TV_SUPPORTED_MODE_T *supported_modes_deprecated,
                                                     uint32_t max_supported_modes,
                                                     HDMI_RES_GROUP_T *preferred_group,
                                                     uint32_t *preferred_mode) {
-   TV_SUPPORTED_MODE_T *supported_modes = malloc(max_supported_modes * sizeof *supported_modes);
-   int modes_copied = vc_tv_hdmi_get_supported_modes(group==3 ? HDMI_RES_GROUP_CEA:group, supported_modes, max_supported_modes, preferred_group, preferred_mode);
+   TV_SUPPORTED_MODE_NEW_T *supported_modes_new = malloc(max_supported_modes * sizeof *supported_modes_new);
+   int modes_copied = vc_tv_hdmi_get_supported_modes_new(group==3 ? HDMI_RES_GROUP_CEA:group, supported_modes_new, max_supported_modes, preferred_group, preferred_mode);
    int i, j=0;
 
    for (i=0; i<modes_copied; i++) {
-      TV_SUPPORTED_MODE_DEPRECATED_T *q = supported_modes_deprecated + j;
-      TV_SUPPORTED_MODE_T *p = supported_modes + i;
+      TV_SUPPORTED_MODE_T *q = supported_modes_deprecated + j;
+      TV_SUPPORTED_MODE_NEW_T *p = supported_modes_new + i;
       if (group != 3 || (p->struct_3d & HDMI_3D_STRUCT_SIDE_BY_SIDE_HALF_HORIZONTAL)) {
          q->scan_mode = p->scan_mode;
          q->native = p->native;
@@ -1528,9 +1529,21 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes_deprecated(HDMI_RES_GROUP_T 
          j++;
       }
    }
-   free(supported_modes);
+   free(supported_modes_new);
 
    return j;
 }
 
+// temporary: maintain backwards compatibility
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_explicit(HDMI_MODE_T mode, HDMI_RES_GROUP_T group, uint32_t code) {
+   if (group == HDMI_RES_GROUP_CEA_3D) {
+      HDMI_PROPERTY_PARAM_T property;
+      property.property = HDMI_PROPERTY_3D_STRUCTURE;
+      property.param1 = HDMI_RES_GROUP_CEA;
+      property.param2 = 0;
+      vc_tv_hdmi_set_property(&property);
+      group == HDMI_RES_GROUP_CEA;
+   }
+   return vc_tv_hdmi_power_on_explicit_new(mode, group, code);
+}
 
