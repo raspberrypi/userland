@@ -40,7 +40,7 @@ MMAL_OPAQUE_IMAGE_HANDLE_T mmal_vc_opaque_alloc_desc(const char *description)
    ret = mmal_vc_sendwait_message(mmal_vc_get_client(),
                                   &msg.header, sizeof(msg),
                                   MMAL_WORKER_OPAQUE_ALLOCATOR_DESC,
-                                  &msg, &len);
+                                  &msg, &len, MMAL_FALSE);
    if (ret == MMAL_SUCCESS)
    {
       h = msg.handle;
@@ -63,7 +63,7 @@ MMAL_STATUS_T mmal_vc_opaque_acquire(unsigned int handle)
    ret = mmal_vc_sendwait_message(mmal_vc_get_client(),
                                   &msg.header, sizeof(msg),
                                   MMAL_WORKER_OPAQUE_ALLOCATOR,
-                                  &msg, &len);
+                                  &msg, &len, MMAL_FALSE);
    if (ret == MMAL_SUCCESS)
       ret = msg.status;
    return ret;
@@ -79,7 +79,7 @@ MMAL_STATUS_T mmal_vc_opaque_release(unsigned int handle)
    ret = mmal_vc_sendwait_message(mmal_vc_get_client(),
                                   &msg.header, sizeof(msg),
                                   MMAL_WORKER_OPAQUE_ALLOCATOR,
-                                  &msg, &len);
+                                  &msg, &len, MMAL_FALSE);
    if (ret == MMAL_SUCCESS)
       ret = msg.status;
    return ret;

@@ -28,6 +28,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/vcos/vcos.h"
 #ifdef __VIDEOCORE__
 #include "host_support/include/vc_debug_sym.h"
+#include "vcfw/vclib/vclib.h"
 #endif
 #include <stdlib.h>
 
@@ -54,12 +55,19 @@ int vcos_verify_bkpts_enable(int enable)
   */
 void vcos_abort(void)
 {
+   VCOS_ALERT("vcos_abort: Halting");
+
 #ifdef __VIDEOCORE__
    _bkpt();
 #endif
 
 #if defined(VCOS_HAVE_BACKTRACE) && !defined(NDEBUG)
    vcos_backtrace_self();
+#endif
+
+#ifdef __VIDEOCORE__
+   /* Flush the cache to help with postmortem RAM-dump debugging */
+   vclib_cache_flush();
 #endif
 
 #ifdef PLATFORM_RASPBERRYPI

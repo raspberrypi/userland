@@ -140,7 +140,7 @@ MMAL_STATUS_T mmal_port_parameter_set_string(MMAL_PORT_T *port, uint32_t id, con
 {
    MMAL_PARAMETER_STRING_T *param = 0;
    MMAL_STATUS_T status;
-   size_t param_size = sizeof(MMAL_PARAMETER_STRING_T) + strlen(value) + 1;
+   size_t param_size = sizeof(param->hdr) + strlen(value) + 1;
 
    param = calloc(1, param_size);
    if (!param)
@@ -158,6 +158,26 @@ MMAL_STATUS_T mmal_port_parameter_set_string(MMAL_PORT_T *port, uint32_t id, con
 MMAL_STATUS_T mmal_util_port_set_uri(MMAL_PORT_T *port, const char *uri)
 {
    return mmal_port_parameter_set_string(port, MMAL_PARAMETER_URI, uri);
+}
+
+/** Helper function to set the value of an array of bytes parameter */
+MMAL_STATUS_T mmal_port_parameter_set_bytes(MMAL_PORT_T *port, uint32_t id,
+   const uint8_t *data, unsigned int size)
+{
+   MMAL_PARAMETER_BYTES_T *param = 0;
+   MMAL_STATUS_T status;
+   size_t param_size = sizeof(param->hdr) + size;
+
+   param = calloc(1, param_size);
+   if (!param)
+      return MMAL_ENOMEM;
+
+   param->hdr.id = id;
+   param->hdr.size = param_size;
+   memcpy(param->data, data, size);
+   status = mmal_port_parameter_set(port, &param->hdr);
+   free(param);
+   return status;
 }
 
 /** Set the display region.

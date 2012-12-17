@@ -97,6 +97,7 @@ static MMAL_STATUS_T mmal_component_create_core(const char *name,
    (*component)->name = component_name= (char *)&((MMAL_COMPONENT_CORE_PRIVATE_T *)(*component)->priv)[1];
    memcpy(component_name, name, name_length);
    (*component)->priv->refcount = 1;
+   (*component)->priv->priority = VCOS_THREAD_PRI_NORMAL;
 
    if(vcos_mutex_create(&private->lock, "mmal component lock") != VCOS_SUCCESS)
    {
@@ -554,6 +555,7 @@ MMAL_STATUS_T mmal_component_action_register(MMAL_COMPONENT_T *component,
                                              void (*pf_action)(MMAL_COMPONENT_T *) )
 {
    MMAL_COMPONENT_CORE_PRIVATE_T *private = (MMAL_COMPONENT_CORE_PRIVATE_T *)component->priv;
+   VCOS_THREAD_ATTR_T attrs;
    VCOS_STATUS_T status;
 
    if (private->pf_action)
@@ -570,7 +572,10 @@ MMAL_STATUS_T mmal_component_action_register(MMAL_COMPONENT_T *component,
       return MMAL_ENOMEM;
    }
 
-   status = vcos_thread_create(&private->action_thread, component->name, NULL,
+   vcos_thread_attr_init(&attrs);
+   vcos_thread_attr_setpriority(&attrs,
+                                private->private.priority);
+   status = vcos_thread_create(&private->action_thread, component->name, &attrs,
                                mmal_component_action_thread_func, component);
    if (status != VCOS_SUCCESS)
    {

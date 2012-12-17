@@ -156,6 +156,17 @@ MMAL_STATUS_T mmal_port_parameter_get_rational(MMAL_PORT_T *port, uint32_t id, M
  */
 MMAL_STATUS_T mmal_port_parameter_set_string(MMAL_PORT_T *port, uint32_t id, const char *value);
 
+/** Helper function to set the value of an array of bytes parameter.
+ * @param port   port on which to set the parameter
+ * @param id     parameter id
+ * @param data   pointer to the array of bytes
+ * @param size   size of the array of bytes
+ *
+ * @return MMAL_SUCCESS or error
+ */
+MMAL_STATUS_T mmal_port_parameter_set_bytes(MMAL_PORT_T *port, uint32_t id,
+   const uint8_t *data, unsigned int size);
+
 /** Helper function to set a MMAL_PARAMETER_URI_T parameter on a port.
  * @param port   port on which to set the parameter
  * @param uri    URI string

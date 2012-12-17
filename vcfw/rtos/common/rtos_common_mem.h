@@ -1089,15 +1089,13 @@ typedef int (*mem_compact_cb_t)(mem_compact_op_t op, uintptr_t context, int retr
  * Register a callback function to be invoked at the start and end of every relocatable
  * heap compaction.
  * @return 1 on success; 0 on failure.
- * @note This may be called during compaction, but may not take effect immediately in
- *       that case.
+ * @note Do not call from a compaction notification function.
  */
 int mem_register_compact_cb(mem_compact_cb_t func, uintptr_t context);
 
 /**
  * Unregister a callback registered via mem_register_compact_cb().
- * @note This may be called during compaction, but in that case may block until it is
- *       known that the specified callback will not execute again.
+ * @note Do not call from a compaction notification function.
  */
 void mem_unregister_compact_cb(mem_compact_cb_t func, uintptr_t context);
 

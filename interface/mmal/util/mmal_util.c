@@ -71,8 +71,10 @@ static struct {
 } pixel_pitch[] =
 {
    {MMAL_ENCODING_I420,  1, 1},
+   {MMAL_ENCODING_YV12,  1, 1},
    {MMAL_ENCODING_I422,  1, 1},
    {MMAL_ENCODING_NV21,  1, 1},
+   {MMAL_ENCODING_NV12,  1, 1},
    {MMAL_ENCODING_ARGB,  4, 1},
    {MMAL_ENCODING_RGBA,  4, 1},
    {MMAL_ENCODING_RGB32, 4, 1},

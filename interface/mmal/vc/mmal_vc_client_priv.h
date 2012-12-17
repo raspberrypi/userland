@@ -65,7 +65,8 @@ MMAL_STATUS_T mmal_vc_sendwait_message(MMAL_CLIENT_T *client,
                                        size_t size,
                                        uint32_t msgid,
                                        void *dest,
-                                       size_t *destlen);
+                                       size_t *destlen,
+                                       MMAL_BOOL_T send_dummy_bulk);
 
 MMAL_STATUS_T mmal_vc_send_message(MMAL_CLIENT_T *client,
                                    mmal_worker_msg_header *header, size_t size,

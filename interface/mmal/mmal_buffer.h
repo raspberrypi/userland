@@ -126,6 +126,8 @@ typedef struct MMAL_BUFFER_HEADER_T
 #define MMAL_BUFFER_HEADER_FLAGS_SNAPSHOT              (1<<8)
 /** Signals a buffer which contains data known to be corrupted */
 #define MMAL_BUFFER_HEADER_FLAG_CORRUPTED              (1<<9)
+/** Signals that a buffer failed to be transmitted */
+#define MMAL_BUFFER_HEADER_FLAG_TRANSMISSION_FAILED    (1<<10)
 /* @} */
 
 /** \name Video buffer header flags

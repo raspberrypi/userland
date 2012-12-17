@@ -65,6 +65,10 @@ struct MMAL_COMPONENT_PRIVATE_T
    /** Reference counting of the ports. Component won't be destroyed until this
     * goes to 0 */
    int refcount_ports;
+
+   /** Priority associated with the 'action thread' for this component, when
+    * such action thread is applicable. */
+   int priority;
 };
 
 /** Set a generic component control parameter.

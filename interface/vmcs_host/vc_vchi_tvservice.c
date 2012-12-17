@@ -1054,10 +1054,10 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes_new(HDMI_RES_GROUP_T group,
                                                     uint32_t max_supported_modes,
                                                     HDMI_RES_GROUP_T *preferred_group,
                                                     uint32_t *preferred_mode) {
-   uint32_t _group = (uint32_t) group;
+   uint32_t param[2] = {(uint32_t) group, 0};
    TV_QUERY_SUPPORTED_MODES_RESP_T response;
    TVSERVICE_MODE_CACHE_T *cache = NULL;
-   int error = 0;
+   int error = -1;
    int modes_copied = 0;
 
    vcos_log_trace("[%s]", VCOS_FUNCTION);
@@ -1079,7 +1079,7 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes_new(HDMI_RES_GROUP_T group,
    memset(&response, 0, sizeof(response));
    if(!cache->is_valid) {
       vchi_service_use(tvservice_client.client_handle[0]);
-      if((error = tvservice_send_command_reply(VC_TV_QUERY_SUPPORTED_MODES, &_group, sizeof(_group),
+      if((error = tvservice_send_command_reply(VC_TV_QUERY_SUPPORTED_MODES, &param[0], sizeof(uint32_t),
                                                &response, sizeof(response))) == VC_HDMI_SUCCESS) {
          //First ask how many modes there are, if the current table is big enough to hold
          //all the modes, just copy over, otherwise allocate a new table
@@ -1097,19 +1097,38 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes_new(HDMI_RES_GROUP_T group,
             if(cache->modes == NULL) {
                cache->modes = vcos_calloc(cache->max_modes, sizeof(TV_SUPPORTED_MODE_NEW_T), "cached modes");
             }
-            //Download the modes from Videocore
             if(vcos_verify(cache->modes)) {
-               cache->num_modes = response.num_supported_modes;
-               error = tvservice_wait_for_bulk_receive(cache->modes, cache->num_modes * sizeof(TV_SUPPORTED_MODE_NEW_T));
+               //If we have successfully allocated the table, send
+               //another request to actually download the modes from Videocore
+               param[1] = response.num_supported_modes;
+               if((error = tvservice_send_command_reply(VC_TV_QUERY_SUPPORTED_MODES_ACTUAL, param, sizeof(param),
+                                                        &response, sizeof(response))) == VC_HDMI_SUCCESS) {
+                  //The response comes back may indicate a different number of modes to param[1].
+                  //This happens if a new EDID was read in between the two requests (should be rare),
+                  //in which case we just download as many as VC says will be sent
+                  cache->num_modes = response.num_supported_modes;
+                  vcos_assert(response.num_supported_modes <= param[1]); //VC will not return more than what we have allocated
+                  if(cache->num_modes) {
+                     error = tvservice_wait_for_bulk_receive(cache->modes, cache->num_modes * sizeof(TV_SUPPORTED_MODE_NEW_T));
+                     if(error)
+                        vcos_log_error("Failed to download %s cache in [%s]", HDMI_RES_GROUP_NAME(group), VCOS_FUNCTION);
+                  } else {
+                     vcos_log_error("First query of supported modes indicated there are %d, but now there are none, has the TV been unplugged? [%s]",
+                                    param[1], VCOS_FUNCTION);
+                  }
+               } else {
+                  vcos_log_error("Failed to request %s cache in [%s]", HDMI_RES_GROUP_NAME(group), VCOS_FUNCTION);
+               }
             } else {
-               error = -1;
+               //If we failed to allocate memory, the request stops here
                vcos_log_error("Failed to allocate memory for %s cache in [%s]", HDMI_RES_GROUP_NAME(group), VCOS_FUNCTION);
             }
          } else {
-            error = -1;
+            //The request also terminates if there are no supported modes reported
             vcos_log_error("No supported modes returned for group %s in [%s]", HDMI_RES_GROUP_NAME(group), VCOS_FUNCTION);
          }
-
+      } else {
+         vcos_log_error("Failed to query supported modes for group %s in [%s]", HDMI_RES_GROUP_NAME(group), VCOS_FUNCTION);
       }
       vchi_service_release(tvservice_client.client_handle[0]);
 
@@ -1136,7 +1155,7 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes_new(HDMI_RES_GROUP_T group,
       *preferred_mode = tvservice_client.hdmi_preferred_mode;
    }
 
-   return modes_copied;
+   return modes_copied; //If there was an error, this will be zero
 }
 
 /***********************************************************
@@ -1519,7 +1538,7 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes(HDMI_RES_GROUP_T group,
    for (i=0; i<modes_copied; i++) {
       TV_SUPPORTED_MODE_T *q = supported_modes_deprecated + j;
       TV_SUPPORTED_MODE_NEW_T *p = supported_modes_new + i;
-      if (group != 3 || (p->struct_3d & HDMI_3D_STRUCT_SIDE_BY_SIDE_HALF_HORIZONTAL)) {
+      if (group != 3 || (p->struct_3d_mask & HDMI_3D_STRUCT_SIDE_BY_SIDE_HALF_HORIZONTAL)) {
          q->scan_mode = p->scan_mode;
          q->native = p->native;
          q->code = p->code;

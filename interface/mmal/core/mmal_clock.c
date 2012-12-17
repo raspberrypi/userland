@@ -67,13 +67,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define CLOCK_UPDATE_THRESHOLD_LOWER  8000   /* microseconds */
 #define CLOCK_UPDATE_THRESHOLD_UPPER  50000  /* microseconds */
 
-/* Threshold after which backward jumps in media time are treated as a discontinuity. */
+/* Default threshold after which backward jumps in media time are treated as a discontinuity. */
 #define CLOCK_DISCONT_THRESHOLD  1000000  /* microseconds */
 
-/* Duration (microseconds) for which a discontinuity applies. Used for wall time duration
- * for which a discontinuity continues to cause affected requests to fire immediately, and
- * as the media time span for detecting discontinuous requests. */
-#define CLOCK_DISCONT_DURATION   1000000
+/* Default duration for which a discontinuity applies. Used for wall time duration for which
+ * a discontinuity continues to cause affected requests to fire immediately, and as the media
+ * time span for detecting discontinuous requests. */
+#define CLOCK_DISCONT_DURATION   1000000  /* microseconds */
 
 /* Absolute value macro */
 #define ABS_VALUE(v)  (((v) < 0) ? -(v) : (v))
@@ -131,12 +131,21 @@ typedef struct MMAL_CLOCK_PRIVATE_T
    uint32_t rtc_at_update;    /**< real-time clock value at local time update (microseconds) */
    int64_t  media_time_at_timer;
                               /**< media-time when the timer was last set */
+
    int64_t  discont_expiry;   /**< wall-time when discontinuity expires; 0 = no discontinuity
                                    in effect */
    int64_t  discont_start;    /**< media-time at start of discontinuity
                                    (n/a if discont_expiry = 0) */
    int64_t  discont_end;      /**< media-time at end of discontinuity
                                    (n/a if discont_expiry = 0) */
+   int64_t  discont_threshold;/**< Threshold after which backward jumps in media time are treated
+                                   as a discontinuity  (microseconds) */
+   int64_t  discont_duration; /**< Duration (wall-time) for which a discontinuity applies */
+
+   int64_t  update_threshold_lower;
+                              /**< Time differences below this threshold are ignored */
+   int64_t  update_threshold_upper;
+                              /**< Time differences above this threshold reset media time */
 
    /* Client requests */
    struct
@@ -326,7 +335,7 @@ static void mmal_clock_process_requests(MMAL_CLOCK_PRIVATE_T *private)
 
       /* Currently only applied to forward speeds */
       if (private->scale > 0 &&
-          media_time_now + CLOCK_DISCONT_THRESHOLD < private->media_time_at_timer)
+          media_time_now + private->discont_threshold < private->media_time_at_timer)
       {
          LOG_INFO("discontinuity: was=%" PRIi64 " now=%" PRIi64 " pending=%d",
                   private->media_time_at_timer, media_time_now, pending->length);
@@ -334,8 +343,8 @@ static void mmal_clock_process_requests(MMAL_CLOCK_PRIVATE_T *private)
          /* It's likely that packets from before the discontinuity will continue to arrive for
           * a short time. Ensure these are detected and the requests fired immediately. */
          private->discont_start = private->media_time_at_timer;
-         private->discont_end = private->discont_start + CLOCK_DISCONT_DURATION;
-         private->discont_expiry = private->wall_time + CLOCK_DISCONT_DURATION;
+         private->discont_end = private->discont_start + private->discont_duration;
+         private->discont_expiry = private->wall_time + private->discont_duration;
 
          /* Fire all pending requests */
          mmal_clock_request_flush_locked(private, media_time_now);
@@ -499,6 +508,12 @@ MMAL_STATUS_T mmal_clock_create(MMAL_CLOCK_T **clock)
       goto error;
    }
 
+   /* Set the default threshold values */
+   private->update_threshold_lower = CLOCK_UPDATE_THRESHOLD_LOWER;
+   private->update_threshold_upper = CLOCK_UPDATE_THRESHOLD_UPPER;
+   private->discont_threshold      = CLOCK_DISCONT_THRESHOLD;
+   private->discont_duration       = CLOCK_DISCONT_DURATION;
+
    if (vcos_thread_create(&private->thread, "mmal-clock thread", NULL,
                           mmal_clock_worker_thread, private) != VCOS_SUCCESS)
    {
@@ -609,8 +624,8 @@ MMAL_STATUS_T mmal_clock_media_time_set(MMAL_CLOCK_T *clock, int64_t media_time)
    mmal_clock_update_local_time(private);
 
    time_diff = private->media_time - media_time;
-   if (time_diff >  CLOCK_UPDATE_THRESHOLD_UPPER ||
-       time_diff < -CLOCK_UPDATE_THRESHOLD_UPPER)
+   if (time_diff >  private->update_threshold_upper ||
+       time_diff < -private->update_threshold_upper)
    {
       LOG_TRACE("cur:%"PRIi64" new:%"PRIi64" diff:%"PRIi64, private->media_time, media_time, time_diff);
       private->media_time = media_time;
@@ -619,8 +634,8 @@ MMAL_STATUS_T mmal_clock_media_time_set(MMAL_CLOCK_T *clock, int64_t media_time)
    else
    {
       private->average_ref_diff = ((private->average_ref_diff << 6) - private->average_ref_diff + time_diff) >> 6;
-      if(private->average_ref_diff >  CLOCK_UPDATE_THRESHOLD_LOWER ||
-         private->average_ref_diff < -CLOCK_UPDATE_THRESHOLD_LOWER)
+      if(private->average_ref_diff >  private->update_threshold_lower ||
+         private->average_ref_diff < -private->update_threshold_lower)
       {
          LOG_TRACE("cur:%"PRIi64" new:%"PRIi64" ave:%"PRIi64, private->media_time,
                private->media_time - private->average_ref_diff, private->average_ref_diff);
@@ -726,4 +741,62 @@ int64_t mmal_clock_media_time_offset_get(MMAL_CLOCK_T *clock)
 MMAL_BOOL_T mmal_clock_is_active(MMAL_CLOCK_T *clock)
 {
    return ((MMAL_CLOCK_PRIVATE_T*)clock)->is_active;
+}
+
+/* Get the clock's media-time update threshold values */
+MMAL_STATUS_T mmal_clock_update_threshold_get(MMAL_CLOCK_T *clock, MMAL_PARAMETER_CLOCK_UPDATE_THRESHOLD_T *update_threshold)
+{
+   MMAL_CLOCK_PRIVATE_T *private = (MMAL_CLOCK_PRIVATE_T *)clock;
+
+   LOCK(private);
+   update_threshold->threshold_lower = private->update_threshold_lower;
+   update_threshold->threshold_upper = private->update_threshold_upper;
+   UNLOCK(private);
+
+   return MMAL_SUCCESS;
+}
+
+/* Set the clock's media-time update threshold values */
+MMAL_STATUS_T mmal_clock_update_threshold_set(MMAL_CLOCK_T *clock, const MMAL_PARAMETER_CLOCK_UPDATE_THRESHOLD_T *update_threshold)
+{
+   MMAL_CLOCK_PRIVATE_T *private = (MMAL_CLOCK_PRIVATE_T *)clock;
+
+   LOG_TRACE("new clock update thresholds: upper %"PRIi64", lower %"PRIi64,
+         update_threshold->threshold_lower, update_threshold->threshold_upper);
+
+   LOCK(private);
+   private->update_threshold_lower = update_threshold->threshold_lower;
+   private->update_threshold_upper = update_threshold->threshold_upper;
+   UNLOCK(private);
+
+   return MMAL_SUCCESS;
+}
+
+/* Get the clock's discontinuity threshold values */
+MMAL_STATUS_T mmal_clock_discont_threshold_get(MMAL_CLOCK_T *clock, MMAL_PARAMETER_CLOCK_DISCONT_THRESHOLD_T *discont)
+{
+   MMAL_CLOCK_PRIVATE_T *private = (MMAL_CLOCK_PRIVATE_T *)clock;
+
+   LOCK(private);
+   discont->threshold = private->discont_threshold;
+   discont->duration  = private->discont_duration;
+   UNLOCK(private);
+
+   return MMAL_SUCCESS;
+}
+
+/* Set the clock's discontinuity threshold values */
+MMAL_STATUS_T mmal_clock_discont_threshold_set(MMAL_CLOCK_T *clock, const MMAL_PARAMETER_CLOCK_DISCONT_THRESHOLD_T *discont)
+{
+   MMAL_CLOCK_PRIVATE_T *private = (MMAL_CLOCK_PRIVATE_T *)clock;
+
+   LOG_TRACE("new clock discontinuity values: threshold %"PRIi64", duration %"PRIi64,
+         discont->threshold, discont->duration);
+
+   LOCK(private);
+   private->discont_threshold = discont->threshold;
+   private->discont_duration  = discont->duration;
+   UNLOCK(private);
+
+   return MMAL_SUCCESS;
 }

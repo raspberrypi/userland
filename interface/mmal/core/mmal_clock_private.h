@@ -162,6 +162,42 @@ int64_t mmal_clock_media_time_offset_get(MMAL_CLOCK_T *clock);
  */
 MMAL_BOOL_T mmal_clock_is_active(MMAL_CLOCK_T *clock);
 
+/** Get the clock's media-time update threshold values.
+ *
+ * @param clock             The clock
+ * @param update_threshold  Pointer to clock update threshold values to fill
+ *
+ * @return MMAL_SUCCESS on success
+ */
+MMAL_STATUS_T mmal_clock_update_threshold_get(MMAL_CLOCK_T *clock, MMAL_PARAMETER_CLOCK_UPDATE_THRESHOLD_T *update_threshold);
+
+/** Set the clock's media-time update threshold values.
+ *
+ * @param clock             The clock
+ * @param update_threshold  Pointer to new clock update threshold values
+ *
+ * @return MMAL_SUCCESS on success
+ */
+MMAL_STATUS_T mmal_clock_update_threshold_set(MMAL_CLOCK_T *clock, const MMAL_PARAMETER_CLOCK_UPDATE_THRESHOLD_T *update_threshold);
+
+/** Get the clock's discontinuity threshold values.
+ *
+ * @param clock      The clock
+ * @param discont    Pointer to clock discontinuity threshold values to fill
+ *
+ * @return MMAL_SUCCESS on success
+ */
+MMAL_STATUS_T mmal_clock_discont_threshold_get(MMAL_CLOCK_T *clock, MMAL_PARAMETER_CLOCK_DISCONT_THRESHOLD_T *discont);
+
+/** Set the clock's discontinuity threshold values.
+ *
+ * @param clock      The clock
+ * @param discont    Pointer to new clock discontinuity threshold values
+ *
+ * @return MMAL_SUCCESS on success
+ */
+MMAL_STATUS_T mmal_clock_discont_threshold_set(MMAL_CLOCK_T *clock, const MMAL_PARAMETER_CLOCK_DISCONT_THRESHOLD_T *discont);
+
 #ifdef __cplusplus
 }
 #endif

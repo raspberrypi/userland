@@ -55,6 +55,7 @@ typedef struct vchiq_service_struct
    void *peek_buf;
    int peek_size;
    int client_id;
+   char is_client;
 } VCHIQ_SERVICE_T;
 
 typedef struct vchiq_service_struct VCHI_SERVICE_T;
@@ -169,10 +170,10 @@ vchiq_shutdown(VCHIQ_INSTANCE_T instance)
 
       for (i = 0; i < instance->used_services; i++)
       {
-         if (instance->services[i].handle != VCHIQ_SERVICE_HANDLE_INVALID)
+         if (instance->services[i].lib_handle != VCHIQ_SERVICE_HANDLE_INVALID)
          {
             vchiq_remove_service(instance->services[i].lib_handle);
-            instance->services[i].handle = VCHIQ_SERVICE_HANDLE_INVALID;
+            instance->services[i].lib_handle = VCHIQ_SERVICE_HANDLE_INVALID;
          }
       }
 
@@ -326,10 +327,12 @@ vchiq_close_service(VCHIQ_SERVICE_HANDLE_T handle)
 
    RETRY(ret,ioctl(service->fd, VCHIQ_IOC_CLOSE_SERVICE, service->handle));
 
+   if (service->is_client)
+      service->lib_handle = VCHIQ_SERVICE_HANDLE_INVALID;
+
    if (ret != 0)
       return VCHIQ_ERROR;
 
-   service->handle = VCHIQ_SERVICE_HANDLE_INVALID;
    return VCHIQ_SUCCESS;
 }
 
@@ -346,10 +349,11 @@ vchiq_remove_service(VCHIQ_SERVICE_HANDLE_T handle)
 
    RETRY(ret,ioctl(service->fd, VCHIQ_IOC_REMOVE_SERVICE, service->handle));
 
+   service->lib_handle = VCHIQ_SERVICE_HANDLE_INVALID;
+
    if (ret != 0)
       return VCHIQ_ERROR;
 
-   service->handle = VCHIQ_SERVICE_HANDLE_INVALID;
    return VCHIQ_SUCCESS;
 }
 
@@ -1202,10 +1206,10 @@ vchi_service_close( const VCHI_SERVICE_HANDLE_T handle )
    if (!service)
       return VCHIQ_ERROR;
 
-   RETRY(ret,ioctl(service->fd, VCHIQ_IOC_REMOVE_SERVICE, service->handle));
+   RETRY(ret,ioctl(service->fd, VCHIQ_IOC_CLOSE_SERVICE, service->handle));
 
-   if (ret == 0)
-      service->handle = VCHIQ_SERVICE_HANDLE_INVALID;
+   if (service->is_client)
+      service->lib_handle = VCHIQ_SERVICE_HANDLE_INVALID;
 
    return ret;
 }
@@ -1221,8 +1225,7 @@ vchi_service_destroy( const VCHI_SERVICE_HANDLE_T handle )
 
    RETRY(ret,ioctl(service->fd, VCHIQ_IOC_REMOVE_SERVICE, service->handle));
 
-   if (ret == 0)
-      service->handle = VCHIQ_SERVICE_HANDLE_INVALID;
+   service->lib_handle = VCHIQ_SERVICE_HANDLE_INVALID;
 
    return ret;
 }
@@ -1537,7 +1540,7 @@ create_service(VCHIQ_INSTANCE_T instance,
       for (i = (instance->used_services - 1); i >= 0; i--)
       {
          VCHIQ_SERVICE_T *srv = &instance->services[i];
-         if (srv->handle == VCHIQ_SERVICE_HANDLE_INVALID)
+         if (srv->lib_handle == VCHIQ_SERVICE_HANDLE_INVALID)
          {
             service = srv;
          }
@@ -1584,12 +1587,13 @@ create_service(VCHIQ_INSTANCE_T instance,
       service->fd = instance->fd;
       service->peek_size = -1;
       service->peek_buf = NULL;
+      service->is_client = is_open;
 
       args.params = *params;
       args.params.userdata = service;
       args.is_open = is_open;
       args.is_vchi = (params->callback == NULL);
-      args.handle = -1; /* OUT parameter */
+      args.handle = VCHIQ_SERVICE_HANDLE_INVALID; /* OUT parameter */
       RETRY(ret, ioctl(instance->fd, VCHIQ_IOC_CREATE_SERVICE, &args));
       if (ret == 0)
          service->handle = args.handle;

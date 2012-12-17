@@ -115,13 +115,14 @@ enum {
    MMAL_PARAMETER_CONFIGFILE_REGISTERS,      /**< Takes a @ref MMAL_PARAMETER_CONFIGFILE_T */
    MMAL_PARAMETER_CONFIGFILE_CHUNK_REGISTERS,/**< Takes a @ref MMAL_PARAMETER_CONFIGFILE_CHUNK_T */
    MMAL_PARAMETER_JPEG_ATTACH_LOG,           /**< Takes a @ref MMAL_PARAMETER_BOOLEAN_T */
-   MMAL_PARAMETER_ZERO_SHUTTER_LAG,          /**< Takes a @ref MMAL_PARAMETER_BOOLEAN_T */
+   MMAL_PARAMETER_ZERO_SHUTTER_LAG,          /**< Takes a @ref MMAL_PARAMETER_ZEROSHUTTERLAG_T */
    MMAL_PARAMETER_FPS_RANGE,                 /**< Takes a @ref MMAL_PARAMETER_FPS_RANGE_T */
    MMAL_PARAMETER_CAPTURE_EXPOSURE_COMP,     /**< Takes a @ref MMAL_PARAMETER_INT32_T */
 
    /* 0x40 */
    MMAL_PARAMETER_SW_SHARPEN_DISABLE,        /**< Takes a @ref MMAL_PARAMETER_BOOLEAN_T */
    MMAL_PARAMETER_FLASH_REQUIRED,            /**< Takes a @ref MMAL_PARAMETER_BOOLEAN_T */
+   MMAL_PARAMETER_SW_SATURATION_DISABLE,     /**< Takes a @ref MMAL_PARAMETER_BOOLEAN_T */
 };
 
 /** Thumbnail configuration parameter type */
@@ -387,6 +388,8 @@ typedef enum MMAL_PARAM_FOCUS_STATUS_T
    MMAL_PARAM_FOCUS_STATUS_CAF_FAILED,
    MMAL_PARAM_FOCUS_STATUS_MANUAL_MOVING,
    MMAL_PARAM_FOCUS_STATUS_MANUAL_REACHED,
+   MMAL_PARAM_FOCUS_STATUS_CAF_WATCHING,
+   MMAL_PARAM_FOCUS_STATUS_CAF_SCENE_CHANGED,
 
    MMAL_PARAM_FOCUS_STATUS_MAX = 0x7FFFFFFF
 } MMAL_PARAM_FOCUS_STATUS_T;
@@ -640,5 +643,15 @@ typedef struct MMAL_PARAMETER_FPS_RANGE_T
    MMAL_RATIONAL_T   fps_low;                /**< Low end of the permitted framerate range */
    MMAL_RATIONAL_T   fps_high;               /**< High end of the permitted framerate range */
 } MMAL_PARAMETER_FPS_RANGE_T;
+
+typedef struct MMAL_PARAMETER_ZEROSHUTTERLAG_T
+{
+   MMAL_PARAMETER_HEADER_T hdr;
+
+   MMAL_BOOL_T zero_shutter_lag_mode;        /**< Select zero shutter lag mode from sensor */
+   MMAL_BOOL_T concurrent_capture;           /**< Activate full zero shutter lag mode and
+                                              *  use the last preview raw image for the stills capture
+                                              */
+} MMAL_PARAMETER_ZEROSHUTTERLAG_T;
 
 #endif  /* MMAL_PARAMETERS_CAMERA_H */

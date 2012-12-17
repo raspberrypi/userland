@@ -166,11 +166,11 @@ MMAL_STATUS_T mmal_graph_destroy(MMAL_GRAPH_T *graph)
    if (graph->pf_destroy)
       graph->pf_destroy(graph);
 
-   for (i = 0; i < private->component_num; i++)
-      mmal_component_release(private->component[i]);
-
    for (i = 0; i < private->connection_num; i++)
       mmal_connection_release(private->connection[i]);
+
+   for (i = 0; i < private->component_num; i++)
+      mmal_component_release(private->component[i]);
 
    vcos_semaphore_delete(&private->sema);
 
@@ -778,16 +778,21 @@ static MMAL_STATUS_T graph_port_disable(MMAL_PORT_T *graph_port)
 {
    MMAL_GRAPH_PRIVATE_T *graph_private = graph_port->component->priv->module;
    MMAL_PORT_T *port;
-   MMAL_STATUS_T status;
 
    port = find_port_from_graph(graph_port->component->priv->module, graph_port);
    if (!port)
       return MMAL_EINVAL;
 
-   /* We need to disable all the connected connections */
-   status = graph_port_state_propagate(graph_private, port, 0);
-   if (status != MMAL_SUCCESS)
-      return status;
+   /* We need to disable all the connected connections.
+    * Since disable does an implicit flush, we only want to do that if
+    * we're acting on an input port or we risk discarding buffers along
+    * the way. */
+   if (!graph_private->input_num || port->type == MMAL_PORT_TYPE_INPUT)
+   {
+      MMAL_STATUS_T status = graph_port_state_propagate(graph_private, port, 0);
+      if (status != MMAL_SUCCESS)
+         return status;
+   }
 
    /* Forward the call */
    return mmal_port_disable(port);

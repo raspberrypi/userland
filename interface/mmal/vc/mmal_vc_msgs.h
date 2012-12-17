@@ -40,7 +40,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MMAL_CONTROL_FOURCC() VCHIQ_MAKE_FOURCC('m','m','a','l')
 
 /* Major version indicates binary backwards compatiblity */
-#define WORKER_VER_MAJOR   14
+#define WORKER_VER_MAJOR   15
 #define WORKER_VER_MINIMUM 10
 /* Minor version is not used normally.
  */
@@ -100,7 +100,8 @@ typedef enum {
    MMAL_WORKER_DRM_GET_LHS32,
    MMAL_WORKER_DRM_GET_TIME,
    MMAL_WORKER_BUFFER_FROM_HOST_ZEROLEN,
-   MMAL_WORKER_MSG_LAST,
+   MMAL_WORKER_PORT_FLUSH,
+   MMAL_WORKER_MSG_LAST
 } MMAL_WORKER_CMD_T;
 
 /** Every message has one of these at the start.

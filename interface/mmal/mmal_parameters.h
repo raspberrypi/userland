@@ -94,6 +94,13 @@ typedef struct MMAL_PARAMETER_STRING_T
    char str[1];        /**< Null-terminated string */
 } MMAL_PARAMETER_STRING_T;
 
+/** Generic array of bytes parameter type. */
+typedef struct MMAL_PARAMETER_BYTES_T
+{
+   MMAL_PARAMETER_HEADER_T hdr;
+
+   uint8_t data[1];   /**< Array of bytes */
+} MMAL_PARAMETER_BYTES_T;
 
 /** The value 1 in 16.16 fixed point form */
 #define MMAL_FIXED_16_16_ONE  (1 << 16)

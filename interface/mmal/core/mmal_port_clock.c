@@ -215,6 +215,20 @@ static MMAL_STATUS_T mmal_port_clock_parameter_set(MMAL_PORT_T *port, const MMAL
          event.id = MMAL_CLOCK_PAYLOAD_INVALID;
       }
       break;
+      case MMAL_PARAMETER_CLOCK_UPDATE_THRESHOLD:
+      {
+         const MMAL_PARAMETER_CLOCK_UPDATE_THRESHOLD_T *p = (MMAL_PARAMETER_CLOCK_UPDATE_THRESHOLD_T *)param;
+         status = mmal_clock_update_threshold_set(module->clock, p);
+         event.id = MMAL_CLOCK_PAYLOAD_INVALID;
+      }
+      break;
+      case MMAL_PARAMETER_CLOCK_DISCONT_THRESHOLD:
+      {
+         const MMAL_PARAMETER_CLOCK_DISCONT_THRESHOLD_T *p = (MMAL_PARAMETER_CLOCK_DISCONT_THRESHOLD_T *)param;
+         status = mmal_clock_discont_threshold_set(module->clock, p);
+         event.id = MMAL_CLOCK_PAYLOAD_INVALID;
+      }
+      break;
       default:
          return MMAL_ENOSYS;
    }
@@ -260,6 +274,18 @@ static MMAL_STATUS_T mmal_port_clock_parameter_get(MMAL_PORT_T *port, MMAL_PARAM
       {
          MMAL_PARAMETER_INT64_T *p = (MMAL_PARAMETER_INT64_T*)param;
          p->value = mmal_clock_media_time_offset_get(module->clock);
+      }
+      break;
+      case MMAL_PARAMETER_CLOCK_UPDATE_THRESHOLD:
+      {
+         MMAL_PARAMETER_CLOCK_UPDATE_THRESHOLD_T *p = (MMAL_PARAMETER_CLOCK_UPDATE_THRESHOLD_T *)param;
+         mmal_clock_update_threshold_get(module->clock, p);
+      }
+      break;
+      case MMAL_PARAMETER_CLOCK_DISCONT_THRESHOLD:
+      {
+         MMAL_PARAMETER_CLOCK_DISCONT_THRESHOLD_T *p = (MMAL_PARAMETER_CLOCK_DISCONT_THRESHOLD_T *)param;
+         mmal_clock_discont_threshold_get(module->clock, p);
       }
       break;
       default:
@@ -378,7 +404,7 @@ static MMAL_STATUS_T mmal_port_clock_setup(MMAL_PORT_T *port, MMAL_PORT_CLOCK_EV
    if (!port->priv->module->queue)
    {
       mmal_clock_destroy(port->priv->module->clock);
-      return MMAL_ENOMEM;          
+      return MMAL_ENOMEM;
    }
 
    port->priv->pf_set_format = mmal_port_clock_set_format;

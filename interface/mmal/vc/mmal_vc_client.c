@@ -465,7 +465,7 @@ static VCHIQ_STATUS_T mmal_vc_vchiq_callback(VCHIQ_REASON_T reason,
             mmal_worker_buffer_from_host *msg = (mmal_worker_buffer_from_host *)msg_hdr;
             LOG_TRACE("bulk rx aborted: %p, %d", msg->buffer_header.data, msg->buffer_header.length);
             vcos_assert(msg->drvbuf.client_context->magic == MMAL_MAGIC);
-            msg->buffer_header.length = 0; /* FIXME: set a buffer flag to signal error */
+            msg->buffer_header.flags |= MMAL_BUFFER_HEADER_FLAG_TRANSMISSION_FAILED;
             msg->drvbuf.client_context->callback(msg);
          }
          else
@@ -475,7 +475,7 @@ static VCHIQ_STATUS_T mmal_vc_vchiq_callback(VCHIQ_REASON_T reason,
 
             vcos_assert(port);
             LOG_DEBUG("event bulk rx aborted");
-            msg->delayed_buffer->length = 0;    /* FIXME: set a buffer flag to signal error */
+            msg->delayed_buffer->flags |= MMAL_BUFFER_HEADER_FLAG_TRANSMISSION_FAILED;
             mmal_port_event_send(port, msg->delayed_buffer);
          }
          vchiq_release_message(service, header);
@@ -486,8 +486,7 @@ static VCHIQ_STATUS_T mmal_vc_vchiq_callback(VCHIQ_REASON_T reason,
          mmal_worker_buffer_from_host *msg = (mmal_worker_buffer_from_host *)context;
          LOG_INFO("bulk tx aborted: %p, %d", msg->buffer_header.data, msg->buffer_header.length);
          vcos_assert(msg->drvbuf.client_context->magic == MMAL_MAGIC);
-         msg->buffer_header.length = 0; /* FIXME: set a buffer flag to signal error */
-         msg->drvbuf.client_context->callback(msg);
+         /* Nothing to do as the VC side will release the buffer and notify us of the error */
       }
       break;
    default:
@@ -505,13 +504,15 @@ static VCHIQ_STATUS_T mmal_vc_vchiq_callback(VCHIQ_REASON_T reason,
   * @param msgid        message id
   * @param dest         destination for reply
   * @param destlen      size of destination, updated with actual length
+  * @param send_dummy_bulk whether to send a dummy bulk transfer
   */
 MMAL_STATUS_T mmal_vc_sendwait_message(struct MMAL_CLIENT_T *client,
                                        mmal_worker_msg_header *msg_header,
                                        size_t size,
                                        uint32_t msgid,
                                        void *dest,
-                                       size_t *destlen)
+                                       size_t *destlen,
+                                       MMAL_BOOL_T send_dummy_bulk)
 {
    MMAL_STATUS_T ret;
    MMAL_WAITER_T *waiter;
@@ -526,6 +527,9 @@ MMAL_STATUS_T mmal_vc_sendwait_message(struct MMAL_CLIENT_T *client,
       vcos_assert(0);
       return MMAL_EINVAL;
    }
+
+   if (send_dummy_bulk)
+      vcos_mutex_lock(&client->bulk_lock);
 
    waiter = get_waiter(client);
    msg_header->msgid  = msgid;
@@ -542,7 +546,29 @@ MMAL_STATUS_T mmal_vc_sendwait_message(struct MMAL_CLIENT_T *client,
    if (vst != VCHIQ_SUCCESS)
    {
       ret = MMAL_EIO;
+      if (send_dummy_bulk)
+        vcos_mutex_unlock(&client->bulk_lock);
       goto fail_msg;
+   }
+
+   if (send_dummy_bulk)
+   {
+      uint32_t data_size = 8;
+      /* The data is just some dummy bytes so it's fine for it to be static */
+      static uint8_t data[8];
+      vst = vchiq_queue_bulk_transmit(client->service, data, data_size, msg_header);
+
+      vcos_mutex_unlock(&client->bulk_lock);
+
+      if (!vcos_verify(vst == VCHIQ_SUCCESS))
+      {
+         LOG_ERROR("failed bulk transmit");
+         /* This really should not happen and if it does, things will go wrong as
+          * we've already queued the vchiq message above. */
+         vcos_assert(0);
+         ret = MMAL_EIO;
+         goto fail_msg;
+      }
    }
 
    /* now wait for the reply...

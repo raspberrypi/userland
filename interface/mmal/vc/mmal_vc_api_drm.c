@@ -51,7 +51,7 @@ int mmal_vc_drm_get_time(unsigned int * time)
    status = mmal_vc_sendwait_message(mmal_vc_get_client(),
                                      &req, sizeof(req),
                                      MMAL_WORKER_DRM_GET_TIME,
-                                     &reply, &len);
+                                     &reply, &len, MMAL_FALSE);
    *time = reply.time;
    mmal_vc_deinit();
    return status;
@@ -70,7 +70,7 @@ int mmal_vc_drm_get_lhs32(unsigned char * into)
    status = mmal_vc_sendwait_message(mmal_vc_get_client(),
                                      &req, sizeof(req),
                                      MMAL_WORKER_DRM_GET_LHS32,
-                                     &reply, &len);
+                                     &reply, &len, MMAL_FALSE);
    memcpy(into, reply.secret, 32);
    mmal_vc_deinit();
    return status;

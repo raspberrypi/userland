@@ -34,9 +34,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   * via MMAL itself.
   */
 
-#include "mmal_types.h"
-#include "mmal_parameters.h"
-#include "mmal_port.h"
+#include "interface/mmal/mmal_types.h"
+#include "interface/mmal/mmal_parameters.h"
+#include "interface/mmal/mmal_port.h"
 
 #ifdef __cplusplus
 extern "C" {

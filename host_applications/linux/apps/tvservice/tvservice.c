@@ -162,43 +162,60 @@ static const char *aspect_ratio_str(HDMI_ASPECT_T aspect_ratio) {
       return "16:10";
    case HDMI_ASPECT_15_9:
       return "15:9";
-   case HDMI_ASPECT_21_9:
-      return "21:9";
    case HDMI_ASPECT_64_27:
-      return "64:27";
+      return "64:27 (21:9)";
+   default:
+      return "unknown AR";
+   }
+}
+
+/* Return the string presentation of aspect ratio */
+static const char *aspect_ratio_sd_str(SDTV_ASPECT_T aspect_ratio) {
+   switch(aspect_ratio) {
+   case SDTV_ASPECT_4_3:
+      return "4:3";
+   case SDTV_ASPECT_14_9:
+      return "14:9";
+   case SDTV_ASPECT_16_9:
+      return "16:9";
    default:
       return "unknown AR";
    }
 }
 
 /* Return the string representation of 3D support bit mask */
-static const char* threed_str(uint32_t struct_3d) {
-   const char* three_d_format_names[] = { //See HDMI_3D_STRUCT_T bit fields
+static const char* threed_str(uint32_t struct_3d_mask) {
+#define THREE_D_FORMAT_NAME_MAX_LEN 10 //Including the separator
+   static const char* three_d_format_names[] = { //See HDMI_3D_STRUCT_T bit fields
       "FP", "F-Alt", "L-Alt", "SbS-Full",
       "Ldep", "Ldep+Gfx", "TopBot", "SbS-HH",
       "SbS-OLOR", "SbS-OLER", "SbS-ELOR", "SbS-ELER"
    };
-   static char struct_desc[256] = {0};
+   //Longest possible string is the concatenation of all of the above
+   static char struct_desc[vcos_countof(three_d_format_names)*THREE_D_FORMAT_NAME_MAX_LEN+4] = {0};
    char *p = &struct_desc[0];
    char * const p_end = p + sizeof struct_desc;
-   size_t j;
+   size_t j, added = 0;
    p += snprintf(p, p_end - p, "3D:");
-   if(struct_3d) {
-      for(j = 0; j < (sizeof three_d_format_names/sizeof *three_d_format_names); j++) {
-         if(struct_3d & (1 << j)) {
+   if(struct_3d_mask) {
+      for(j = 0; j < vcos_countof(three_d_format_names); j++) {
+         if(struct_3d_mask & (1 << j)) {
             p += snprintf(p, p_end - p, "%s|", three_d_format_names[j]);
+            added++;
          }
       }
-      *(--p) = '\0';
-   } else {
-      p += snprintf(p, p_end - p, "none");
+      if(added > 0)
+         *(--p) = '\0'; //Get rid of final "|"
    }
+   if(!added)
+      p += snprintf(p, p_end - p, "none");
+
    return struct_desc;
 }
 
 static int get_modes( HDMI_RES_GROUP_T group)
 {
-   static TV_SUPPORTED_MODE_T supported_modes[MAX_MODE_ID] = {0};
+   static TV_SUPPORTED_MODE_T supported_modes[MAX_MODE_ID] = {{0}};
    HDMI_RES_GROUP_T preferred_group;
    uint32_t preferred_mode;
    int num_modes;
@@ -208,7 +225,7 @@ static int get_modes( HDMI_RES_GROUP_T group)
                ( group == HDMI_RES_GROUP_DMT ));
 
    num_modes = vc_tv_hdmi_get_supported_modes( group, supported_modes,
-                                               sizeof(supported_modes)/sizeof(supported_modes[0]),
+                                               vcos_countof(supported_modes),
                                                &preferred_group,
                                                &preferred_mode );
    if ( num_modes < 0 )
@@ -218,23 +235,23 @@ static int get_modes( HDMI_RES_GROUP_T group)
    }
 
    LOG_STD( "Group %s has %u modes:",
-            group == HDMI_RES_GROUP_CEA ? "CEA" : group == HDMI_RES_GROUP_DMT ? "DMT" : "UNKWOWN", num_modes );
+            HDMI_RES_GROUP_NAME(group), num_modes );
    for ( i = 0; i < num_modes; i++ )
    {
       char p[8] = {0};
       if( supported_modes[i].pixel_rep )
          snprintf(p, sizeof(p)-1, "x%d ", supported_modes[i].pixel_rep);
       else
-         snprintf(p, sizeof(p)-1, "");
+         snprintf(p, sizeof(p)-1, " ");
 
-      LOG_STD( "%s mode %u: %ux%u @ %uHz %s, clock:%uMHz %s%s %s",
+      LOG_STD( "%s mode %u: %ux%u @ %uHz %s, clock:%luMHz %s%s %s",
                supported_modes[i].native ? "  (native)" : "          ",
                supported_modes[i].code, supported_modes[i].width,
                supported_modes[i].height, supported_modes[i].frame_rate,
                aspect_ratio_str(supported_modes[i].aspect_ratio),
                supported_modes[i].pixel_freq / 1000000UL, p,
                supported_modes[i].scan_mode ? "interlaced" : "progressive",
-               supported_modes[i].struct_3d ? threed_str(supported_modes[i].struct_3d) : "");
+               supported_modes[i].struct_3d_mask ? threed_str(supported_modes[i].struct_3d_mask) : "");
    }
 
    return 0;
@@ -354,6 +371,9 @@ static const char *status_mode( TV_DISPLAY_STATE_T *tvstate ) {
           }
           chars_left -= tmp; s += tmp;
        }
+      //This is the format's aspect ratio
+      tmp = snprintf(s, chars_left, " %s", aspect_ratio_str(tvstate->display.sdtv.display_options.aspect));
+      chars_left -= tmp; s += tmp;
    } else {
       tmp = snprintf(s, chars_left, "TV is off");
       chars_left -= tmp; s += tmp;
