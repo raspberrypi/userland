@@ -56,6 +56,12 @@ const char *mmal_msgname(uint32_t id)
       MSGNAME(GET_CORE_STATS_FOR_PORT),
       MSGNAME(OPAQUE_ALLOCATOR),
       MSGNAME(CONSUME_MEM),
+      MSGNAME(LMK),
+      MSGNAME(OPAQUE_ALLOCATOR_DESC),
+      MSGNAME(DRM_GET_LHS32),
+      MSGNAME(DRM_GET_TIME),
+      MSGNAME(BUFFER_FROM_HOST_ZEROLEN),
+      MSGNAME(PORT_FLUSH),
       { 0, NULL },
    };
    vcos_static_assert(sizeof(msgnames)/sizeof(msgnames[0]) == MMAL_WORKER_MSG_LAST);

@@ -130,7 +130,11 @@ static MMAL_VC_PAYLOAD_ELEM_T *mmal_vc_payload_list_find_handle(uint8_t *mem)
 MMAL_STATUS_T mmal_vc_shm_init(void)
 {
 #ifdef ENABLE_MMAL_VCSM
-   vcsm_init();
+   if (vcsm_init() != 0)
+   {
+      LOG_ERROR("could not initialize vc shared memory service");
+      return MMAL_EIO;
+   }
 #endif /* ENABLE_MMAL_VCSM */
 
    mmal_vc_payload_list_init();
@@ -150,7 +154,7 @@ uint8_t *mmal_vc_shm_alloc(uint32_t size)
    }
 
 #ifdef ENABLE_MMAL_VCSM
-   unsigned int vcsm_handle = vcsm_malloc_cache(size, VCSM_CACHE_TYPE_NONE, "mmal_vc_port buffer");
+   unsigned int vcsm_handle = vcsm_malloc_cache(size, VCSM_CACHE_TYPE_HOST, "mmal_vc_port buffer");
    unsigned int vc_handle = vcsm_vc_hdl_from_hdl(vcsm_handle);
    mem = (uint8_t *)vcsm_lock( vcsm_handle );
    if (!mem || !vc_handle)
@@ -164,6 +168,12 @@ uint8_t *mmal_vc_shm_alloc(uint32_t size)
       mmal_vc_payload_list_release(payload_elem);
       return NULL;
    }
+
+   /* The memory area is automatically mem-locked by vcsm's fault
+    * handler when it is next used. So leave it unlocked until it
+    * is needed.
+    */
+   vcsm_unlock_hdl(vcsm_handle);
 
    payload_elem->mem = mem;
    payload_elem->handle = (void *)vcsm_handle;

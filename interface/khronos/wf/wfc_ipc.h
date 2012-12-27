@@ -36,13 +36,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define WFC_IPC_CONTROL_FOURCC()   VCHIQ_MAKE_FOURCC('W','F','C','I')
 
-/* Major version indicates binary backwards compatiblity */
-#define WFC_IPC_VER_MAJOR     1
-/* Minor version is increased for new APIs where backwards
- * binary compatibility is retained for existing APIs */
-#define WFC_IPC_VER_MINOR     0
+/* Define the current version number of the IPC API that the host library of VC
+ * server is built against.
+ */
+/* The current IPC version number */
+#define WFC_IPC_VER_CURRENT     8
+
+/* The minimum verison number for backwards compatibility */
 #ifndef WFC_IPC_VER_MINIMUM
-#define WFC_IPC_VER_MINIMUM   WFC_IPC_VER_MAJOR
+#define WFC_IPC_VER_MINIMUM     5
 #endif
 
 /** Definitions of messages used for implementing the WFC API on the server.
@@ -55,7 +57,7 @@ typedef enum {
    WFC_IPC_MSG_GET_VERSION,            /**< Returns major, minor and minimum values */
    WFC_IPC_MSG_CREATE_CONTEXT,         /**< Returns uint32_t */
    WFC_IPC_MSG_DESTROY_CONTEXT,
-   WFC_IPC_MSG_COMPOSE_SCENE,
+   WFC_IPC_MSG_COMMIT_SCENE,
    WFC_IPC_MSG_ACTIVATE,
    WFC_IPC_MSG_DEACTIVATE,
    WFC_IPC_MSG_SET_DEFERRAL_STREAM,
@@ -71,10 +73,14 @@ typedef enum {
    WFC_IPC_MSG_SS_REGISTER,
    WFC_IPC_MSG_SS_UNREGISTER,
    WFC_IPC_MSG_SS_ON_IMAGE_AVAILABLE,
+   WFC_IPC_MSG_SS_SIGNAL_IMAGE,        /**< Signal to update the front buffer of a generic image stream */
+   WFC_IPC_MSG_SS_CREATE_INFO,         /**< Returns WFCNativeStreamType */
+   WFC_IPC_MSG_SS_GET_INFO,            /**< Get stream configuration information */
 
    WFC_IPC_MSG_COUNT,                  /**< Always immediately after last client message type */
 
    WFC_IPC_MSG_CALLBACK,               /**< Sent from server to complete callback */
+
 
    WFC_IPC_MSG_MAX = 0x7FFFFFFF        /**< Force type to be 32-bit */
 } WFC_IPC_MSG_TYPE;
@@ -160,8 +166,9 @@ typedef struct {
    WFC_IPC_CALLBACK_T scene_taken_cb;     /**< Opaque client function pointer */
    WFC_IPC_VOID_PTR_T scene_taken_data;   /**< Opaque client data */
    WFCContext context;
+   uint32_t flags;
    WFC_SCENE_T scene;
-} WFC_IPC_MSG_COMPOSE_SCENE_T;
+} WFC_IPC_MSG_COMMIT_SCENE_T;
 
 /** Set deferral stream message */
 typedef struct {
@@ -180,6 +187,25 @@ typedef struct {
    uint32_t pid_lo;
    uint32_t pid_hi;
 } WFC_IPC_MSG_SS_CREATE_T;
+
+/** Create stream using info block message */
+typedef struct {
+   WFC_IPC_MSG_HEADER_T header;  /**< All messages start with a header */
+
+   WFCNativeStreamType stream;
+   WFC_STREAM_INFO_T info;
+   uint32_t pid_lo;
+   uint32_t pid_hi;
+} WFC_IPC_MSG_SS_CREATE_INFO_T;
+
+/** Destroy stream message */
+typedef struct {
+   WFC_IPC_MSG_HEADER_T header;  /**< All messages start with a header */
+
+   WFCNativeStreamType stream;
+   uint32_t pid_lo;
+   uint32_t pid_hi;
+} WFC_IPC_MSG_SS_DESTROY_T;
 
 /** Set stream rectangle update callback message */
 typedef struct {
@@ -213,7 +239,14 @@ typedef struct {
    WFC_IPC_MSG_HEADER_T header;  /**< All messages start with a header */
 
    WFCNativeStreamType stream;
-   EGLImageKHR image_handle;
+   uint32_t ustorage;
+   uint32_t width;
+   uint32_t height;
+   uint32_t stride;
+   uint32_t offset;
+   uint32_t format;
+   uint32_t flags;
+   bool flip;
 } WFC_IPC_MSG_SS_SIGNAL_EGLIMAGE_DATA_T;
 
 /** Signal new multimedia image message */
@@ -234,7 +267,19 @@ typedef struct {
    uint32_t width;
    uint32_t height;
    uint32_t pitch;
+   uint32_t vpitch;
 } WFC_IPC_MSG_SS_SIGNAL_RAW_PIXELS_T;
+
+/** Signals a new image buffer */
+typedef struct {
+   WFC_IPC_MSG_HEADER_T header;  /**< All messages start with a header */
+   WFCNativeStreamType stream;
+
+   /**< Descibes the image buffer.
+    * image.length initialised to sizeof(WFC_STREAM_IMAGE_T) */
+   WFC_STREAM_IMAGE_T image;
+
+} WFC_IPC_MSG_SS_SIGNAL_IMAGE_T;
 
 /** Register stream as owned by process message */
 typedef struct {
@@ -244,6 +289,22 @@ typedef struct {
    uint32_t pid_lo;
    uint32_t pid_hi;
 } WFC_IPC_MSG_SS_REGISTER_T;
+
+/** Unregister stream as owned by process message */
+typedef struct {
+   WFC_IPC_MSG_HEADER_T header;  /**< All messages start with a header */
+
+   WFCNativeStreamType stream;
+   uint32_t pid_lo;
+   uint32_t pid_hi;
+} WFC_IPC_MSG_SS_UNREGISTER_T;
+
+typedef struct {
+   WFC_IPC_MSG_HEADER_T header;  /**< All messages start with a header */
+
+   uint32_t result;
+   WFC_STREAM_INFO_T info;
+} WFC_IPC_MSG_SS_GET_INFO_T;
 
 /** Set stream image available callback message */
 typedef struct {
@@ -266,18 +327,22 @@ typedef union
    WFC_IPC_MSG_CONTEXT_T context;
    WFC_IPC_MSG_STREAM_T stream;
    WFC_IPC_MSG_CREATE_CONTEXT_T create_context;
-   WFC_IPC_MSG_COMPOSE_SCENE_T compose_scene;
+   WFC_IPC_MSG_COMMIT_SCENE_T commit_scene;
    WFC_IPC_MSG_SET_DEFERRAL_STREAM_T set_deferral_stream;
    WFC_IPC_MSG_SS_CREATE_T ss_create;
+   WFC_IPC_MSG_SS_CREATE_INFO_T ss_create_info;
+   WFC_IPC_MSG_SS_DESTROY_T ss_destroy;
    WFC_IPC_MSG_SS_ON_RECTS_CHANGE_T ss_on_rects_change;
    WFC_IPC_MSG_SS_ALLOCATE_IMAGES_T ss_allocate_images;
    WFC_IPC_MSG_SS_SIGNAL_EGLIMAGE_DATA_T ss_signal_eglimage_data;
    WFC_IPC_MSG_SS_SIGNAL_MM_IMAGE_DATA_T ss_signal_mm_image_data;
    WFC_IPC_MSG_SS_SIGNAL_RAW_PIXELS_T ss_signal_raw_image_data;
    WFC_IPC_MSG_SS_REGISTER_T ss_register;
+   WFC_IPC_MSG_SS_UNREGISTER_T ss_unregister;
    WFC_IPC_MSG_SS_ON_IMAGE_AVAILABLE_T ss_on_image_available;
    WFC_IPC_MSG_GET_VERSION_T get_version;
    WFC_IPC_MSG_SS_GET_RECTS_T ss_get_rects;
+   WFC_IPC_MSG_SS_SIGNAL_IMAGE_T ss_signal_image;
 } WFC_IPC_MSG_T;
 
 #define WFC_IPC_MSG_MAGIC       VCHIQ_MAKE_FOURCC('W', 'F', 'C', 'm')

@@ -42,6 +42,7 @@ extern "C" {
 #include "interface/vmcs_host/khronos/IL/OMX_Component.h"
 #include "interface/vmcs_host/khronos/IL/OMX_Video.h"
 #include "interface/vmcs_host/khronos/IL/OMX_Audio.h"
+#include "interface/vmcs_host/khronos/IL/OMX_Broadcom.h"
 
 /** Convert MMAL status codes into OMX error codes.
  *
@@ -90,7 +91,7 @@ void mmalil_buffer_header_to_mmal(MMAL_BUFFER_HEADER_T *mmal, OMX_BUFFERHEADERTY
 OMX_PORTDOMAINTYPE mmalil_es_type_to_omx_domain(MMAL_ES_TYPE_T type);
 MMAL_ES_TYPE_T mmalil_omx_domain_to_es_type(OMX_PORTDOMAINTYPE domain);
 uint32_t mmalil_omx_audio_coding_to_encoding(OMX_AUDIO_CODINGTYPE coding);
-OMX_VIDEO_CODINGTYPE mmalil_encoding_to_omx_audio_coding(uint32_t encoding);
+OMX_AUDIO_CODINGTYPE mmalil_encoding_to_omx_audio_coding(uint32_t encoding);
 uint32_t mmalil_omx_video_coding_to_encoding(OMX_VIDEO_CODINGTYPE coding);
 OMX_VIDEO_CODINGTYPE mmalil_encoding_to_omx_video_coding(uint32_t encoding);
 uint32_t mmalil_omx_image_coding_to_encoding(OMX_IMAGE_CODINGTYPE coding);
@@ -98,12 +99,86 @@ OMX_IMAGE_CODINGTYPE mmalil_encoding_to_omx_image_coding(uint32_t encoding);
 uint32_t mmalil_omx_coding_to_encoding(uint32_t encoding, OMX_PORTDOMAINTYPE domain);
 uint32_t mmalil_omx_color_format_to_encoding(OMX_COLOR_FORMATTYPE coding);
 OMX_COLOR_FORMATTYPE mmalil_encoding_to_omx_color_format(uint32_t encoding);
+uint32_t mmalil_omx_color_space_to_mmal(OMX_COLORSPACETYPE coding);
+OMX_COLORSPACETYPE mmalil_color_space_to_omx(uint32_t coding);
 uint32_t mmalil_omx_video_profile_to_mmal(OMX_U32 level, OMX_VIDEO_CODINGTYPE coding);
 OMX_U32 mmalil_video_profile_to_omx(uint32_t profile);
 uint32_t mmalil_omx_video_level_to_mmal(OMX_U32 level, OMX_VIDEO_CODINGTYPE coding);
 OMX_U32 mmalil_video_level_to_omx(uint32_t level);
 MMAL_VIDEO_RATECONTROL_T mmalil_omx_video_ratecontrol_to_mmal(OMX_VIDEO_CONTROLRATETYPE omx);
 OMX_VIDEO_CONTROLRATETYPE mmalil_video_ratecontrol_to_omx(MMAL_VIDEO_RATECONTROL_T mmal);
+
+/** Union of all the OMX_VIDEO/AUDIO_PARAM types */
+typedef union OMX_FORMAT_PARAM_TYPE {
+   OMX_PARAM_U32TYPE common;
+
+   /* Video */
+   OMX_VIDEO_PARAM_AVCTYPE avc;
+   OMX_VIDEO_PARAM_H263TYPE h263;
+   OMX_VIDEO_PARAM_MPEG2TYPE mpeg2;
+   OMX_VIDEO_PARAM_MPEG4TYPE mpeg4;
+   OMX_VIDEO_PARAM_WMVTYPE wmv;
+   OMX_VIDEO_PARAM_RVTYPE rv;
+
+   /* Audio */
+   OMX_AUDIO_PARAM_PCMMODETYPE pcm;
+   OMX_AUDIO_PARAM_MP3TYPE mp3;
+   OMX_AUDIO_PARAM_AACPROFILETYPE aac;
+   OMX_AUDIO_PARAM_VORBISTYPE vorbis;
+   OMX_AUDIO_PARAM_WMATYPE wma;
+   OMX_AUDIO_PARAM_RATYPE ra;
+   OMX_AUDIO_PARAM_SBCTYPE sbc;
+   OMX_AUDIO_PARAM_ADPCMTYPE adpcm;
+   OMX_AUDIO_PARAM_G723TYPE g723;
+   OMX_AUDIO_PARAM_G726TYPE g726;
+   OMX_AUDIO_PARAM_G729TYPE g729;
+   OMX_AUDIO_PARAM_AMRTYPE amr;
+   OMX_AUDIO_PARAM_GSMFRTYPE gsmfr;
+   OMX_AUDIO_PARAM_GSMHRTYPE gsmhr;
+   OMX_AUDIO_PARAM_GSMEFRTYPE gsmefr;
+   OMX_AUDIO_PARAM_TDMAFRTYPE tdmafr;
+   OMX_AUDIO_PARAM_TDMAEFRTYPE tdmaefr;
+   OMX_AUDIO_PARAM_PDCFRTYPE pdcfr;
+   OMX_AUDIO_PARAM_PDCEFRTYPE pdcefr;
+   OMX_AUDIO_PARAM_PDCHRTYPE pdchr;
+   OMX_AUDIO_PARAM_QCELP8TYPE qcelp8;
+   OMX_AUDIO_PARAM_QCELP13TYPE qcelp13;
+   OMX_AUDIO_PARAM_EVRCTYPE evrc;
+   OMX_AUDIO_PARAM_SMVTYPE smv;
+   OMX_AUDIO_PARAM_MIDITYPE midi;
+
+} OMX_FORMAT_PARAM_TYPE;
+
+/** Get the OMX_IndexParamAudio index corresponding to a specified audio coding type.
+ *
+ * @param coding Audio coding type.
+ * @param size  Pointer used to return the size of the parameter.
+ *
+ * @return OMX index or 0 if no match was found.
+ */
+OMX_INDEXTYPE mmalil_omx_audio_param_index(OMX_AUDIO_CODINGTYPE coding, OMX_U32 *size);
+
+/** Convert an OMX_IndexParamAudio into a MMAL elementary stream format.
+ *
+ * @param format Format structure to update.
+ * @param coding Audio coding type.
+ * @param param  Source OMX_IndexParamAudio structure.
+ *
+ * @return The MMAL encoding if a match was found or MMAL_ENCODING_UNKNOWN otherwise.
+ */
+MMAL_FOURCC_T mmalil_omx_audio_param_to_format(MMAL_ES_FORMAT_T *format,
+   OMX_AUDIO_CODINGTYPE coding, OMX_FORMAT_PARAM_TYPE *param);
+
+/** Convert a MMAL elementary stream format into a OMX_IndexParamAudio structure.
+ *
+ * @param param  OMX_IndexParamAudio structure to update.
+ * @param param_index returns the OMX_IndexParamAudio index corresponding to the format.
+ * @param format Source format structure.
+ *
+ * @return The OMX aduio coding type if a match was found or OMX_AUDIO_CodingUnused otherwise.
+ */
+OMX_AUDIO_CODINGTYPE mmalil_format_to_omx_audio_param(OMX_FORMAT_PARAM_TYPE *param,
+   OMX_INDEXTYPE *param_index, MMAL_ES_FORMAT_T *format);
 
 #ifdef __cplusplus
 }

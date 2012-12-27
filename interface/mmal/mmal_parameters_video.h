@@ -30,6 +30,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "mmal_parameters_common.h"
 
+/*************************************************
+ * ALWAYS ADD NEW ENUMS AT THE END OF THIS LIST! *
+ ************************************************/
+
 /** Video-specific MMAL parameter IDs.
  * @ingroup MMAL_PARAMETER_IDS
  */
@@ -49,14 +53,42 @@ enum {
    MMAL_PARAMETER_VIDEO_EEDE_LOSSRATE,    /**< Takes a @ref MMAL_PARAMETER_VIDEO_EEDE_LOSSRATE_T */
    MMAL_PARAMETER_VIDEO_REQUEST_I_FRAME,  /**< Takes a @ref MMAL_PARAMETER_BOOLEAN_T.
                                            * Request an I-frame. */
+   MMAL_PARAMETER_VIDEO_INTRA_REFRESH,    /**< Takes a @ref MMAL_PARAMETER_VIDEO_INTRA_REFRESH_T */
    MMAL_PARAMETER_VIDEO_IMMUTABLE_INPUT,  /**< Takes a @ref MMAL_PARAMETER_BOOLEAN_T. */
    MMAL_PARAMETER_VIDEO_BIT_RATE,         /**< Takes a @ref MMAL_PARAMETER_UINT32_T.
                                            * Run-time bit rate control */
    MMAL_PARAMETER_VIDEO_FRAME_RATE,       /**< Takes a @ref MMAL_PARAMETER_FRAME_RATE_T */
    MMAL_PARAMETER_VIDEO_ENCODE_MIN_QUANT, /**< Takes a @ref MMAL_PARAMETER_UINT32_T. */
    MMAL_PARAMETER_VIDEO_ENCODE_MAX_QUANT, /**< Takes a @ref MMAL_PARAMETER_UINT32_T. */
-   MMAL_PARAMETER_VIDEO_ENCODE_RC_MODEL,  /**< Takes a @ref MMAL_PARAMETER_UINT32_T. */
+   MMAL_PARAMETER_VIDEO_ENCODE_RC_MODEL,  /**< Takes a @ref MMAL_PARAMETER_VIDEO_ENCODE_RC_MODEL_T. */
    MMAL_PARAMETER_EXTRA_BUFFERS,          /**< Takes a @ref MMAL_PARAMETER_UINT32_T. */
+   MMAL_PARAMETER_VIDEO_ALIGN_HORIZ,      /**< Takes a @ref MMAL_PARAMETER_UINT32_T.
+                                               Changing this paramater from the default can reduce frame rate
+                                               because image buffers need to be re-pitched.*/
+   MMAL_PARAMETER_VIDEO_ALIGN_VERT,        /**< Takes a @ref MMAL_PARAMETER_UINT32_T.
+                                               Changing this paramater from the default can reduce frame rate
+                                               because image buffers need to be re-pitched.*/
+   MMAL_PARAMETER_VIDEO_DROPPABLE_PFRAMES,      /**< Take a @ref MMAL_PARAMETER_BOOLEAN_T. */
+   MMAL_PARAMETER_VIDEO_ENCODE_INITIAL_QUANT,   /**< Takes a @ref MMAL_PARAMETER_UINT32_T. */
+   MMAL_PARAMETER_VIDEO_ENCODE_QP_P,            /**< Takes a @ref MMAL_PARAMETER_UINT32_T. */
+   MMAL_PARAMETER_VIDEO_ENCODE_RC_SLICE_DQUANT, /**< Takes a @ref MMAL_PARAMETER_UINT32_T. */
+   MMAL_PARAMETER_VIDEO_ENCODE_FRAME_LIMIT_BITS,    /**< Takes a @ref MMAL_PARAMETER_UINT32_T */
+   MMAL_PARAMETER_VIDEO_ENCODE_PEAK_RATE,       /**< Takes a @ref MMAL_PARAMETER_UINT32_T. */       
+
+   /*H264 specific parameters*/
+   MMAL_PARAMETER_VIDEO_ENCODE_H264_DISABLE_CABAC,      /**< Take a @ref MMAL_PARAMETER_BOOLEAN_T. */
+   MMAL_PARAMETER_VIDEO_ENCODE_H264_LOW_LATENCY,        /**< Take a @ref MMAL_PARAMETER_BOOLEAN_T. */
+   MMAL_PARAMETER_VIDEO_ENCODE_H264_AU_DELIMITERS,      /**< Take a @ref MMAL_PARAMETER_BOOLEAN_T. */
+   MMAL_PARAMETER_VIDEO_ENCODE_H264_DEBLOCK_IDC,        /**< Takes a @ref MMAL_PARAMETER_UINT32_T. */
+   MMAL_PARAMETER_VIDEO_ENCODE_H264_MB_INTRA_MODE,      /**< Takes a @ref MMAL_PARAMETER_VIDEO_ENCODER_H264_MB_INTRA_MODES_T. */
+
+   MMAL_PARAMETER_VIDEO_ENCODE_HEADER_ON_OPEN,  /**< Takes a @ref MMAL_PARAMETER_BOOLEAN_T */
+   MMAL_PARAMETER_VIDEO_ENCODE_PRECODE_FOR_QP,  /**< Takes a @ref MMAL_PARAMETER_BOOLEAN_T */
+
+   MMAL_PARAMETER_VIDEO_DRM_INIT_INFO,          /**< Takes a @ref MMAL_PARAMETER_VIDEO_DRM_INIT_INFO_T. */
+   MMAL_PARAMETER_VIDEO_TIMESTAMP_FIFO,         /**< Takes a @ref MMAL_PARAMETER_BOOLEAN_T */
+   MMAL_PARAMETER_VIDEO_DECODE_ERROR_CONCEALMENT,        /**< Takes a @ref MMAL_PARAMETER_BOOLEAN_T */
+   MMAL_PARAMETER_VIDEO_DRM_PROTECT_BUFFER              /**< Takes a @ref MMAL_PARAMETER_VIDEO_DRM_PROTECT_BUFFER_T. */
 };
 
 /** Display transformations.
@@ -205,6 +237,7 @@ typedef enum MMAL_VIDEO_PROFILE_T {
     MMAL_VIDEO_PROFILE_H264_HIGH10,
     MMAL_VIDEO_PROFILE_H264_HIGH422,
     MMAL_VIDEO_PROFILE_H264_HIGH444,
+    MMAL_VIDEO_PROFILE_H264_CONSTRAINED_BASELINE,
     MMAL_VIDEO_PROFILE_DUMMY = 0x7FFFFFFF
 } MMAL_VIDEO_PROFILE_T;
 
@@ -274,6 +307,34 @@ typedef enum MMAL_VIDEO_RATECONTROL_T {
     MMAL_VIDEO_RATECONTROL_DUMMY = 0x7fffffff
 } MMAL_VIDEO_RATECONTROL_T;
 
+/** Intra refresh modes */
+typedef enum MMAL_VIDEO_INTRA_REFRESH_T {
+    MMAL_VIDEO_INTRA_REFRESH_CYCLIC,
+    MMAL_VIDEO_INTRA_REFRESH_ADAPTIVE,
+    MMAL_VIDEO_INTRA_REFRESH_BOTH,
+    MMAL_VIDEO_INTRA_REFRESH_KHRONOSEXTENSIONS = 0x6F000000,
+    MMAL_VIDEO_INTRA_REFRESH_VENDORSTARTUNUSED = 0x7F000000,
+    MMAL_VIDEO_INTRA_REFRESH_CYCLIC_MROWS,
+    MMAL_VIDEO_INTRA_REFRESH_PSEUDO_RAND,
+    MMAL_VIDEO_INTRA_REFRESH_MAX,
+    MMAL_VIDEO_INTRA_REFRESH_DUMMY         = 0x7FFFFFFF
+} MMAL_VIDEO_INTRA_REFRESH_T;
+
+/*Encode RC Models Supported*/
+typedef enum MMAL_VIDEO_ENCODE_RC_MODEL_T {
+    MMAL_VIDEO_ENCODER_RC_MODEL_DEFAULT    = 0,
+    MMAL_VIDEO_ENCODER_RC_MODEL_JVT = MMAL_VIDEO_ENCODER_RC_MODEL_DEFAULT,
+    MMAL_VIDEO_ENCODER_RC_MODEL_VOWIFI,
+    MMAL_VIDEO_ENCODER_RC_MODEL_CBR,
+    MMAL_VIDEO_ENCODER_RC_MODEL_LAST,
+    MMAL_VIDEO_ENCODER_RC_MODEL_DUMMY      = 0x7FFFFFFF
+} MMAL_VIDEO_ENCODE_RC_MODEL_T;
+
+typedef struct MMAL_PARAMETER_VIDEO_ENCODE_RC_MODEL_T {
+    MMAL_PARAMETER_HEADER_T hdr;
+    MMAL_VIDEO_ENCODE_RC_MODEL_T rc_model;
+}MMAL_PARAMETER_VIDEO_ENCODE_RC_MODEL_T;
+
 /** Video rate control setting */
 typedef struct MMAL_PARAMETER_VIDEO_RATECONTROL_T {
    MMAL_PARAMETER_HEADER_T hdr;
@@ -281,13 +342,26 @@ typedef struct MMAL_PARAMETER_VIDEO_RATECONTROL_T {
    MMAL_VIDEO_RATECONTROL_T control;
 } MMAL_PARAMETER_VIDEO_RATECONTROL_T;
 
+/*H264 INTRA MB MODES*/
+typedef enum MMAL_VIDEO_ENCODE_H264_MB_INTRA_MODES_T {
+    MMAL_VIDEO_ENCODER_H264_MB_4x4_INTRA = 1,
+    MMAL_VIDEO_ENCODER_H264_MB_8x8_INTRA = 2,
+    MMAL_VIDEO_ENCODER_H264_MB_16x16_INTRA = 4,
+    MMAL_VIDEO_ENCODER_H264_MB_INTRA_DUMMY = 0x7fffffff
+} MMAL_VIDEO_ENCODE_H264_MB_INTRA_MODES_T;
+
+typedef struct MMAL_PARAMETER_VIDEO_ENCODER_H264_MB_INTRA_MODES_T {
+    MMAL_PARAMETER_HEADER_T hdr;
+    MMAL_VIDEO_ENCODE_H264_MB_INTRA_MODES_T mb_mode;
+}MMAL_PARAMETER_VIDEO_ENCODER_H264_MB_INTRA_MODES_T;
+
 /** NAL unit formats */
 typedef enum MMAL_VIDEO_NALUNITFORMAT_T {
-    MMAL_VIDEO_NALUNITFORMAT_STARTCODES,
-    MMAL_VIDEO_NALUNITFORMAT_NALUNITPERBUFFER,
-    MMAL_VIDEO_NALUNITFORMAT_ONEBYTEINTERLEAVELENGTH,
-    MMAL_VIDEO_NALUNITFORMAT_TWOBYTEINTERLEAVELENGTH,
-    MMAL_VIDEO_NALUNITFORMAT_FOURBYTEINTERLEAVELENGTH,
+    MMAL_VIDEO_NALUNITFORMAT_STARTCODES = 1,
+    MMAL_VIDEO_NALUNITFORMAT_NALUNITPERBUFFER = 2,
+    MMAL_VIDEO_NALUNITFORMAT_ONEBYTEINTERLEAVELENGTH = 4,
+    MMAL_VIDEO_NALUNITFORMAT_TWOBYTEINTERLEAVELENGTH = 8,
+    MMAL_VIDEO_NALUNITFORMAT_FOURBYTEINTERLEAVELENGTH = 16,
     MMAL_VIDEO_NALUNITFORMAT_DUMMY = 0x7fffffff
 } MMAL_VIDEO_NALUNITFORMAT_T;
 
@@ -309,6 +383,19 @@ typedef struct MMAL_PARAMETER_VIDEO_LEVEL_EXTENSION_T {
    uint32_t custom_max_br_and_cpb;
 } MMAL_PARAMETER_VIDEO_LEVEL_EXTENSION_T;
 
+/** H264 Only: Overrides for max macro-blocks per second, max framesize,
+ * and max bitrates. This overrides the default maximums for the configured level.
+ */
+typedef struct MMAL_PARAMETER_VIDEO_INTRA_REFRESH_T {
+   MMAL_PARAMETER_HEADER_T hdr;
+
+    MMAL_VIDEO_INTRA_REFRESH_T refresh_mode;
+    uint32_t air_mbs;
+    uint32_t air_ref;
+    uint32_t cir_mbs;
+    uint32_t pir_mbs;
+} MMAL_PARAMETER_VIDEO_INTRA_REFRESH_T;
+
 /** Structure for enabling EEDE, we keep it like this for now, there could be extra fields in the future */
 typedef struct MMAL_PARAMETER_VIDEO_EEDE_ENABLE_T {
    MMAL_PARAMETER_HEADER_T hdr;
@@ -322,5 +409,27 @@ typedef struct MMAL_PARAMETER_VIDEO_EEDE_LOSSRATE_T {
 
    uint32_t loss_rate;
 } MMAL_PARAMETER_VIDEO_EEDE_LOSSRATE_T;
+
+/** Structure for setting inital DRM parameters */
+typedef struct MMAL_PARAMETER_VIDEO_DRM_INIT_INFO_T {
+   MMAL_PARAMETER_HEADER_T hdr;
+
+   uint32_t current_time;
+   uint32_t ticks_per_sec;
+   uint8_t  lhs[32];
+} MMAL_PARAMETER_VIDEO_DRM_INIT_INFO_T;
+
+/** Structure for requesting a hardware-protected memory buffer **/
+typedef struct MMAL_PARAMETER_VIDEO_DRM_PROTECT_BUFFER_T {
+   MMAL_PARAMETER_HEADER_T hdr;
+
+   uint32_t size_wanted;     /**< Input. Zero size means internal video decoder buffer,
+                                 mem_handle and phys_addr not returned in this case */
+   uint32_t protect;         /**< Input. 1 = protect, 0 = unprotect */
+
+   uint32_t mem_handle;      /**< Output. Handle for protected buffer */
+   void *   phys_addr;       /**< Output. Physical memory address of protected buffer */
+
+} MMAL_PARAMETER_VIDEO_DRM_PROTECT_BUFFER_T;
 
 #endif

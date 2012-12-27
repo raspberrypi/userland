@@ -33,6 +33,7 @@ extern "C" {
 
 #include "helpers/v3d/v3d_ver.h"
 
+#define VC_KHRN_VERSION 1
 //#define KHRN_NOT_REALLY_DUALCORE   // Use dual core codebase but switch master thread to vpu1
 //#define KHRN_SIMPLE_MULTISAMPLE
 //#define USE_CTRL_FOR_DATA

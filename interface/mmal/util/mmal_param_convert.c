@@ -39,7 +39,7 @@ static MMAL_STATUS_T parse_enum(int *dest, string_pair_t *pairs, size_t n_pairs,
    size_t i;
    for (i=0; i<n_pairs; i++)
    {
-      if (strcasecmp(str, pairs[i].string) == 0)
+      if (vcos_strcasecmp(str, pairs[i].string) == 0)
       {
          *dest = pairs[i].value;
          return MMAL_SUCCESS;
@@ -66,7 +66,7 @@ MMAL_STATUS_T mmal_parse_video_size(uint32_t *w, uint32_t *h, const char *str)
    size_t i;
    for (i=0; i<vcos_countof(sizes); i++)
    {
-      if (strcasecmp(str, sizes[i].name) == 0)
+      if (vcos_strcasecmp(str, sizes[i].name) == 0)
       {
          *w = sizes[i].width;
          *h = sizes[i].height;
@@ -158,6 +158,7 @@ MMAL_STATUS_T mmal_parse_geometry(MMAL_RECT_T *dest, const char *str)
    MMAL_STATUS_T ret;
    uint32_t w, h, x, y;
    x = y = w = h = 0;
+   /* coverity[secure_coding] */
    if (sscanf(str, "%d*%d+%d+%d", &w,&h,&x,&y) == 4 ||
        sscanf(str, "%d*%d", &w,&h) == 2)
    {

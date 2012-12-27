@@ -34,6 +34,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "interface/mmal/mmal.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /** Parse a video size. e.g. "1080p" gives 1920x1080.
  *
  * @param w width result
@@ -81,5 +85,8 @@ MMAL_STATUS_T mmal_parse_geometry(MMAL_RECT_T *dest, const char *str);
  */
 MMAL_STATUS_T mmal_parse_video_codec(uint32_t *dest, const char *str);
 
+#ifdef __cplusplus
+}
 #endif
 
+#endif

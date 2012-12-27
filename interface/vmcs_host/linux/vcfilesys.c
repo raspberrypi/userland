@@ -403,8 +403,11 @@ int vc_hostfs_open(const char *inPath, int vc_oflag)
       // but we will fake, to the extent supported by the buffered file system
       // on the Videocore, limited FIFO seek functionality.  This is for the benefit
       // of certain Videocore "streaming" file handlers.
-      fstat( ret, &fileStat );
-      if (S_ISFIFO( fileStat.st_mode ))
+      if (fstat( ret, &fileStat ) != 0)
+      {
+         DEBUG_MINOR("vc_hostfs_open: fstat failed: %s", strerror(errno));
+      }
+      else if (S_ISFIFO( fileStat.st_mode ))
       {
          // file is a FIFO, so note its fildes for future reference
          p_file_info_table[ret].is_fifo = 1;
@@ -776,14 +779,13 @@ struct fs_dirent *vc_hostfs_readdir_r(void *dhandle, struct fs_dirent *result)
 
          /* Append the filename, and stat the resulting path */
          fsdir->pathbuf[fsdir->pathlen] = '/';
-         strcpy(fsdir->pathbuf + fsdir->pathlen + 1, dent->d_name);
+         vcos_safe_strcpy(fsdir->pathbuf, dent->d_name, sizeof(fsdir->pathbuf), fsdir->pathlen + 1);
          ret = stat(fsdir->pathbuf, &statbuf);
          fsdir->pathbuf[fsdir->pathlen] = '\0';
 
          if (ret == 0)
          {
-            strncpy(result->d_name, dent->d_name, sizeof(result->d_name) - 1);
-            result->d_name[sizeof(result->d_name) - 1] = '\0';
+            vcos_safe_strcpy(result->d_name, dent->d_name, sizeof(result->d_name), 0);
             result->d_size = (statbuf.st_size <= 0xffffffff) ? (unsigned int)statbuf.st_size : 0xffffffff;
             result->d_attrib = ATTR_NORMAL;
             if ((statbuf.st_mode & S_IWUSR) == 0)
@@ -842,6 +844,9 @@ int vc_hostfs_remove(const char *path)
        if ( unlink( pathbuf ) == 0 )
           ret = 0;
     }
+
+    free(pathbuf);
+
     return ret;
 }
 
@@ -929,6 +934,8 @@ int vc_hostfs_set_attr(const char *path, fattributes_t attr)
             mode |= S_IWUSR;
          }
 
+         /* coverity[toctou] Not doing anything security-relevant here,
+          * so the race condition is harmless */
          if ( chmod( path, mode ) == 0 )
             ret = 0;
       }

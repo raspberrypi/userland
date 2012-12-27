@@ -37,6 +37,11 @@ typedef struct MMAL_DRIVER_BUFFER_T MMAL_DRIVER_BUFFER_T;
 /** Typedef for the framework's private area in the buffer header */
 typedef struct MMAL_BUFFER_HEADER_PRIVATE_T
 {
+   /** Callback invoked just prior to actually releasing the buffer header. Returns TRUE if
+    * release should be delayed. */
+   MMAL_BH_PRE_RELEASE_CB_T pf_pre_release;
+   void *pre_release_userdata;
+
    /** Callback used to release / recycle the buffer header. This needs to be set by
     * whoever allocates the buffer header. */
    void (*pf_release)(struct MMAL_BUFFER_HEADER_T *header);
@@ -71,5 +76,11 @@ MMAL_BUFFER_HEADER_T *mmal_buffer_header_initialise(void *mem, unsigned int leng
 /** Return a pointer to the area reserved for the driver.
   */
 MMAL_DRIVER_BUFFER_T *mmal_buffer_header_driver_data(MMAL_BUFFER_HEADER_T *);
+
+/** Return a pointer to a referenced buffer header.
+ * It is the caller's responsibility to ensure that the reference is still
+ * valid when using it.
+ */
+MMAL_BUFFER_HEADER_T *mmal_buffer_header_reference(MMAL_BUFFER_HEADER_T *header);
 
 #endif /* MMAL_BUFFER_PRIVATE_H */

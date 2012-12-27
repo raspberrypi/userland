@@ -40,12 +40,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MMAL_CONTROL_FOURCC() VCHIQ_MAKE_FOURCC('m','m','a','l')
 
 /* Major version indicates binary backwards compatiblity */
-#define WORKER_VER_MAJOR   8
-/* Minor version is increased for new APIs where backwards
- * binary compatibility is retained for existing APIs */
+#define WORKER_VER_MAJOR   15
+#define WORKER_VER_MINIMUM 10
+/* Minor version is not used normally.
+ */
 #define WORKER_VER_MINOR   1
 #ifndef WORKER_VER_MINIMUM
-#define WORKER_VER_MINIMUM WORKER_VER_MAJOR
 #endif
 
 #define VIDEOCORE_PREFIX "vc"
@@ -95,7 +95,13 @@ typedef enum {
    MMAL_WORKER_OPAQUE_ALLOCATOR,
    /* VC debug mode only - due to security, denial of service implications */
    MMAL_WORKER_CONSUME_MEM,
-   MMAL_WORKER_MSG_LAST,
+   MMAL_WORKER_LMK,
+   MMAL_WORKER_OPAQUE_ALLOCATOR_DESC,
+   MMAL_WORKER_DRM_GET_LHS32,
+   MMAL_WORKER_DRM_GET_TIME,
+   MMAL_WORKER_BUFFER_FROM_HOST_ZEROLEN,
+   MMAL_WORKER_PORT_FLUSH,
+   MMAL_WORKER_MSG_LAST
 } MMAL_WORKER_CMD_T;
 
 /** Every message has one of these at the start.
@@ -157,9 +163,9 @@ typedef struct
    mmal_worker_msg_header header;
    MMAL_STATUS_T status;
    uint32_t component_handle;          /** Handle on VideoCore for component */
-   uint32_t control_num;               /**< Number of control ports */
    uint32_t input_num;                 /**< Number of input ports */
    uint32_t output_num;                /**< Number of output ports */
+   uint32_t clock_num;                 /**< Number of clock ports */
 } mmal_worker_component_create_reply;
 vcos_static_assert(sizeof(mmal_worker_component_create_reply) <= MMAL_WORKER_MAX_MSG_LEN);
 
@@ -235,6 +241,22 @@ typedef struct
    mmal_worker_msg_header header;
    MMAL_STATUS_T status;
 } mmal_worker_reply;
+
+typedef struct
+{
+   mmal_worker_msg_header header;
+   MMAL_STATUS_T status;
+   uint8_t secret[32];
+} mmal_worker_drm_get_lhs32_reply;
+vcos_static_assert(sizeof(mmal_worker_drm_get_lhs32_reply) <= MMAL_WORKER_MAX_MSG_LEN);
+
+typedef struct
+{
+   mmal_worker_msg_header header;
+   MMAL_STATUS_T status;
+   uint32_t time;
+} mmal_worker_drm_get_time_reply;
+vcos_static_assert(sizeof(mmal_worker_drm_get_time_reply) <= MMAL_WORKER_MAX_MSG_LEN);
 
 /** List of actions for a port */
 enum MMAL_WORKER_PORT_ACTIONS
@@ -341,11 +363,19 @@ typedef struct mmal_worker_buffer_from_host
     */
    struct MMAL_DRIVER_BUFFER_T drvbuf;
 
+   /** Referenced buffer control data.
+    * This is set if the buffer is referencing another
+    * buffer as is the case with passthrough ports where
+    * buffers on the output port reference buffers on the
+    * input port. */
+   struct MMAL_DRIVER_BUFFER_T drvbuf_ref;
+
    /** the buffer header itself */
    MMAL_BUFFER_HEADER_T buffer_header;
    MMAL_BUFFER_HEADER_TYPE_SPECIFIC_T buffer_header_type_specific;
 
    MMAL_BOOL_T is_zero_copy;
+   MMAL_BOOL_T has_reference;
 
    /** If the data is short enough, then send it in the control message rather
     * than using a separate VCHIQ bulk transfer.
@@ -402,6 +432,7 @@ typedef struct
    MMAL_WORKER_OPAQUE_MEM_OP op;
    uint32_t handle;
    MMAL_STATUS_T status;
+   char description[32];
 } mmal_worker_opaque_allocator;
 
 /*
@@ -435,6 +466,14 @@ typedef struct
    /* Handle to newly allocated memory or MEM_HANDLE_INVALD on failure */
    uint32_t handle;
 } mmal_worker_consume_mem;
+
+typedef struct
+{
+   mmal_worker_msg_header header;
+   /* The memory allocation size to pass to lmk, as if in a response to an
+    * allocation for this amount of memory. */
+   uint32_t alloc_size;
+} mmal_worker_lmk;
 
 
 static inline void mmal_vc_buffer_header_to_msg(mmal_worker_buffer_from_host *msg,

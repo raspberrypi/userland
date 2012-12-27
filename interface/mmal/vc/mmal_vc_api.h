@@ -34,9 +34,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   * via MMAL itself.
   */
 
-#include "mmal_types.h"
-#include "mmal_parameters.h"
-#include "mmal_port.h"
+#include "interface/mmal/mmal_types.h"
+#include "interface/mmal/mmal_parameters.h"
+#include "interface/mmal/mmal_port.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -132,6 +132,10 @@ typedef enum
 
 MMAL_STATUS_T mmal_vc_init(void);
 void mmal_vc_deinit(void);
+
+MMAL_STATUS_T mmal_vc_use(void);
+MMAL_STATUS_T mmal_vc_release(void);
+
 MMAL_STATUS_T mmal_vc_get_version(uint32_t *major, uint32_t *minor, uint32_t *minimum);
 MMAL_STATUS_T mmal_vc_get_stats(MMAL_VC_STATS_T *stats, int reset);
 
@@ -174,6 +178,11 @@ MMAL_STATUS_T mmal_vc_get_core_stats(MMAL_CORE_STATISTICS_T *stats,
  * @internal
  */
 MMAL_STATUS_T mmal_vc_consume_mem(size_t size, uint32_t *handle);
+
+/** Trigger LMK action from VC, for diagnostics.
+ * @internal
+ */
+MMAL_STATUS_T mmal_vc_lmk(uint32_t alloc_size);
 
 #ifdef __cplusplus
 }

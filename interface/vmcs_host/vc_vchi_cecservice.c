@@ -236,7 +236,7 @@ VCHPRE_ void VCHPOST_ vc_vchi_cec_init(VCHI_INSTANCE_T initialise_instance, VCHI
    for (i=0; i < cecservice_client.num_connections; i++) {
    
       // Create a 'Client' service on the each of the connections
-      SERVICE_CREATION_T cecservice_parameters = { //VCHI_VERSION(VC_CECSERVICE_VER),
+      SERVICE_CREATION_T cecservice_parameters = { VCHI_VERSION(VC_CECSERVICE_VER),
                                                    CECSERVICE_CLIENT_NAME,     // 4cc service code
                                                    connections[i],             // passed in fn ptrs
                                                    0,                          // tx fifo size (unused)
@@ -248,7 +248,7 @@ VCHPRE_ void VCHPOST_ vc_vchi_cec_init(VCHI_INSTANCE_T initialise_instance, VCHI
                                                    VC_FALSE,                   // want_crc
       };
 
-      SERVICE_CREATION_T cecservice_parameters2 = { //VCHI_VERSION(VC_CECSERVICE_VER),
+      SERVICE_CREATION_T cecservice_parameters2 = { VCHI_VERSION(VC_CECSERVICE_VER),
                                                     CECSERVICE_NOTIFY_NAME,    // 4cc service code
                                                     connections[i],            // passed in fn ptrs
                                                     0,                         // tx fifo size (unused)
@@ -743,7 +743,7 @@ VCHPRE_ int VCHPOST_ vc_cec_deregister_all( void ) {
 VCHPRE_ int VCHPOST_ vc_cec_send_message(const uint32_t follower,
                                          const uint8_t *payload,
                                          uint32_t length,
-                                         bool_t is_reply) {
+                                         vcos_bool_t is_reply) {
    int success = -1;  
    CEC_SEND_MSG_PARAM_T param;
    if(!vcos_verify(length <= CEC_MAX_XMIT_LENGTH))
@@ -1162,7 +1162,7 @@ VCHPRE_ int VCHPOST_ vc_cec_set_logical_address(const CEC_AllDevices_T logical_a
 VCHPRE_ int VCHPOST_ vc_cec_add_device(const CEC_AllDevices_T logical_address,
                                        const uint16_t physical_address,
                                        const CEC_DEVICE_TYPE_T device_type,
-                                       bool_t last_device) {
+                                       vcos_bool_t last_device) {
    CEC_ADD_DEVICE_PARAM_T param = {VC_HTOV32(logical_address),
                                    VC_HTOV32(physical_address),
                                    VC_HTOV32(device_type),
@@ -1194,7 +1194,7 @@ VCHPRE_ int VCHPOST_ vc_cec_add_device(const CEC_AllDevices_T logical_address,
  *
  * Returns: 0 if successful, non-zero otherwise
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_cec_set_passive(bool_t enabled) {
+VCHPRE_ int VCHPOST_ vc_cec_set_passive(vcos_bool_t enabled) {
    uint32_t param = VC_HTOV32(enabled);
    int32_t response;
    int32_t success = cecservice_send_command_reply( VC_CEC_SET_PASSIVE, &param, sizeof(param), 
@@ -1245,7 +1245,7 @@ VCHPRE_ int VCHPOST_ vc_cec_send_FeatureAbort(uint32_t follower,
  *          Tx callback if successful
  ***********************************************************/
 VCHPRE_ int VCHPOST_ vc_cec_send_ActiveSource(uint16_t physical_address, 
-                                              bool_t is_reply) {
+                                              vcos_bool_t is_reply) {
    uint8_t tx_buf[3];
    tx_buf[0] = CEC_Opcode_ActiveSource;    // <Active Source>
    tx_buf[1] = physical_address >> 8;      // physical address msb
@@ -1268,7 +1268,7 @@ VCHPRE_ int VCHPOST_ vc_cec_send_ActiveSource(uint16_t physical_address,
  *          Tx callback if successful
  ***********************************************************/
 VCHPRE_ int VCHPOST_ vc_cec_send_ImageViewOn(uint32_t follower, 
-                                             bool_t is_reply) {
+                                             vcos_bool_t is_reply) {
    uint8_t tx_buf[1];
    tx_buf[0] = CEC_Opcode_ImageViewOn;      // <Image View On> no param required
    return vc_cec_send_message(follower,
@@ -1292,7 +1292,7 @@ VCHPRE_ int VCHPOST_ vc_cec_send_ImageViewOn(uint32_t follower,
 VCHPRE_ int VCHPOST_ vc_cec_send_SetOSDString(uint32_t follower, 
                                               CEC_DISPLAY_CONTROL_T disp_ctrl,                               
                                               const char* string,
-                                              bool_t is_reply) {
+                                              vcos_bool_t is_reply) {
    uint8_t tx_buf[CEC_MAX_XMIT_LENGTH];
    tx_buf[0] = CEC_Opcode_SetOSDString;     // <Set OSD String>
    tx_buf[1] = disp_ctrl;
@@ -1316,7 +1316,7 @@ VCHPRE_ int VCHPOST_ vc_cec_send_SetOSDString(uint32_t follower,
  * Returns: if the command is successful (zero) or not (non-zero)
  *          Tx callback if successful
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_cec_send_Standby(uint32_t follower, bool_t is_reply) {
+VCHPRE_ int VCHPOST_ vc_cec_send_Standby(uint32_t follower, vcos_bool_t is_reply) {
    uint8_t tx_buf[1];
    tx_buf[0] = CEC_Opcode_Standby;           // <Standby>
    return vc_cec_send_message(follower,
@@ -1340,7 +1340,7 @@ VCHPRE_ int VCHPOST_ vc_cec_send_Standby(uint32_t follower, bool_t is_reply) {
  ***********************************************************/
 VCHPRE_ int VCHPOST_ vc_cec_send_MenuStatus(uint32_t follower, 
                                             CEC_MENU_STATE_T menu_state, 
-                                            bool_t is_reply) {
+                                            vcos_bool_t is_reply) {
    uint8_t tx_buf[2];
    if(!vcos_verify(menu_state < CEC_MENU_STATE_QUERY))
       return -1;
@@ -1371,7 +1371,7 @@ VCHPRE_ int VCHPOST_ vc_cec_send_MenuStatus(uint32_t follower,
  ***********************************************************/
 VCHPRE_ int VCHPOST_ vc_cec_send_ReportPhysicalAddress(uint16_t physical_address, 
                                                        CEC_DEVICE_TYPE_T device_type,
-                                                       bool_t is_reply) {
+                                                       vcos_bool_t is_reply) {
    uint8_t tx_buf[4];
    if(vcos_verify(physical_address == cecservice_client.physical_address &&
                   cecservice_client.physical_address != CEC_CLEAR_ADDR)) {

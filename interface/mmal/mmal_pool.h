@@ -148,6 +148,16 @@ typedef MMAL_BOOL_T (*MMAL_POOL_BH_CB_T)(MMAL_POOL_T *pool, MMAL_BUFFER_HEADER_T
  */
 void mmal_pool_callback_set(MMAL_POOL_T *pool, MMAL_POOL_BH_CB_T cb, void *userdata);
 
+/** Set a pre-release callback for all buffer headers in the pool.
+ * Each time a buffer header is about to be released to the pool, the callback
+ * will be triggered.
+ *
+ * @param pool     Pointer to the pool
+ * @param cb       Pre-release callback function
+ * @param userdata User-specific data passed back with each callback
+ */
+void mmal_pool_pre_release_callback_set(MMAL_POOL_T *pool, MMAL_BH_PRE_RELEASE_CB_T cb, void *userdata);
+
 /* @} */
 
 #ifdef __cplusplus

@@ -36,6 +36,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MEM_CHUNK_SIZE           0x40000
 #endif
 
+#include <stdarg.h>
+
 #include "vcinclude/common.h"
 
 #ifdef _MSC_VER
@@ -81,6 +83,7 @@ typedef enum
    MEM_COMPACT_DISCARD    = 2,   /* _NORMAL + discard blocks where possible */
    MEM_COMPACT_AGGRESSIVE = 4,   /* _NORMAL + move locked blocks where possible */
    MEM_COMPACT_ALL        = MEM_COMPACT_NORMAL | MEM_COMPACT_DISCARD | MEM_COMPACT_AGGRESSIVE,
+   MEM_COMPACT_NOT_BLOCKING = 8,    /* don't retry if initial allocation fails */
 
    MEM_COMPACT_SHUFFLE    = 0x80 /* Move the lowest unlocked block up to the top
                                     (space permitting) - for testing */
@@ -253,16 +256,13 @@ typedef enum {
    */
 
    MEM_FLAG_HINT_PERMALOCK = 1 << 6, /* Likely to be locked for long periods of time. */
-   MEM_FLAG_HINT_GROW      = 1 << 7, /* Likely to grow in size over time. If this flag is specified, MEM_FLAG_RESIZEABLE must also be. */
 
    MEM_FLAG_HINT_ALL = 0xc0,
 
-   /*
-      User flag. Intended for private use by subsystems; 3d uses this for resource
-      use counting. Currently collides with MEM_FLAG_HINT_GROW, which is ignored.
-   */
-
    MEM_FLAG_USER = 1 << 7,
+   MEM_FLAG_HINT_GROW      = 1 << 7, /* Likely to grow in size over time. If this flag is specified, MEM_FLAG_RESIZEABLE must also be. */
+
+   MEM_FLAG_UNUSED = 1 << 7,
 
    /*
       If a MEM_HANDLE_T is to be resized with mem_resize, this flag must be
@@ -540,15 +540,19 @@ extern const char *mem_get_desc(
    - The MEM_HANDLE_T's description is set to desc.
 */
 
-#ifdef NDEBUG
-static RCM_INLINE void mem_set_desc(MEM_HANDLE_T handle, const char *desc)
-{
-}
-#else
 extern void mem_set_desc(
    MEM_HANDLE_T handle,
    const char *desc);
-#endif
+
+extern void mem_set_desc_vprintf(
+   MEM_HANDLE_T handle,
+   const char *fmt,
+   va_list ap);
+
+extern void mem_set_desc_printf(
+   MEM_HANDLE_T handle,
+   const char *fmt,
+   ...);
 
 /*
    void mem_set_term(MEM_HANDLE_T handle, MEM_TERM_T term)
@@ -862,7 +866,8 @@ Legacy memory blocks API
      o MEM_FLAG_COHERENT
      o MEM_FLAG_DIRECT
      o MEM_FLAG_L1_NONALLOCATING (VC4 only)
-     No other flags are permitted.
+   - other permitted flags
+     o MEM_FLAG_LOW_256M
 
    Postconditions:
 
@@ -961,7 +966,8 @@ Offline chunks API
      o MEM_FLAG_COHERENT
      o MEM_FLAG_DIRECT
      o MEM_FLAG_L1_NONALLOCATING (VC4 only)
-     No other flags are permitted.
+   - other permitted flags
+     o MEM_FLAG_LOW_256M
 
    Postconditions:
 
@@ -1001,10 +1007,13 @@ extern void mem_online_chunks(int chunk, int num_chunks);
 
 /*
    Retrieves various statistics about the heap chunks.
+   Note that _used + _available may not equal _total in the case of
+   overlapping areas.
  */
 
-extern void mem_get_chunk_stats(uint32_t *total, uint32_t *legacy_used, uint32_t *legacy_total,
-   uint32_t *offline_used, uint32_t *offline_total);
+extern void mem_get_chunk_stats(uint32_t *total,
+   uint32_t *legacy_used, uint32_t *legacy_available, uint32_t *legacy_total,
+   uint32_t *offline_used, uint32_t *offline_available, uint32_t *offline_total);
 
 
 /******************************************************************************
@@ -1013,10 +1022,10 @@ Long-term lock owners' API
 
 typedef enum
 {
-   /* A compaction is beginning. Any long-term locks should be released. */
+   /* An aggressive compaction is beginning. Any long-term locks should be released. */
    MEM_CALLBACK_REASON_UNLOCK,
 
-   /* A compaction has completed. Any long-term locks can be reclaimed. */
+   /* An aggressive compaction has completed. Any long-term locks can be reclaimed. */
    MEM_CALLBACK_REASON_RELOCK,
 
    /* The total amount of free memory has fallen below the threshold
@@ -1045,6 +1054,50 @@ extern int mem_register_callback(mem_callback_func_t func, uintptr_t context);
 extern void mem_set_low_mem_threshold(uint32_t theshold);
 
 extern void mem_unregister_callback(mem_callback_func_t func, uintptr_t context);
+
+
+/******************************************************************************
+Compaction notification API
+******************************************************************************/
+
+/** Type of compaction operation. */
+typedef enum
+{
+   /* A compaction is about to begin. */
+   MEM_COMPACT_OP_BEGIN,
+
+   /* A compaction has just ended. */
+   MEM_COMPACT_OP_END,
+
+   MEM_COMPACT_OP_MAX
+} mem_compact_op_t;
+
+/**
+ * Compaction notification function. Called when a relocatable heap compaction is
+ * about to begin or has just ended.
+ * This gives the callback the ability to delay the start of compaction.
+ * Will be invoked independently from those registered via mem_register_callback().
+ * @param op      Compaction operation.
+ * @param context Context passed in compaction registration.
+ * @param retries Number of retries remaining (assuming at least one callback returns non-zero).
+ *                0 means the last call for this compaction.
+ * @return non-zero to delay compaction; 0 if ok for compaction to start.
+ */
+typedef int (*mem_compact_cb_t)(mem_compact_op_t op, uintptr_t context, int retries);
+
+/**
+ * Register a callback function to be invoked at the start and end of every relocatable
+ * heap compaction.
+ * @return 1 on success; 0 on failure.
+ * @note Do not call from a compaction notification function.
+ */
+int mem_register_compact_cb(mem_compact_cb_t func, uintptr_t context);
+
+/**
+ * Unregister a callback registered via mem_register_compact_cb().
+ * @note Do not call from a compaction notification function.
+ */
+void mem_unregister_compact_cb(mem_compact_cb_t func, uintptr_t context);
 
 /******************************************************************************
 Movable memory helpers

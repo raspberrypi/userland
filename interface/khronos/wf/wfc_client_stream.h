@@ -86,7 +86,9 @@ uint32_t wfc_stream_create_req_rect
 
 //!@brief Indicate that a source or mask is now associated with this stream, or should
 //! now be removed from such an association.
-void wfc_stream_register_source_or_mask(WFCNativeStreamType stream, bool add_source_or_mask);
+//!
+//!@return True if successful, false if not (invalid handle).
+bool wfc_stream_register_source_or_mask(WFCNativeStreamType stream, bool add_source_or_mask);
 
 //!@brief Suspend until buffer is available on the server (requires
 //! WFC_STREAM_FLAGS_ASYNC_SEM to have been specified on creation).
@@ -118,9 +120,14 @@ void wfc_stream_register_off_screen(WFCNativeStreamType stream, bool used_for_of
 //------------------------------------------------------------------------------
 
 void wfc_stream_signal_eglimage_data(WFCNativeStreamType stream, EGLImageKHR im);
+void wfc_stream_signal_eglimage_data_protected(WFCNativeStreamType stream, EGLImageKHR im, uint32_t is_protected);
+void wfc_stream_release_eglimage_data(WFCNativeStreamType stream, EGLImageKHR im);
 void wfc_stream_signal_mm_image_data(WFCNativeStreamType stream, uint32_t im);
 
-void wfc_stream_signal_raw_pixels(WFCNativeStreamType stream, uint32_t handle, uint32_t format, uint32_t w, uint32_t h, uint32_t pitch);
+void wfc_stream_signal_raw_pixels(WFCNativeStreamType stream, uint32_t handle,
+      uint32_t format, uint32_t w, uint32_t h, uint32_t pitch, uint32_t vpitch);
+void wfc_stream_signal_image(WFCNativeStreamType stream,
+      const WFC_STREAM_IMAGE_T *image);
 void wfc_stream_register(WFCNativeStreamType stream);
 void wfc_stream_unregister(WFCNativeStreamType stream);
 

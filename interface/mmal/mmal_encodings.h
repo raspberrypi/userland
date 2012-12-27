@@ -61,7 +61,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MMAL_ENCODING_BMP              MMAL_FOURCC('B','M','P',' ')
 
 #define MMAL_ENCODING_I420             MMAL_FOURCC('I','4','2','0')
+#define MMAL_ENCODING_I420_SLICE       MMAL_FOURCC('S','4','2','0')
+#define MMAL_ENCODING_YV12             MMAL_FOURCC('Y','V','1','2')
 #define MMAL_ENCODING_I422             MMAL_FOURCC('I','4','2','2')
+#define MMAL_ENCODING_I422_SLICE       MMAL_FOURCC('S','4','2','2')
+#define MMAL_ENCODING_YUYV             MMAL_FOURCC('Y','U','Y','V')
+#define MMAL_ENCODING_YVYU             MMAL_FOURCC('Y','V','Y','U')
+#define MMAL_ENCODING_UYVY             MMAL_FOURCC('U','Y','V','Y')
+#define MMAL_ENCODING_VYUY             MMAL_FOURCC('V','Y','U','Y')
+#define MMAL_ENCODING_NV12             MMAL_FOURCC('N','V','1','2')
 #define MMAL_ENCODING_NV21             MMAL_FOURCC('N','V','2','1')
 #define MMAL_ENCODING_ARGB             MMAL_FOURCC('A','R','G','B')
 #define MMAL_ENCODING_RGBA             MMAL_FOURCC('R','G','B','A')
@@ -93,9 +101,106 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 /** \name Pre-defined audio encodings */
 /* @{ */
+#define MMAL_ENCODING_PCM_UNSIGNED_BE  MMAL_FOURCC('P','C','M','U')
+#define MMAL_ENCODING_PCM_UNSIGNED_LE  MMAL_FOURCC('p','c','m','u')
+#define MMAL_ENCODING_PCM_SIGNED_BE    MMAL_FOURCC('P','C','M','S')
+#define MMAL_ENCODING_PCM_SIGNED_LE    MMAL_FOURCC('p','c','m','s')
+#define MMAL_ENCODING_PCM_FLOAT_BE     MMAL_FOURCC('P','C','M','F')
+#define MMAL_ENCODING_PCM_FLOAT_LE     MMAL_FOURCC('p','c','m','f')
+/* Defines for native endianness */
+#ifdef MMAL_IS_BIG_ENDIAN
+#define MMAL_ENCODING_PCM_UNSIGNED     MMAL_ENCODING_PCM_UNSIGNED_BE
+#define MMAL_ENCODING_PCM_SIGNED       MMAL_ENCODING_PCM_SIGNED_BE
+#define MMAL_ENCODING_PCM_FLOAT        MMAL_ENCODING_PCM_FLOAT_BE
+#else
+#define MMAL_ENCODING_PCM_UNSIGNED     MMAL_ENCODING_PCM_UNSIGNED_LE
+#define MMAL_ENCODING_PCM_SIGNED       MMAL_ENCODING_PCM_SIGNED_LE
+#define MMAL_ENCODING_PCM_FLOAT        MMAL_ENCODING_PCM_FLOAT_LE
+#endif
+
 #define MMAL_ENCODING_MP4A             MMAL_FOURCC('M','P','4','A')
+#define MMAL_ENCODING_MPGA             MMAL_FOURCC('M','P','G','A')
+#define MMAL_ENCODING_ALAW             MMAL_FOURCC('A','L','A','W')
+#define MMAL_ENCODING_MULAW            MMAL_FOURCC('U','L','A','W')
+#define MMAL_ENCODING_ADPCM_MS         MMAL_FOURCC('M','S',0x0,0x2)
+#define MMAL_ENCODING_ADPCM_IMA_MS     MMAL_FOURCC('M','S',0x0,0x1)
+#define MMAL_ENCODING_ADPCM_SWF        MMAL_FOURCC('A','S','W','F')
+#define MMAL_ENCODING_WMA1             MMAL_FOURCC('W','M','A','1')
+#define MMAL_ENCODING_WMA2             MMAL_FOURCC('W','M','A','2')
+#define MMAL_ENCODING_WMAP             MMAL_FOURCC('W','M','A','P')
+#define MMAL_ENCODING_WMAL             MMAL_FOURCC('W','M','A','L')
+#define MMAL_ENCODING_AMRNB            MMAL_FOURCC('A','M','R','N')
+#define MMAL_ENCODING_AMRWB            MMAL_FOURCC('A','M','R','W')
+#define MMAL_ENCODING_AMRWBP           MMAL_FOURCC('A','M','R','P')
+#define MMAL_ENCODING_AC3              MMAL_FOURCC('A','C','3',' ')
+#define MMAL_ENCODING_EAC3             MMAL_FOURCC('E','A','C','3')
+#define MMAL_ENCODING_DTS              MMAL_FOURCC('D','T','S',' ')
+#define MMAL_ENCODING_MLP              MMAL_FOURCC('M','L','P',' ')
+#define MMAL_ENCODING_FLAC             MMAL_FOURCC('F','L','A','C')
+#define MMAL_ENCODING_VORBIS           MMAL_FOURCC('V','O','R','B')
+#define MMAL_ENCODING_SPEEX            MMAL_FOURCC('S','P','X',' ')
+#define MMAL_ENCODING_ATRAC3           MMAL_FOURCC('A','T','R','3')
+#define MMAL_ENCODING_ATRACX           MMAL_FOURCC('A','T','R','X')
+#define MMAL_ENCODING_ATRACL           MMAL_FOURCC('A','T','R','L')
+#define MMAL_ENCODING_MIDI             MMAL_FOURCC('M','I','D','I')
+#define MMAL_ENCODING_EVRC             MMAL_FOURCC('E','V','R','C')
+#define MMAL_ENCODING_NELLYMOSER       MMAL_FOURCC('N','E','L','Y')
+#define MMAL_ENCODING_QCELP            MMAL_FOURCC('Q','C','E','L')
+#define MMAL_ENCODING_MP4V_DIVX_DRM    MMAL_FOURCC('M','4','V','D')
 /* @} */
 
+/* @} MmalEncodings List */
+
+/** \defgroup MmalEncodingVariants List of pre-defined encoding variants
+ * This defines a list of common encoding variants. This list isn't exhaustive and is only
+ * provided as a convenience to avoid clients having to use FourCC codes directly.
+ * However components are allowed to define and use their own FourCC codes. */
+/* @{ */
+
+/** \name Pre-defined H264 encoding variants */
+/* @{ */
+/** ISO 14496-10 Annex B byte stream format */
+#define MMAL_ENCODING_VARIANT_H264_DEFAULT   0
+/** ISO 14496-15 AVC stream format */
+#define MMAL_ENCODING_VARIANT_H264_AVC1      MMAL_FOURCC('A','V','C','1')
+/** Implicitly delineated NAL units without emulation prevention */
+#define MMAL_ENCODING_VARIANT_H264_RAW       MMAL_FOURCC('R','A','W',' ')
 /* @} */
+
+/** \name Pre-defined MPEG4 audio encoding variants */
+/* @{ */
+/** Raw stream format */
+#define MMAL_ENCODING_VARIANT_MP4A_DEFAULT   0
+/** ADTS stream format */
+#define MMAL_ENCODING_VARIANT_MP4A_ADTS      MMAL_FOURCC('A','D','T','S')
+/* @} */
+
+/* @} MmalEncodingVariants List */
+
+/** \defgroup MmalColorSpace List of pre-defined video color spaces
+ * This defines a list of common color spaces. This list isn't exhaustive and is only
+ * provided as a convenience to avoid clients having to use FourCC codes directly.
+ * However components are allowed to define and use their own FourCC codes. */
+/* @{ */
+
+/** Unknown color space */
+#define MMAL_COLOR_SPACE_UNKNOWN       0
+/** ITU-R BT.601-5 [SDTV] */
+#define MMAL_COLOR_SPACE_ITUR_BT601    MMAL_FOURCC('Y','6','0','1')
+/** ITU-R BT.709-3 [HDTV] */
+#define MMAL_COLOR_SPACE_ITUR_BT709    MMAL_FOURCC('Y','7','0','9')
+/** JPEG JFIF */
+#define MMAL_COLOR_SPACE_JPEG_JFIF     MMAL_FOURCC('Y','J','F','I')
+/** Title 47 Code of Federal Regulations (2003) 73.682 (a) (20) */
+#define MMAL_COLOR_SPACE_FCC           MMAL_FOURCC('Y','F','C','C')
+/** Society of Motion Picture and Television Engineers 240M (1999) */
+#define MMAL_COLOR_SPACE_SMPTE240M     MMAL_FOURCC('Y','2','4','0')
+/** ITU-R BT.470-2 System M */
+#define MMAL_COLOR_SPACE_BT470_2_M     MMAL_FOURCC('Y','_','_','M')
+/** ITU-R BT.470-2 System BG */
+#define MMAL_COLOR_SPACE_BT470_2_BG    MMAL_FOURCC('Y','_','B','G')
+/** JPEG JFIF, but with 16..255 luma */
+#define MMAL_COLOR_SPACE_JFIF_Y16_255  MMAL_FOURCC('Y','Y','1','6')
+/* @} MmalColorSpace List */
 
 #endif /* MMAL_ENCODINGS_H */

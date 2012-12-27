@@ -28,9 +28,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define VCOS_VERIFY_BKPTS 1 // TODO remove
 #define VCOS_LOG_CATEGORY (&log_cat)
 
-#include "interface/khronos/common/khrn_client_platform.h"
-#include "interface/khronos/common/khrn_client_pointermap.h"
+#include "interface/khronos/common/khrn_client.h"
 #include "interface/vcos/vcos.h"
+#ifdef KHRN_FRUIT_DIRECT
+#include "middleware/khronos/egl/egl_server.h"
+#include "middleware/khronos/ext/egl_khr_image.h"
+#include "middleware/khronos/common/khrn_umem.h"
+#endif
 
 #include "interface/khronos/wf/wfc_client_stream.h"
 #include "interface/khronos/wf/wfc_server_api.h"
@@ -44,38 +48,50 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 //==============================================================================
 
-//!@name Numbers of various things (all fixed size for now)
+//!@name Stream data block pool sizes
 //!@{
-#define WFC_STREAM_NUM_OF_BUFFERS            8
-#define WFC_STREAM_NUM_OF_SOURCES_OR_MASKS   8
-#define WFC_STREAM_NUM_OF_CONTEXT_INPUTS     8
+#define WFC_STREAM_BLOCK_SIZE          (WFC_MAX_STREAMS_PER_CLIENT / 8)
+#define WFC_STREAM_MAX_EXTENSIONS      7
+#define WFC_STREAM_MAX_STREAMS         (WFC_STREAM_BLOCK_SIZE * (WFC_STREAM_MAX_EXTENSIONS + 1))
 //!@}
 
-//!@name Stream-specific mutex
+//!@name Global lock to protect global data (stream data list, next stream ID)
 //!@{
-#define STREAM_LOCK(stream_ptr)      (platform_mutex_acquire(&stream_ptr->mutex))
-#define STREAM_UNLOCK(stream_ptr)    (platform_mutex_release(&stream_ptr->mutex))
+#define GLOBAL_LOCK()      do {vcos_once(&wfc_stream_initialise_once, wfc_stream_initialise); vcos_mutex_lock(&wfc_stream_global_lock);} while (0)
+#define GLOBAL_UNLOCK()    do {vcos_mutex_unlock(&wfc_stream_global_lock);} while (0)
 //!@}
+
+//!@name Stream-specific mutex. Global lock must already be held when acquiring this lock.
+//!@{
+#define STREAM_LOCK(stream_ptr)        do {vcos_mutex_lock(&stream_ptr->mutex);} while (0)
+#define STREAM_UNLOCK(stream_ptr)      do {vcos_mutex_unlock(&stream_ptr->mutex);} while (0)
+//!@}
+
+//! Period in milliseconds to wait for an existing stream handle to be released
+//! when creating a new one.
+#define WFC_STREAM_RETRY_DELAY_MS      1
+//! Number of attempts allowed to create a stream with a given handle.
+#define WFC_STREAM_RETRIES             50
 
 //==============================================================================
 
 //! Top-level stream type
-typedef struct
+typedef struct WFC_STREAM_tag
 {
    //! Handle; may be assigned by window manager.
    WFCNativeStreamType handle;
 
-   //! Flag, indicating that the stream has been created on the server.
-   bool has_been_created;
+   //! Number of times this stream has been registered in the process. Creation implies registration
+   uint32_t registrations;
 
-   //! Flag indicating that destruction has been requested, but stream is still in use.
-   bool destroy_pending;
+   //! Flag to indicate entry is no longer in use and imminently due for destruction.
+   bool to_be_deleted;
 
    //! Mutex, for thread safety.
-   PLATFORM_MUTEX_T mutex;
+   VCOS_MUTEX_T mutex;
 
-   //! Configuration flags.
-   uint32_t flags;
+   //! Configuration info.
+   WFC_STREAM_INFO_T info;
 
    //!@brief Image providers to which this stream sends data; recorded so we do
    //! not destroy this stream if it is still associated with a source or mask.
@@ -91,24 +107,37 @@ typedef struct
    WFC_STREAM_REQ_RECT_CALLBACK_T req_rect_callback;
    //! Argument to callback function
    void *req_rect_cb_args;
+
+   //! Pointer to next stream
+   struct WFC_STREAM_tag *next;
+   //! Pointer to previous stream
+   struct WFC_STREAM_tag *prev;
 } WFC_STREAM_T;
 
 //==============================================================================
 
-//! Map containing all created streams.
-static KHRN_POINTER_MAP_T stream_map;
+//! Blockpool containing all created streams.
+static VCOS_BLOCKPOOL_T wfc_stream_blockpool;
 //! Next stream handle, allocated by wfc_stream_get_next().
-static WFCNativeStreamType wfc_next_stream = (1 << 31);
+static WFCNativeStreamType wfc_stream_next_handle = (1 << 31);
 
 static VCOS_LOG_CAT_T log_cat = VCOS_LOG_INIT("wfc_client_stream", WFC_LOG_LEVEL);
+
+//! Ensure lock and blockpool are only initialised once
+static VCOS_ONCE_T wfc_stream_initialise_once;
+//! The global (process-wide) lock
+static VCOS_MUTEX_T wfc_stream_global_lock;
+//! Pointer to the first stream data block
+static WFC_STREAM_T *wfc_stream_head;
 
 //==============================================================================
 //!@name Static functions
 //!@{
-static bool wfc_stream_initialise(void);
-static void wfc_stream_create_internal(WFC_STREAM_T *stream_ptr, uint32_t flags);
-static WFC_STREAM_T *wfc_stream_get_ptr_or_create_placeholder(WFCNativeStreamType stream);
-static bool wfc_stream_destroy_actual(WFCNativeStreamType stream, WFC_STREAM_T *stream_ptr);
+static void wfc_stream_initialise(void);
+static WFC_STREAM_T *wfc_stream_global_lock_and_find_stream_ptr(WFCNativeStreamType stream);
+static WFC_STREAM_T *wfc_stream_create_stream_ptr(WFCNativeStreamType stream, bool allow_duplicate);
+static WFC_STREAM_T *wfc_stream_find_stream_ptr(WFCNativeStreamType stream);
+static void wfc_stream_destroy_if_ready(WFC_STREAM_T *stream_ptr);
 static void *wfc_stream_rect_req_thread(void *arg);
 static void wfc_client_stream_post_sem(void *cb_data);
 //!@}
@@ -120,10 +149,15 @@ WFCNativeStreamType wfc_stream_get_next(void)
 // In cases where the caller doesn't want to assign a stream number, provide
 // one for it.
 {
-   WFCNativeStreamType next_stream = wfc_next_stream;
-   wfc_next_stream++;
+   GLOBAL_LOCK();
+
+   WFCNativeStreamType next_stream = wfc_stream_next_handle;
+   wfc_stream_next_handle++;
+
+   GLOBAL_UNLOCK();
+
    return next_stream;
-} // wfc_stream_get_next()
+}
 
 //------------------------------------------------------------------------------
 
@@ -132,35 +166,58 @@ uint32_t wfc_stream_create(WFCNativeStreamType stream, uint32_t flags)
 // window manager). Return zero if OK.
 {
    WFC_STREAM_T *stream_ptr;
+   uint32_t result = 0;
 
-   vcos_log_trace("%s: stream 0x%x flags 0x%x", VCOS_FUNCTION, stream, flags);
+   vcos_log_info("%s: stream 0x%x flags 0x%x", VCOS_FUNCTION, stream, flags);
 
    // Create stream
-   stream_ptr = wfc_stream_get_ptr_or_create_placeholder(stream);
-   if(stream_ptr == NULL) {return 1;}
-
-   STREAM_LOCK(stream_ptr);
-
-   if(!stream_ptr->has_been_created)
+   stream_ptr = wfc_stream_create_stream_ptr(stream, false);
+   if(stream_ptr == NULL)
    {
-      vcos_log_info("wfc_stream_create_from_image: stream %X", stream);
-      // Stream did not previously exist.
-      wfc_stream_create_internal(stream_ptr, flags);
+      vcos_log_error("%s: unable to create data block for stream 0x%x", VCOS_FUNCTION, stream);
+      return VCOS_ENOMEM;
+   }
 
-      vcos_assert(stream_ptr->handle == stream);
-   } // if
+   uint64_t pid = vcos_process_id_current();
+   uint32_t pid_lo = (uint32_t) pid;
+   uint32_t pid_hi = (uint32_t) (pid >> 32);
+   int stream_in_use_retries = WFC_STREAM_RETRIES;
+   WFC_STREAM_INFO_T info;
+
+   memset(&info, 0, sizeof(info));
+   info.size = sizeof(info);
+   info.flags = flags;
+
+   do
+   {
+      stream_ptr->handle = wfc_server_stream_create_info(stream, &info, pid_lo, pid_hi);
+      vcos_log_trace("%s: server create returned 0x%x", VCOS_FUNCTION, stream_ptr->handle);
+
+      // If a handle is re-used rapidly, it may still be in use in the server temporarily
+      // Retry after a short delay
+      if (stream_ptr->handle == WFC_INVALID_HANDLE)
+         vcos_sleep(WFC_STREAM_RETRY_DELAY_MS);
+   }
+   while (stream_ptr->handle == WFC_INVALID_HANDLE && stream_in_use_retries-- > 0);
+
+   if (stream_ptr->handle == WFC_INVALID_HANDLE)
+   {
+      // Even after the retries, stream handle was still in use. Fail.
+      vcos_log_error("%s: stream 0x%x already exists in server", VCOS_FUNCTION, stream);
+      result = VCOS_EEXIST;
+      wfc_stream_destroy_if_ready(stream_ptr);
+   }
    else
    {
-      // Stream already exists, so nothing else to do.
-      vcos_log_warn("wfc_stream_create_from_image: already exists: stream: %X", stream);
+      vcos_assert(stream_ptr->handle == stream);
 
-      vcos_assert(stream_ptr->flags == flags);
-   } // else
+      stream_ptr->registrations++;
+      stream_ptr->info.flags = flags;
+      STREAM_UNLOCK(stream_ptr);
+   }
 
-   STREAM_UNLOCK(stream_ptr);
-
-   return 0;
-} // wfc_stream_create_from_image()
+   return result;
+}
 
 //------------------------------------------------------------------------------
 
@@ -170,9 +227,16 @@ WFCNativeStreamType wfc_stream_create_assign_id(uint32_t flags)
    WFCNativeStreamType stream = wfc_stream_get_next();
    uint32_t failure = wfc_stream_create(stream, flags);
 
+   if (failure == VCOS_EEXIST)
+   {
+      // If a duplicate stream exists, give it one more go with a new ID
+      stream = wfc_stream_get_next();
+      failure = wfc_stream_create(stream, flags);
+   }
+
    if(failure) {return WFC_INVALID_HANDLE;}
    else {return stream;}
-} // wfc_stream_create_assign_id()
+}
 
 //------------------------------------------------------------------------------
 
@@ -188,10 +252,12 @@ uint32_t wfc_stream_create_req_rect
    uint32_t failure;
 
    failure = wfc_stream_create(stream, flags | WFC_STREAM_FLAGS_REQ_RECT);
+   if (failure)
+      return failure;
 
-   WFC_STREAM_T *stream_ptr = wfc_stream_get_ptr_or_create_placeholder(stream);
-
-   STREAM_LOCK(stream_ptr);
+   WFC_STREAM_T *stream_ptr = wfc_stream_find_stream_ptr(stream);
+   // Stream just created, so ought to be found
+   vcos_assert(stream_ptr);
 
    // There's no point creating this type of stream if you don't supply a callback
    // to update the src/dest rects via WF-C.
@@ -208,34 +274,40 @@ uint32_t wfc_stream_create_req_rect
 
    STREAM_UNLOCK(stream_ptr);
 
-   return failure;
-} // wfc_stream_create_req_rect()
+   return 0;
+}
 
 //------------------------------------------------------------------------------
 
-void wfc_stream_register_source_or_mask(WFCNativeStreamType stream, bool add_source_or_mask)
+bool wfc_stream_register_source_or_mask(WFCNativeStreamType stream, bool add_source_or_mask)
 // Indicate that a source or mask is now associated with this stream, or should
 // now be removed from such an association.
 {
-   vcos_log_trace("%s: stream 0x%x add %d", VCOS_FUNCTION, stream, add_source_or_mask);
+   WFC_STREAM_T *stream_ptr = wfc_stream_find_stream_ptr(stream);
 
-   WFC_STREAM_T *stream_ptr = wfc_stream_get_ptr_or_create_placeholder(stream);
-   bool still_exists = true;
+   if (!stream_ptr)
+      return false;
 
-   STREAM_LOCK(stream_ptr);
+   vcos_log_trace("%s: stream 0x%x %d->%d", VCOS_FUNCTION, stream,
+         stream_ptr->num_of_sources_or_masks,
+         add_source_or_mask ? stream_ptr->num_of_sources_or_masks + 1 : stream_ptr->num_of_sources_or_masks - 1);
 
    if(add_source_or_mask)
-      {stream_ptr->num_of_sources_or_masks++;}
+   {
+      stream_ptr->num_of_sources_or_masks++;
+      STREAM_UNLOCK(stream_ptr);
+   }
    else
    {
       if(vcos_verify(stream_ptr->num_of_sources_or_masks > 0))
          {stream_ptr->num_of_sources_or_masks--;}
-      still_exists = wfc_stream_destroy_actual(stream, stream_ptr);
-   } // else
 
-   if(still_exists) {STREAM_UNLOCK(stream_ptr);}
+      // Stream is unlocked by destroy_if_ready
+      wfc_stream_destroy_if_ready(stream_ptr);
+   }
 
-} // wfc_stream_register_off_screen()
+   return true;
+}
 
 //------------------------------------------------------------------------------
 
@@ -244,9 +316,11 @@ void wfc_stream_await_buffer(WFCNativeStreamType stream)
 {
    vcos_log_trace("%s: stream 0x%x", VCOS_FUNCTION, stream);
 
-   WFC_STREAM_T *stream_ptr = wfc_stream_get_ptr_or_create_placeholder(stream);
+   WFC_STREAM_T *stream_ptr = wfc_stream_find_stream_ptr(stream);
+   if (!stream_ptr)
+      return;
 
-   if(vcos_verify(stream_ptr->flags & WFC_STREAM_FLAGS_BUF_AVAIL))
+   if(vcos_verify(stream_ptr->info.flags & WFC_STREAM_FLAGS_BUF_AVAIL))
    {
       VCOS_SEMAPHORE_T image_available_sem;
       VCOS_STATUS_T status;
@@ -266,9 +340,11 @@ void wfc_stream_await_buffer(WFCNativeStreamType stream)
 
       vcos_semaphore_delete(&image_available_sem);
       wfc_server_release_keep_alive();
-   } // if
+   }
 
-} // wfc_stream_await_buffer()
+   STREAM_UNLOCK(stream_ptr);
+
+}
 
 //------------------------------------------------------------------------------
 
@@ -276,32 +352,34 @@ void wfc_stream_destroy(WFCNativeStreamType stream)
 // Destroy a stream - unless it is still in use, in which case, mark it for
 // destruction once all users have finished with it.
 {
-   vcos_log_info("wfc_stream_destroy: stream: %X", stream);
+   vcos_log_info("%s: stream: %X", VCOS_FUNCTION, stream);
 
-   WFC_STREAM_T *stream_ptr;
+   WFC_STREAM_T *stream_ptr = wfc_stream_find_stream_ptr(stream);
 
-   // Look up stream
-   stream_ptr = (WFC_STREAM_T *) khrn_pointer_map_lookup(&stream_map, stream);
-
-   if(stream_ptr != NULL)
+   if (stream_ptr)
    {
-      /* If stream is still in use (i.e. it's attached to at least one source/mask
+      /* If stream is still in use (e.g. it's attached to at least one source/mask
        * which is associated with at least one element) then destruction is delayed
-       * until it's no longer in use.
-       * Element-source/mask associations must be dealt with in wfc_client.c. */
-      STREAM_LOCK(stream_ptr);
+       * until it's no longer in use. */
+      if (stream_ptr->registrations> 0)
+      {
+         stream_ptr->registrations--;
+         vcos_log_trace("%s: stream: %X ready to destroy?", VCOS_FUNCTION, stream);
+      }
+      else
+      {
+         vcos_log_error("%s: stream: %X destroyed when unregistered", VCOS_FUNCTION, stream);
+      }
 
-      stream_ptr->destroy_pending = true;
-
-      if(wfc_stream_destroy_actual(stream, stream_ptr))
-         {STREAM_UNLOCK(stream_ptr);}
-   } // if
+      // Stream is unlocked by destroy_if_ready
+      wfc_stream_destroy_if_ready(stream_ptr);
+   }
    else
    {
-      vcos_log_warn("wfc_stream_destroy: stream %X doesn't exist", stream);
-   } // else
+      vcos_log_warn("%s: stream %X doesn't exist", VCOS_FUNCTION, stream);
+   }
 
-} // wfc_stream_destroy()
+}
 
 //------------------------------------------------------------------------------
 //!@name
@@ -320,22 +398,46 @@ uint32_t wfc_stream_create_for_context_nbufs
    (WFCNativeStreamType stream, uint32_t width, uint32_t height, uint32_t nbufs)
 // Create a stream for an off-screen context to output to, with a specific number of buffers.
 {
-   // Create stream
-   wfc_stream_create(stream, WFC_STREAM_FLAGS_NONE);
+   WFC_STREAM_T *stream_ptr;
+   bool stream_created = false;
+
    if(!vcos_verify(stream != WFC_INVALID_HANDLE))
       {return 1;}
+
+   stream_ptr = wfc_stream_find_stream_ptr(stream);
+   if (stream_ptr)
+   {
+      uint32_t flags = stream_ptr->info.flags;
+
+      // Stream already exists, check flags match expected
+      STREAM_UNLOCK(stream_ptr);
+
+      if (flags != WFC_STREAM_FLAGS_NONE)
+      {
+         vcos_log_error("%s: stream flags mismatch (expected 0x%x, got 0x%x)", VCOS_FUNCTION, WFC_STREAM_FLAGS_NONE, flags);
+         return 1;
+      }
+   }
+   else
+   {
+      // Create stream
+      if (wfc_stream_create(stream, WFC_STREAM_FLAGS_NONE) != 0)
+         return 1;
+      stream_created = true;
+   }
 
    // Allocate buffers on the server.
    if (!wfc_server_stream_allocate_images(stream, width, height, nbufs))
    {
       // Failed to allocate buffers
       vcos_log_warn("%s: failed to allocate %u buffers for stream %X size %ux%u", VCOS_FUNCTION, nbufs, stream, width, height);
-      wfc_stream_destroy(stream);
+      if (stream_created)
+         wfc_stream_destroy(stream);
       return 1;
    }
 
    return 0;
-} // wfc_stream_create_from_context()
+}
 
 //------------------------------------------------------------------------------
 
@@ -347,9 +449,9 @@ bool wfc_stream_used_for_off_screen(WFCNativeStreamType stream)
 
    vcos_log_trace("%s: stream 0x%x", VCOS_FUNCTION, stream);
 
-   WFC_STREAM_T *stream_ptr = wfc_stream_get_ptr_or_create_placeholder(stream);
-
-   STREAM_LOCK(stream_ptr);
+   WFC_STREAM_T *stream_ptr = wfc_stream_find_stream_ptr(stream);
+   if (!stream_ptr)
+      return false;
 
    used_for_off_screen = stream_ptr->used_for_off_screen;
 
@@ -357,7 +459,7 @@ bool wfc_stream_used_for_off_screen(WFCNativeStreamType stream)
 
    return used_for_off_screen;
 
-} // wfc_stream_used_for_off_screen()
+}
 
 //------------------------------------------------------------------------------
 
@@ -370,150 +472,289 @@ void wfc_stream_register_off_screen(WFCNativeStreamType stream, bool used_for_of
 
    vcos_log_trace("%s: stream 0x%x", VCOS_FUNCTION, stream);
 
-   WFC_STREAM_T *stream_ptr = wfc_stream_get_ptr_or_create_placeholder(stream);
-   bool still_exists = true;
-
-   STREAM_LOCK(stream_ptr);
+   WFC_STREAM_T *stream_ptr = wfc_stream_find_stream_ptr(stream);
+   if (!stream_ptr)
+      return;
 
    stream_ptr->used_for_off_screen = used_for_off_screen;
 
-   if(!used_for_off_screen)
-      {still_exists = wfc_stream_destroy_actual(stream, stream_ptr);}
-
-   if(still_exists) {STREAM_UNLOCK(stream_ptr);}
-
-} // wfc_stream_register_off_screen()
+   if (used_for_off_screen)
+      STREAM_UNLOCK(stream_ptr);
+   else
+   {
+      // Stream is unlocked by destroy_if_ready
+      wfc_stream_destroy_if_ready(stream_ptr);
+   }
+}
 
 //!@} // Off-screen composition functions
 //!@} // Public functions
 //==============================================================================
 
-static bool wfc_stream_initialise(void)
-//! Initialise logging and stream_map the first time around. Return true if OK.
+/** Initialise logging and global mutex */
+static void wfc_stream_initialise(void)
 {
-   if(stream_map.storage == NULL) {
-      // Logging
-      vcos_log_set_level(&log_cat, WFC_LOG_LEVEL);
-      vcos_log_register("wfc_client_stream", &log_cat);
-      // Stream map
-      if(!vcos_verify(khrn_pointer_map_init(&stream_map, 8)))
-         return false;
-   }
+   VCOS_STATUS_T status;
 
-   return true;
-} // wfc_stream_initialise()
+   vcos_log_set_level(&log_cat, WFC_LOG_LEVEL);
+   vcos_log_register("wfc_client_stream", &log_cat);
+
+   vcos_log_trace("%s", VCOS_FUNCTION);
+
+   status = vcos_mutex_create(&wfc_stream_global_lock, "WFC stream global lock");
+   vcos_assert(status == VCOS_SUCCESS);
+
+   status = vcos_blockpool_create_on_heap(&wfc_stream_blockpool,
+         WFC_STREAM_BLOCK_SIZE, sizeof(WFC_STREAM_T),
+         VCOS_BLOCKPOOL_ALIGN_DEFAULT, VCOS_BLOCKPOOL_FLAG_NONE,
+         "wfc stream pool");
+   vcos_assert(status == VCOS_SUCCESS);
+
+   status = vcos_blockpool_extend(&wfc_stream_blockpool,
+         WFC_STREAM_MAX_EXTENSIONS, WFC_STREAM_BLOCK_SIZE);
+   vcos_assert(status == VCOS_SUCCESS);
+}
 
 //------------------------------------------------------------------------------
 
-static void wfc_stream_create_internal(WFC_STREAM_T *stream_ptr, uint32_t flags)
-//! Create stream, etc.
+/** Take the global lock and then search for the stream data for a given handle.
+ * The global lock is not released on return and the stream is not locked.
+ *
+ * @param stream The stream handle.
+ * @return The pointer to the stream structure, or NULL if not found.
+ */
+static WFC_STREAM_T *wfc_stream_global_lock_and_find_stream_ptr(WFCNativeStreamType stream)
 {
-   stream_ptr->has_been_created = true;
-   stream_ptr->flags = flags;
+   WFC_STREAM_T *stream_ptr;
 
-   uint64_t pid = vcos_process_id_current();
-   uint32_t pid_lo = (uint32_t) pid;
-   uint32_t pid_hi = (uint32_t) (pid >> 32);
+   GLOBAL_LOCK();
 
-   stream_ptr->handle = wfc_server_stream_create(stream_ptr->handle, flags, pid_lo, pid_hi);
-} // wfc_stream_create_internal()
-
-//------------------------------------------------------------------------------
-
-static WFC_STREAM_T *wfc_stream_get_ptr_or_create_placeholder(WFCNativeStreamType stream)
-//!@brief Return the pointer to the stream structure corresponding to the specified
-//! stream handle. If it doesn't exist, create it.
-{
-   WFC_STREAM_T *stream_ptr = NULL;
-
-   if (!wfc_stream_initialise()) return NULL;
-
-   if (khrn_pointer_map_get_count(&stream_map) == 0)
-      if (wfc_server_connect() != VCOS_SUCCESS)
-         return NULL;
-
-   // Look up stream
-   stream_ptr = (WFC_STREAM_T *) khrn_pointer_map_lookup(&stream_map, stream);
-
-   // If it doesn't exist, then create it, and insert into the map
-   if(stream_ptr == NULL)
-   {
-      bool is_in_use = false;
-      uint32_t in_use_timeout = 10;
-
-      do
-      {
-         // In case this stream number is being re-used, block until the server
-         // side has finished destroying it, or time out otherwise.
-         is_in_use = wfc_server_stream_is_in_use(stream);
-         in_use_timeout--;
-         if(is_in_use) {vcos_sleep(1);}
-      }
-      while(is_in_use && (in_use_timeout > 0));
-
-      if(!vcos_verify(in_use_timeout > 0))
-      {
-         vcos_log_warn("get_stream_ptr timeout");
-         return NULL;
-      } // if
-
-      // Allocate memory for stream_ptr
-      stream_ptr = (WFC_STREAM_T *) khrn_platform_malloc(sizeof(WFC_STREAM_T), "WFC_STREAM_T");
-
-      if(vcos_verify(stream_ptr != NULL))
-      {
-         // Initialise new stream
-         memset(stream_ptr, 0, sizeof(WFC_STREAM_T));
-         platform_mutex_create(&stream_ptr->mutex);
-         stream_ptr->handle = stream;
-         // Insert stream into map
-         khrn_pointer_map_insert(&stream_map, stream, stream_ptr);
-      } // if
-   } // if
+   stream_ptr = wfc_stream_head;
+   while (stream_ptr && stream_ptr->handle != stream)
+      stream_ptr = stream_ptr->next;
 
    return stream_ptr;
-} // wfc_stream_get_ptr_or_create_placeholder()
+}
 
 //------------------------------------------------------------------------------
 
-static bool wfc_stream_destroy_actual(WFCNativeStreamType stream, WFC_STREAM_T *stream_ptr)
-//!@brief Actually destroy the stream, _if_ it is no longer in use. Stream is already
-//! locked before this function is called. If stream was destroyed, returns FALSE.
+/** Create a stream structure corresponding to the specified stream handle. If
+ * the stream structure already exists or there is an error allocating it, the
+ * function returns NULL. On success, the stream pointer is left locked.
+ *
+ * @param stream The stream handle.
+ * @param allow_duplicate True to allow an existing entry
+ * @return The pointer to the new stream structure, or NULL on error.
+ */
+static WFC_STREAM_T *wfc_stream_create_stream_ptr(WFCNativeStreamType stream, bool allow_duplicate)
 {
-   if((stream_ptr == NULL)
-      || !stream_ptr->destroy_pending
-      || (stream_ptr->num_of_sources_or_masks > 0)
-      || stream_ptr->used_for_off_screen)
-      {return true;}
+   WFC_STREAM_T *stream_ptr = wfc_stream_global_lock_and_find_stream_ptr(stream);
 
-   vcos_log_info("wfc_stream_destroy_actual: stream: %X", stream);
+   vcos_log_trace("%s: stream handle 0x%x", VCOS_FUNCTION, stream);
+
+   if (stream_ptr && !stream_ptr->to_be_deleted)
+   {
+      if (!allow_duplicate)
+      {
+         vcos_log_error("%s: attempt to create duplicate of stream handle 0x%x", VCOS_FUNCTION, stream);
+         // Stream already exists, return NULL
+         stream_ptr = NULL;
+      }
+      else
+      {
+         vcos_log_trace("%s: duplicate of stream handle 0x%x created", VCOS_FUNCTION, stream);
+
+         STREAM_LOCK(stream_ptr);
+      }
+   }
+   else
+   {
+      if (stream_ptr)
+      {
+         vcos_log_trace("%s: recycling data block for stream handle 0x%x", VCOS_FUNCTION, stream);
+
+         // Recycle existing entry
+         stream_ptr->to_be_deleted = false;
+
+         STREAM_LOCK(stream_ptr);
+      }
+      else
+      {
+         vcos_log_trace("%s: allocating block for stream handle 0x%x", VCOS_FUNCTION, stream);
+
+         // Create new block and insert it into the list
+         stream_ptr = vcos_blockpool_calloc(&wfc_stream_blockpool);
+
+         if (stream_ptr)
+         {
+            VCOS_STATUS_T status;
+
+            status = vcos_mutex_create(&stream_ptr->mutex, "WFC_STREAM_T mutex");
+            if (vcos_verify(status == VCOS_SUCCESS))
+            {
+               STREAM_LOCK(stream_ptr);
+
+               // First stream in this process, connect
+               if (!wfc_stream_head)
+                  wfc_server_connect();
+
+               stream_ptr->handle = stream;
+               stream_ptr->info.size = sizeof(stream_ptr->info);
+
+               // Insert data into list
+               stream_ptr->next = wfc_stream_head;
+               if (wfc_stream_head)
+                  wfc_stream_head->prev = stream_ptr;
+               wfc_stream_head = stream_ptr;
+            }
+            else
+            {
+               vcos_log_error("%s: unable to create mutex for stream handle 0x%x", VCOS_FUNCTION, stream);
+               vcos_blockpool_free(stream_ptr);
+               stream_ptr = NULL;
+            }
+         }
+         else
+         {
+            vcos_log_error("%s: unable to allocate data for stream handle 0x%x", VCOS_FUNCTION, stream);
+         }
+      }
+   }
+
+   GLOBAL_UNLOCK();
+
+   return stream_ptr;
+}
+
+//------------------------------------------------------------------------------
+
+/** Destroys a stream structure identified by stream handle. If the stream is not
+ * found or the stream has not been marked for deletion, the operation has no
+ * effect.
+ *
+ * @param stream The stream handle.
+ */
+static void wfc_stream_destroy_stream_ptr(WFCNativeStreamType stream)
+{
+   WFC_STREAM_T *stream_ptr = wfc_stream_global_lock_and_find_stream_ptr(stream);
+
+   vcos_log_trace("%s: stream handle 0x%x", VCOS_FUNCTION, stream);
+
+   if (stream_ptr)
+   {
+      if (stream_ptr->to_be_deleted)
+      {
+         STREAM_LOCK(stream_ptr);
+
+         vcos_log_trace("%s: unlinking from list", VCOS_FUNCTION);
+
+         if (stream_ptr->next)
+            stream_ptr->next->prev = stream_ptr->prev;
+         if (stream_ptr->prev)
+            stream_ptr->prev->next = stream_ptr->next;
+         else
+            wfc_stream_head = stream_ptr->next;
+
+         // No streams left in this process, disconnect
+         if (wfc_stream_head == NULL)
+            wfc_server_disconnect();
+      }
+      else
+      {
+         vcos_log_trace("%s: stream 0x%x recycled before destruction", VCOS_FUNCTION, stream);
+         stream_ptr = NULL;
+      }
+   }
+   else
+   {
+      vcos_log_error("%s: stream 0x%x not found", VCOS_FUNCTION, stream);
+   }
+
+   GLOBAL_UNLOCK();
+
+   if (stream_ptr)
+   {
+      // Stream data block no longer in list, can safely destroy it
+      STREAM_UNLOCK(stream_ptr);
+
+      // Wait for rectangle request thread to complete
+      if(stream_ptr->info.flags & WFC_STREAM_FLAGS_REQ_RECT)
+         vcos_thread_join(&stream_ptr->rect_req_thread_data, NULL);
+
+      // Destroy mutex
+      vcos_mutex_delete(&stream_ptr->mutex);
+
+      // Delete
+      vcos_blockpool_free(stream_ptr);
+   }
+}
+
+//------------------------------------------------------------------------------
+
+/** Return a pointer to the stream structure corresponding to the specified stream
+ * handle. On success, the stream pointer is locked.
+ *
+ * @param stream The stream handle.
+ * @return The pointer to the stream structure, or NULL on error.
+ */
+static WFC_STREAM_T *wfc_stream_find_stream_ptr(WFCNativeStreamType stream)
+{
+   WFC_STREAM_T *stream_ptr = wfc_stream_global_lock_and_find_stream_ptr(stream);
+
+   if (stream_ptr && !stream_ptr->to_be_deleted)
+      STREAM_LOCK(stream_ptr);
+
+   GLOBAL_UNLOCK();
+
+   return stream_ptr;
+}
+
+//------------------------------------------------------------------------------
+
+/** Destroy the stream if it is no longer in use. The stream must be locked on
+ * entry and shall be unlocked (or destroyed along with the rest of the stream)
+ * on exit.
+ *
+ * @param stream_ptr The locked stream data pointer.
+ */
+static void wfc_stream_destroy_if_ready(WFC_STREAM_T *stream_ptr)
+{
+   WFCNativeStreamType stream;
+   uint64_t pid = vcos_process_id_current();
+   uint32_t pid_lo = (uint32_t)pid;
+   uint32_t pid_hi = (uint32_t)(pid >> 32);
+
+   if (stream_ptr == NULL)
+   {
+      vcos_log_error("%s: stream_ptr is NULL", VCOS_FUNCTION);
+      return;
+   }
+
+   if(stream_ptr->num_of_sources_or_masks > 0
+      || stream_ptr->used_for_off_screen
+      || stream_ptr->registrations > 0)
+   {
+      vcos_log_trace("%s: stream: %X not ready: reg:%u srcs:%u o/s:%d", VCOS_FUNCTION,
+            stream_ptr->handle, stream_ptr->registrations,
+            stream_ptr->num_of_sources_or_masks, stream_ptr->used_for_off_screen);
+      STREAM_UNLOCK(stream_ptr);
+      return;
+   }
+
+   stream = stream_ptr->handle;
+
+   vcos_log_info("%s: stream: %X to be destroyed", VCOS_FUNCTION, stream);
+
+   // Prevent stream from being found, although it can be recycled.
+   stream_ptr->to_be_deleted = true;
 
    // Delete server-side stream
-   wfc_server_stream_destroy(stream_ptr->handle);
-
-   // Remove from map
-   khrn_pointer_map_delete(&stream_map, stream);
+   wfc_server_stream_destroy(stream, pid_lo, pid_hi);
 
    STREAM_UNLOCK(stream_ptr);
 
-   // Wait for rectangle request thread to complete
-   if(stream_ptr->flags & WFC_STREAM_FLAGS_REQ_RECT)
-   {
-      vcos_thread_join(&stream_ptr->rect_req_thread_data, NULL);
-   } // if
-
-   // Destroy mutex
-   platform_mutex_destroy(&stream_ptr->mutex);
-
-   // Delete
-   khrn_platform_free(stream_ptr);
-
-   if (khrn_pointer_map_get_count(&stream_map) == 0)
-      wfc_server_disconnect();
-
-   return false;
-
-} // wfc_stream_destroy_actual()
+   wfc_stream_destroy_stream_ptr(stream);
+}
 
 //------------------------------------------------------------------------------
 
@@ -537,11 +778,15 @@ static void *wfc_stream_rect_req_thread(void *arg)
 
    vcos_log_info("wfc_stream_rect_req_thread: START: stream: %X", stream);
 
-   WFC_STREAM_T *stream_ptr = wfc_stream_get_ptr_or_create_placeholder(stream);
+   WFC_STREAM_T *stream_ptr = wfc_stream_find_stream_ptr(stream);
+   if (!stream_ptr)
+      return NULL;
 
    // Get local pointers to stream parameters
    callback = stream_ptr->req_rect_callback;
    cb_args = stream_ptr->req_rect_cb_args;
+
+   STREAM_UNLOCK(stream_ptr);
 
    status = vcos_semaphore_create(&rect_req_sem, "WFC rect req", 0);
    vcos_assert(status == VCOS_SUCCESS);      // On all relevant platforms
@@ -588,34 +833,211 @@ static void wfc_client_stream_post_sem(void *cb_data)
 }
 
 //==============================================================================
+#ifdef KHRN_FRUIT_DIRECT
+static KHRN_UMEM_HANDLE_T get_ustorage(EGLImageKHR im, KHRN_DEPS_T *deps)
+{
+   KHRN_UMEM_HANDLE_T ret = KHRN_UMEM_HANDLE_INVALID;
+   EGL_SERVER_STATE_T *state = EGL_GET_SERVER_STATE();
+   EGL_IMAGE_T *eglimage_;
+   KHRN_IMAGE_T *image;
+
+   KHRN_MEM_HANDLE_T eglimage =
+      khrn_map_lookup(&state->eglimages, (uint32_t) im);
+
+   if (eglimage == KHRN_MEM_HANDLE_INVALID) {
+      vcos_log_error("Bad image %p", im);
+      goto end;
+   }
+
+   eglimage_ = khrn_mem_lock(eglimage);
+   vcos_assert(eglimage_->external.src != KHRN_UMEM_HANDLE_INVALID);
+   image = khrn_mem_lock(eglimage_->external.src);
+
+   /* FIXME: We probably don't need this. It doesn't make any sense */
+   khrn_deps_quick_write(deps, &image->interlock);
+
+   ret = image->ustorage;
+
+   khrn_mem_unlock(eglimage_->external.src);
+   khrn_mem_unlock(eglimage);
+
+end:
+   return ret;
+}
 
 void wfc_stream_signal_eglimage_data(WFCNativeStreamType stream, EGLImageKHR im)
 {
-   wfc_server_stream_signal_eglimage_data(stream, im);
+   wfc_stream_signal_eglimage_data_protected(stream, im, 0);
 }
+
+#ifdef ANDROID
+void wfc_stream_signal_eglimage_data_protected(WFCNativeStreamType stream, EGLImageKHR im, uint32_t is_protected)
+{
+   EGL_SERVER_STATE_T *state = EGL_GET_SERVER_STATE();
+   KHRN_DEPS_T deps;
+   KHRN_MEM_HANDLE_T eglimage;
+   EGL_IMAGE_T *eglimage_;
+   KHRN_IMAGE_T *image_;
+
+   CLIENT_LOCK();
+
+   khrn_deps_init(&deps);
+
+   eglimage = khrn_map_lookup(&state->eglimages, (uint32_t)im);
+   eglimage_ = khrn_mem_lock(eglimage);
+   image_ = khrn_mem_lock(eglimage_->external.src);
+
+   vcos_assert(image_->ustorage != KHRN_UMEM_HANDLE_INVALID);
+   khrn_umem_acquire(&deps, image_->ustorage);
+
+   image_->flags &= ~IMAGE_FLAG_PROTECTED;
+   if (is_protected)
+      image_->flags |= IMAGE_FLAG_PROTECTED;
+
+   khrn_signal_image_data((uint32_t)stream, image_->ustorage, image_->width, image_->height, image_->stride, image_->offset,
+      image_->format, image_->flags, eglimage_->flip_y ? true : false);
+
+   khrn_mem_unlock(eglimage_->external.src);
+   khrn_mem_unlock(eglimage);
+
+   CLIENT_UNLOCK();
+}
+#else
+void wfc_stream_signal_eglimage_data_protected(WFCNativeStreamType stream, EGLImageKHR im, uint32_t is_protected)
+{
+   EGL_SERVER_STATE_T *state = EGL_GET_SERVER_STATE();
+   KHRN_DEPS_T deps;
+   KHRN_MEM_HANDLE_T eglimage;
+   EGL_IMAGE_T *eglimage_;
+   KHRN_IMAGE_T *image_;
+   WFC_STREAM_IMAGE_T stream_image;
+
+   CLIENT_LOCK();
+
+   khrn_deps_init(&deps);
+
+   eglimage = khrn_map_lookup(&state->eglimages, (uint32_t)im);
+   eglimage_ = khrn_mem_lock(eglimage);
+   image_ = khrn_mem_lock(eglimage_->external.src);
+
+   vcos_assert(image_->ustorage != KHRN_UMEM_HANDLE_INVALID);
+   khrn_umem_acquire(&deps, image_->ustorage);
+
+   /* The EGL protection flag is passed through the KHRN_IMAGE_T flags field */
+   image_->flags &= ~IMAGE_FLAG_PROTECTED;
+   if (is_protected)
+      image_->flags |= IMAGE_FLAG_PROTECTED;
+
+   memset(&stream_image, 0, sizeof(stream_image));
+   stream_image.length = sizeof(stream_image);
+   stream_image.type = WFC_STREAM_IMAGE_TYPE_EGL;
+
+   stream_image.handle = image_->ustorage;
+   stream_image.width = image_->width;
+   stream_image.height = image_->height;
+   stream_image.format = image_->format;
+   stream_image.pitch = image_->stride;
+   stream_image.offset = image_->offset;
+   stream_image.flags = image_->flags;
+   stream_image.flip = eglimage_->flip_y ? WFC_STREAM_IMAGE_FLIP_VERT : WFC_STREAM_IMAGE_FLIP_NONE;
+
+   khrn_mem_unlock(eglimage_->external.src);
+   khrn_mem_unlock(eglimage);
+
+   CLIENT_UNLOCK();
+
+   wfc_server_stream_signal_image(stream, &stream_image);
+}
+#endif
+
+void wfc_stream_release_eglimage_data(WFCNativeStreamType stream,
+      EGLImageKHR im)
+{
+   KHRN_DEPS_T deps;
+   KHRN_UMEM_HANDLE_T ustorage;
+
+   CLIENT_LOCK();
+   ustorage = get_ustorage(im, &deps);
+   khrn_umem_release(&deps, ustorage);
+   CLIENT_UNLOCK();
+}
+#endif
 
 void wfc_stream_signal_mm_image_data(WFCNativeStreamType stream, uint32_t im)
 {
    wfc_server_stream_signal_mm_image_data(stream, im);
 }
 
-void wfc_stream_signal_raw_pixels(WFCNativeStreamType stream, uint32_t handle, uint32_t format, uint32_t w, uint32_t h, uint32_t pitch)
+void wfc_stream_signal_raw_pixels(WFCNativeStreamType stream, uint32_t handle,
+      uint32_t format, uint32_t w, uint32_t h, uint32_t pitch, uint32_t vpitch)
 {
-   wfc_server_stream_signal_raw_pixels(stream, handle, format, w, h, pitch);
+   wfc_server_stream_signal_raw_pixels(stream, handle, format, w, h, pitch, vpitch);
+}
+
+void wfc_stream_signal_image(WFCNativeStreamType stream,
+      const WFC_STREAM_IMAGE_T *image)
+{
+   wfc_server_stream_signal_image(stream, image);
 }
 
 void wfc_stream_register(WFCNativeStreamType stream) {
-   uint64_t pid = khronos_platform_get_process_id();
+   uint64_t pid = vcos_process_id_current();
    uint32_t pid_lo = (uint32_t)pid;
    uint32_t pid_hi = (uint32_t)(pid >> 32);
 
    if (wfc_server_connect() == VCOS_SUCCESS)
-      wfc_server_stream_register(stream, pid_lo, pid_hi);
+   {
+      WFC_STREAM_INFO_T info;
+      uint32_t status;
+
+      info.size = sizeof(info);
+      status = wfc_server_stream_get_info(stream, &info);
+
+      if (status == VCOS_SUCCESS)
+      {
+         WFC_STREAM_T *stream_ptr = wfc_stream_create_stream_ptr(stream, true);
+
+         if (stream_ptr)
+         {
+            stream_ptr->registrations++;
+            memcpy(&stream_ptr->info, &info, info.size);
+            STREAM_UNLOCK(stream_ptr);
+         }
+
+         wfc_server_stream_register(stream, pid_lo, pid_hi);
+      }
+      else
+      {
+         vcos_log_error("%s: get stream info failed: %u", VCOS_FUNCTION, status);
+      }
+   }
 }
 
 void wfc_stream_unregister(WFCNativeStreamType stream) {
-   wfc_server_stream_unregister(stream);
+   uint64_t pid = vcos_process_id_current();
+   uint32_t pid_lo = (uint32_t)pid;
+   uint32_t pid_hi = (uint32_t)(pid >> 32);
+   WFC_STREAM_T *stream_ptr = wfc_stream_find_stream_ptr(stream);
+
+   if (vcos_verify(stream_ptr != NULL))
+   {
+      wfc_server_stream_unregister(stream, pid_lo, pid_hi);
+
+      if (stream_ptr->registrations > 0)
+      {
+         stream_ptr->registrations--;
+         vcos_log_trace("%s: stream %X", VCOS_FUNCTION, stream);
+      }
+      else
+      {
+         vcos_log_error("%s: stream %X already fully unregistered", VCOS_FUNCTION, stream);
+      }
+
+      wfc_stream_destroy_if_ready(stream_ptr);
+   }
+
    wfc_server_disconnect();
 }
 
 //==============================================================================
+

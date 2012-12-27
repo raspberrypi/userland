@@ -30,6 +30,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef _VC_TOUCHSERV_DEFS_H
 #define _VC_TOUCHSERV_DEFS_H
 
+#define VC_TOUCHSERV_VER   1
+  
 
 /*! Message header */
 typedef struct {

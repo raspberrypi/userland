@@ -40,6 +40,21 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 /** Private information for MMAL VC components
  */
+
+typedef enum MMAL_ZEROLEN_CHECK_T
+{
+   ZEROLEN_NOT_INITIALIZED,
+   ZEROLEN_COMPATIBLE,
+   ZEROLEN_INCOMPATIBLE
+} MMAL_ZEROLEN_CHECK_T;
+
+typedef enum MMAL_PORT_FLUSH_CHECK_T
+{
+   PORT_FLUSH_NOT_INITIALIZED,
+   PORT_FLUSH_COMPATIBLE,
+   PORT_FLUSH_INCOMPATIBLE
+} MMAL_PORT_FLUSH_CHECK_T;
+
 typedef struct MMAL_PORT_MODULE_T
 {
    uint32_t magic;
@@ -52,6 +67,8 @@ typedef struct MMAL_PORT_MODULE_T
 
    MMAL_BOOL_T is_zero_copy;
    MMAL_BOOL_T zero_copy_workaround;
+
+   MMAL_BOOL_T sent_data_on_port;
 
    MMAL_PORT_T *connected;           /**< Connected port if any */
 } MMAL_PORT_MODULE_T;
@@ -81,7 +98,7 @@ MMAL_STATUS_T mmal_vc_get_version(uint32_t *major, uint32_t *minor, uint32_t *mi
    MMAL_STATUS_T status;
 
    status = mmal_vc_sendwait_message(mmal_vc_get_client(), &msg.header, sizeof(msg),
-                                     MMAL_WORKER_GET_VERSION, &msg, &len);
+                                     MMAL_WORKER_GET_VERSION, &msg, &len, MMAL_FALSE);
 
    if (status != MMAL_SUCCESS)
       return status;
@@ -105,7 +122,7 @@ MMAL_STATUS_T mmal_vc_get_stats(MMAL_VC_STATS_T *stats, int reset)
    MMAL_STATUS_T status = mmal_vc_sendwait_message(mmal_vc_get_client(),
                                                    &msg.header, sizeof(msg),
                                                    MMAL_WORKER_GET_STATS,
-                                                   &msg, &len);
+                                                   &msg, &len, MMAL_FALSE);
 
 
    if (status == MMAL_SUCCESS)
@@ -131,7 +148,7 @@ static MMAL_STATUS_T mmal_vc_port_requirements_set(MMAL_PORT_T *port)
    msg.param.enable.port = *port;
 
    status = mmal_vc_sendwait_message(mmal_vc_get_client(), &msg.header, sizeof(msg),
-                                     MMAL_WORKER_PORT_ACTION, &reply, &replylen);
+                                     MMAL_WORKER_PORT_ACTION, &reply, &replylen, MMAL_FALSE);
    if (status == MMAL_SUCCESS)
    {
       vcos_assert(replylen == sizeof(reply));
@@ -161,7 +178,7 @@ static MMAL_STATUS_T mmal_vc_port_requirements_get(MMAL_PORT_T *port)
    LOG_TRACE("get port requirements (%i:%i)", port->type, port->index);
 
    status = mmal_vc_sendwait_message(mmal_vc_get_client(), &msg.header, sizeof(msg),
-                                     MMAL_WORKER_PORT_INFO_GET, &reply, &replylen);
+                                     MMAL_WORKER_PORT_INFO_GET, &reply, &replylen, MMAL_FALSE);
    if (status == MMAL_SUCCESS)
    {
       vcos_assert(replylen == sizeof(reply));
@@ -219,7 +236,7 @@ static MMAL_STATUS_T mmal_vc_port_enable(MMAL_PORT_T *port, MMAL_PORT_BH_CB_T cb
    msg.param.enable.port = *port;
 
    status = mmal_vc_sendwait_message(mmal_vc_get_client(), &msg.header, sizeof(msg),
-                                     MMAL_WORKER_PORT_ACTION, &reply, &replylen);
+                                     MMAL_WORKER_PORT_ACTION, &reply, &replylen, MMAL_FALSE);
    if (status == MMAL_SUCCESS)
    {
       vcos_assert(replylen == sizeof(reply));
@@ -257,7 +274,7 @@ static MMAL_STATUS_T mmal_vc_port_disable(MMAL_PORT_T *port)
    msg.port_handle = module->port_handle;
 
    status = mmal_vc_sendwait_message(mmal_vc_get_client(), &msg.header, sizeof(msg),
-                                     MMAL_WORKER_PORT_ACTION, &reply, &replylen);
+                                     MMAL_WORKER_PORT_ACTION, &reply, &replylen, MMAL_FALSE);
    if (status == MMAL_SUCCESS)
    {
       vcos_assert(replylen == sizeof(reply));
@@ -285,8 +302,8 @@ static MMAL_STATUS_T mmal_vc_port_disable(MMAL_PORT_T *port)
    return status;
 }
 
-/** Flush a port */
-static MMAL_STATUS_T mmal_vc_port_flush(MMAL_PORT_T *port)
+/** Flush a port using MMAL_WORKER_PORT_ACTION - when the port is zero-copy or no data has been sent */
+static MMAL_STATUS_T mmal_vc_port_flush_normal(MMAL_PORT_T *port)
 {
    MMAL_PORT_MODULE_T *module = port->priv->module;
    MMAL_STATUS_T status;
@@ -299,7 +316,7 @@ static MMAL_STATUS_T mmal_vc_port_flush(MMAL_PORT_T *port)
    msg.port_handle = module->port_handle;
 
    status = mmal_vc_sendwait_message(mmal_vc_get_client(), &msg.header, sizeof(msg),
-                                     MMAL_WORKER_PORT_ACTION, &reply, &replylen);
+                                     MMAL_WORKER_PORT_ACTION, &reply, &replylen, MMAL_FALSE);
    if (status == MMAL_SUCCESS)
    {
       vcos_assert(replylen == sizeof(reply));
@@ -310,6 +327,84 @@ static MMAL_STATUS_T mmal_vc_port_flush(MMAL_PORT_T *port)
 
    return status;
 }
+
+
+/** Flush a port using PORT_FLUSH - generates a dummy bulk transfer to keep it in sync
+  * with buffers being passed using bulk transfer */
+static MMAL_STATUS_T mmal_vc_port_flush_sync(MMAL_PORT_T *port)
+{
+   MMAL_PORT_MODULE_T *module = port->priv->module;
+   MMAL_STATUS_T status;
+   mmal_worker_reply reply;
+   MMAL_VC_CLIENT_BUFFER_CONTEXT_T client_context;
+   mmal_worker_buffer_from_host *msg;
+
+   size_t replylen = sizeof(reply);
+
+   msg = &client_context.msg;
+
+   client_context.magic = MMAL_MAGIC;
+   client_context.port = port;
+
+   msg->drvbuf.client_context = &client_context;
+   msg->drvbuf.component_handle = module->component_handle;
+   msg->drvbuf.port_handle = module->port_handle;
+   msg->drvbuf.magic = MMAL_MAGIC;
+
+
+   status = mmal_vc_sendwait_message(mmal_vc_get_client(), &msg->header, sizeof(*msg),
+                                     MMAL_WORKER_PORT_FLUSH, &reply, &replylen, MMAL_TRUE);
+   if (status == MMAL_SUCCESS)
+   {
+      vcos_assert(replylen == sizeof(reply));
+      status = reply.status;
+   }
+   if (status != MMAL_SUCCESS)
+      LOG_ERROR("failed to disable port - reason %d", status);
+
+   return status;
+}
+
+/** Flush a port */
+static MMAL_STATUS_T mmal_vc_port_flush(MMAL_PORT_T *port)
+{
+   static MMAL_PORT_FLUSH_CHECK_T is_port_flush_compatible = PORT_FLUSH_NOT_INITIALIZED;
+   uint32_t major, minor, minimum;
+   MMAL_STATUS_T status;
+   /* Buffers sent to videocore, if not zero-copy, use vchiq bulk transfers to copy the data.
+      A flush could be sent while one of these buffers is being copied. If the normal flushing method
+      is used, the flush can arrive before the buffer, which causes confusion when a pre-flush buffer
+      arrives after the flush. So use a special flush mode that uses a dummy vchiq transfer to synchronise
+      things.
+      If data has never been sent on the port, then we don't need to worry about a flush overtaking data.
+      In that case, the port may not actually be set up on the other end to receive bulk transfers, so use
+      the normal flushing mechanism in that case.
+    */
+
+   if (port->priv->module->is_zero_copy || !port->priv->module->sent_data_on_port)
+      return mmal_vc_port_flush_normal(port);
+
+   if (is_port_flush_compatible == PORT_FLUSH_NOT_INITIALIZED)
+   {
+      status = mmal_vc_get_version(&major, &minor, &minimum);
+      if (major >= 15)
+      {
+         is_port_flush_compatible = PORT_FLUSH_COMPATIBLE;
+      }
+      else
+      {
+         LOG_ERROR("Version number of MMAL Server incompatible. Required Major:14 Minor: 2 \
+          or Greater. Current Major %d , Minor %d",major,minor);
+         is_port_flush_compatible = PORT_FLUSH_INCOMPATIBLE;
+      }
+   }
+
+   if (is_port_flush_compatible == PORT_FLUSH_COMPATIBLE)
+      return mmal_vc_port_flush_sync(port);
+   else
+      return mmal_vc_port_flush_normal(port);
+}
+
 
 /** Connect 2 ports together */
 static MMAL_STATUS_T mmal_vc_port_connect(MMAL_PORT_T *port, MMAL_PORT_T *other_port)
@@ -335,7 +430,7 @@ static MMAL_STATUS_T mmal_vc_port_connect(MMAL_PORT_T *port, MMAL_PORT_T *other_
    }
 
    status = mmal_vc_sendwait_message(mmal_vc_get_client(), &msg.header, sizeof(msg),
-                                     MMAL_WORKER_PORT_ACTION, &reply, &replylen);
+                                     MMAL_WORKER_PORT_ACTION, &reply, &replylen, MMAL_FALSE);
    if (status == MMAL_SUCCESS)
    {
       vcos_assert(replylen == sizeof(reply));
@@ -378,8 +473,12 @@ static void mmal_vc_do_callback(MMAL_COMPONENT_T *component)
       return; /* Will happen when a port gets disabled */
 
    port = (MMAL_PORT_T *)buffer->priv->component_data;
-   buffer->data = mmal_vc_shm_lock(buffer->data, port->priv->module->zero_copy_workaround);
 
+   /* Catch and report any transmission error */
+   if (buffer->flags & MMAL_BUFFER_HEADER_FLAG_TRANSMISSION_FAILED)
+       mmal_event_error_send(port->component, MMAL_EIO);
+
+   buffer->data = mmal_vc_shm_lock(buffer->data, port->priv->module->zero_copy_workaround);
    mmal_port_buffer_header_callback(port, buffer);
 }
 
@@ -405,14 +504,6 @@ static void mmal_vc_port_send_callback(mmal_worker_buffer_from_host *msg)
    vcos_assert(port->priv->module->magic == MMAL_MAGIC);
    mmal_vc_msg_to_buffer_header(buffer, msg);
 
-   if (port->priv->module->is_zero_copy &&
-       (port->capabilities & MMAL_PORT_CAPABILITY_PASSTHROUGH))
-   {
-      /* We do not have our own payload but are reusing one from an input port */
-      buffer->alloc_size = msg->buffer_header.alloc_size;
-      buffer->data = msg->buffer_header.data;
-   }
-
    /* Queue the callback so it is delivered by the action thread */
    buffer->priv->component_data = (void *)port;
    mmal_queue_put(port->component->priv->module->callback_queue, buffer);
@@ -429,6 +520,9 @@ static MMAL_STATUS_T mmal_vc_port_send(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *
    MMAL_VC_CLIENT_BUFFER_CONTEXT_T *client_context;
    mmal_worker_buffer_from_host *msg;
    uint32_t length;
+   uint32_t msgid = MMAL_WORKER_BUFFER_FROM_HOST;
+   uint32_t major, minor, minimum;
+   static MMAL_ZEROLEN_CHECK_T is_vc_zerolength_compatible = ZEROLEN_NOT_INITIALIZED;
 
    vcos_assert(port);
    vcos_assert(module);
@@ -513,9 +607,39 @@ static MMAL_STATUS_T mmal_vc_port_send(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *
    if (module->is_zero_copy)
       length = 0;
 
+   if (is_vc_zerolength_compatible == ZEROLEN_NOT_INITIALIZED)
+   {
+      status = mmal_vc_get_version(&major, &minor, &minimum);
+      if ((major > 12 ) || ((major == 12) && (minor >= 2)))
+      {
+         is_vc_zerolength_compatible = ZEROLEN_COMPATIBLE;
+      }
+      else
+      {
+         LOG_ERROR("Version number of MMAL Server incompatible. Required Major:12 Minor: 2 \
+          or Greater. Current Major %d , Minor %d",major,minor);
+         is_vc_zerolength_compatible = ZEROLEN_INCOMPATIBLE;
+      }
+   }
+
+   if ((is_vc_zerolength_compatible == ZEROLEN_COMPATIBLE) && !(module->is_zero_copy) && !length
+       && (msg->buffer_header.flags & MMAL_BUFFER_HEADER_FLAG_EOS))
+   {
+      length = 8;
+      msgid = MMAL_WORKER_BUFFER_FROM_HOST_ZEROLEN;
+   }
+
+   if (length)
+   {
+      // We're doing a bulk transfer. Note this so that flushes know
+      // they need to use the more cumbersome fake-bulk-transfer mechanism
+      // to guarantee correct ordering.
+      port->priv->module->sent_data_on_port = MMAL_TRUE;
+   }
+
    status = mmal_vc_send_message(mmal_vc_get_client(), &msg->header, sizeof(*msg),
                                  buffer->data + buffer->offset, length,
-                                 MMAL_WORKER_BUFFER_FROM_HOST);
+                                 msgid);
    if (status != MMAL_SUCCESS)
    {
       LOG_INFO("failed %d", status);
@@ -539,7 +663,7 @@ static MMAL_STATUS_T mmal_vc_component_disable(MMAL_COMPONENT_T *component)
 
    status = mmal_vc_sendwait_message(mmal_vc_get_client(), &msg.header, sizeof(msg),
          MMAL_WORKER_COMPONENT_DISABLE,
-         &reply, &replylen);
+         &reply, &replylen, MMAL_FALSE);
 
    if (status == MMAL_SUCCESS)
    {
@@ -570,7 +694,7 @@ static MMAL_STATUS_T mmal_vc_component_enable(MMAL_COMPONENT_T *component)
    msg.component_handle = component->priv->module->component_handle;
 
    status = mmal_vc_sendwait_message(mmal_vc_get_client(), &msg.header, sizeof(msg),
-                                     MMAL_WORKER_COMPONENT_ENABLE, &reply, &replylen);
+                                     MMAL_WORKER_COMPONENT_ENABLE, &reply, &replylen, MMAL_FALSE);
 
    if (status == MMAL_SUCCESS)
    {
@@ -600,7 +724,7 @@ static MMAL_STATUS_T mmal_vc_component_destroy(MMAL_COMPONENT_T *component)
 
    status = mmal_vc_sendwait_message(mmal_vc_get_client(), &msg.header, sizeof(msg),
          MMAL_WORKER_COMPONENT_DESTROY,
-         &reply, &replylen);
+         &reply, &replylen, MMAL_FALSE);
 
    if (status == MMAL_SUCCESS)
    {
@@ -617,11 +741,15 @@ static MMAL_STATUS_T mmal_vc_component_destroy(MMAL_COMPONENT_T *component)
       mmal_ports_free(component->input, component->input_num);
    if(component->output_num)
       mmal_ports_free(component->output, component->output_num);
+   if(component->clock_num)
+      mmal_ports_free(component->clock, component->clock_num);
 
    vcos_free(component->priv->module);
    component->priv->module = NULL;
 
 fail:
+   // no longer require videocore
+   mmal_vc_release();
    mmal_vc_deinit();
    return status;
 }
@@ -631,20 +759,36 @@ MMAL_STATUS_T mmal_vc_consume_mem(size_t size, uint32_t *handle)
    MMAL_STATUS_T status;
    mmal_worker_consume_mem req;
    mmal_worker_consume_mem reply;
-   size_t len;
+   size_t len = sizeof(reply);
 
    req.size = (uint32_t) size;
 
    status = mmal_vc_sendwait_message(mmal_vc_get_client(),
                                      &req.header, sizeof(req),
                                      MMAL_WORKER_CONSUME_MEM,
-                                     &reply, &len);
+                                     &reply, &len, MMAL_FALSE);
    if (status == MMAL_SUCCESS)
    {
       vcos_assert(len == sizeof(reply));
       status = reply.status;
       *handle = reply.handle;
    }
+   return status;
+}
+
+MMAL_STATUS_T mmal_vc_lmk(uint32_t alloc_size)
+{
+   MMAL_STATUS_T status;
+   mmal_worker_lmk req;
+   mmal_worker_lmk reply;
+   size_t len = sizeof(reply);
+
+   req.alloc_size = alloc_size;
+
+   status = mmal_vc_sendwait_message(mmal_vc_get_client(),
+                                     &req.header, sizeof(req),
+                                     MMAL_WORKER_LMK,
+                                     &reply, &len, MMAL_FALSE);
    return status;
 }
 
@@ -672,7 +816,7 @@ MMAL_STATUS_T mmal_vc_get_core_stats(MMAL_CORE_STATISTICS_T *stats,
    status = mmal_vc_sendwait_message(mmal_vc_get_client(),
                                      &req.header, sizeof(req),
                                      MMAL_WORKER_GET_CORE_STATS_FOR_PORT,
-                                     &reply, &len);
+                                     &reply, &len, MMAL_FALSE);
 
    if (status == MMAL_SUCCESS)
    {
@@ -702,7 +846,7 @@ static MMAL_STATUS_T mmal_vc_port_info_get(MMAL_PORT_T *port)
    LOG_TRACE("get port info (%i:%i)", port->type, port->index);
 
    status = mmal_vc_sendwait_message(mmal_vc_get_client(), &msg.header, sizeof(msg),
-                                     MMAL_WORKER_PORT_INFO_GET, &reply, &replylen);
+                                     MMAL_WORKER_PORT_INFO_GET, &reply, &replylen, MMAL_FALSE);
    if (status == MMAL_SUCCESS)
    {
       vcos_assert(replylen == sizeof(reply));
@@ -723,8 +867,8 @@ static MMAL_STATUS_T mmal_vc_port_info_get(MMAL_PORT_T *port)
    port->buffer_size_min = reply.port.buffer_size_min;
    port->buffer_size_recommended = reply.port.buffer_size_recommended;
    port->buffer_size = reply.port.buffer_size;
-   port->is_enabled = reply.port.is_enabled;
    port->buffer_alignment_min = reply.port.buffer_alignment_min;
+   port->is_enabled = reply.port.is_enabled;
    port->capabilities = reply.port.capabilities;
    reply.format.extradata = port->format->extradata;
    reply.format.es = port->format->es;
@@ -771,7 +915,7 @@ static MMAL_STATUS_T mmal_vc_port_info_set(MMAL_PORT_T *port)
    LOG_TRACE("set port info (%i:%i)", port->type, port->index);
 
    status = mmal_vc_sendwait_message(mmal_vc_get_client(), &msg.header, sizeof(msg),
-                                     MMAL_WORKER_PORT_INFO_SET, &reply, &replylen);
+                                     MMAL_WORKER_PORT_INFO_SET, &reply, &replylen, MMAL_FALSE);
    if (status == MMAL_SUCCESS)
    {
       vcos_assert(replylen == sizeof(reply));
@@ -791,8 +935,8 @@ static MMAL_STATUS_T mmal_vc_port_info_set(MMAL_PORT_T *port)
    port->buffer_size_min = reply.port.buffer_size_min;
    port->buffer_size_recommended = reply.port.buffer_size_recommended;
    port->buffer_size = reply.port.buffer_size;
-   port->is_enabled = reply.port.is_enabled;
    port->buffer_alignment_min = reply.port.buffer_alignment_min;
+   port->is_enabled = reply.port.is_enabled;
    port->capabilities = reply.port.capabilities;
    reply.format.extradata = port->format->extradata;
    reply.format.es = port->format->es;
@@ -887,10 +1031,11 @@ static MMAL_STATUS_T mmal_vc_port_parameter_set(MMAL_PORT_T *port, const MMAL_PA
 
    msg.component_handle = module->component_handle;
    msg.port_handle = module->port_handle;
+   /* coverity[overrun-buffer-arg] */
    memcpy(&msg.param, param, param->size);
 
    status = mmal_vc_sendwait_message(mmal_vc_get_client(), &msg.header, msglen,
-                                     MMAL_WORKER_PORT_PARAMETER_SET, &reply, &replylen);
+                                     MMAL_WORKER_PORT_PARAMETER_SET, &reply, &replylen, MMAL_FALSE);
 
    if (status == MMAL_SUCCESS)
    {
@@ -938,7 +1083,7 @@ static MMAL_STATUS_T mmal_vc_port_parameter_get(MMAL_PORT_T *port, MMAL_PARAMETE
    msg.param = *param;
 
    status = mmal_vc_sendwait_message(mmal_vc_get_client(), &msg.header, sizeof(msg),
-                                     MMAL_WORKER_PORT_PARAMETER_GET, &reply, &replylen);
+                                     MMAL_WORKER_PORT_PARAMETER_GET, &reply, &replylen, MMAL_FALSE);
    if (status == MMAL_SUCCESS)
    {
       status = reply.status;
@@ -967,6 +1112,7 @@ static MMAL_STATUS_T mmal_vc_port_parameter_get(MMAL_PORT_T *port, MMAL_PARAMETE
    if (status == MMAL_ENOSPC)
    {
       /* Copy only as much as we have space for but report true size of parameter */
+      /* coverity[overrun-buffer-arg] */
       memcpy(param, &reply.param, param->size);
       param->size = reply.param.size;
    }
@@ -996,20 +1142,26 @@ static uint8_t *mmal_vc_port_payload_alloc(MMAL_PORT_T *port, uint32_t payload_s
    if (port->format->encoding == MMAL_ENCODING_OPAQUE &&
        module->is_zero_copy)
    {
-      MMAL_OPAQUE_IMAGE_HANDLE_T h = mmal_vc_opaque_alloc();
+      MMAL_OPAQUE_IMAGE_HANDLE_T h = mmal_vc_opaque_alloc_desc(port->name);
       can_deref = MMAL_FALSE;
       ret = (void*)h;
       if (!ret)
+      {
          LOG_ERROR("%s: failed to allocate %d bytes opaque memory",
                    port->name, payload_size);
+         return NULL;
+      }
    }
 
    else if (module->is_zero_copy)
    {
       ret = mmal_vc_shm_alloc(payload_size);
       if (!ret)
+      {
          LOG_ERROR("%s: failed to allocate %d bytes of shared memory",
                    port->name, payload_size);
+         return NULL;
+      }
    }
 
    else
@@ -1074,6 +1226,7 @@ static MMAL_STATUS_T mmal_vc_component_create(const char *name, MMAL_COMPONENT_T
    }
 
    msg.client_component = component;
+   /* coverity[secure_coding] Length tested above */
    strcpy(msg.name, basename);
 #ifdef __linux__
    msg.pid = getpid();
@@ -1086,9 +1239,11 @@ static MMAL_STATUS_T mmal_vc_component_create(const char *name, MMAL_COMPONENT_T
                 name, status, mmal_status_to_string(status));
       return status;
    }
+   // claim VC for entire duration of component.
+   status = mmal_vc_use();
 
    status = mmal_vc_sendwait_message(mmal_vc_get_client(), &msg.header, sizeof(msg),
-                                     MMAL_WORKER_COMPONENT_CREATE, &reply, &replylen);
+                                     MMAL_WORKER_COMPONENT_CREATE, &reply, &replylen, MMAL_FALSE);
 
    vcos_log_info("%s: %s: handle 0x%x status %d reply status %d",
                  __FUNCTION__, name, reply.component_handle, status, reply.status);
@@ -1103,21 +1258,26 @@ static MMAL_STATUS_T mmal_vc_component_create(const char *name, MMAL_COMPONENT_T
    {
       LOG_ERROR("failed to create component '%s' (%i:%s)", name, status,
                 mmal_status_to_string(status));
+      mmal_vc_release();
       mmal_vc_deinit();
       return status;
    }
 
    /* Component has been created, allocate our context. */
    status = MMAL_ENOMEM;
-   ports_num = 1 + reply.input_num + reply.output_num;
+   ports_num = 1 + reply.input_num + reply.output_num + reply.clock_num;
    module = vcos_calloc(1, sizeof(*module) + ports_num * sizeof(*module->ports), "mmal_vc_module");
    if (!module)
    {
       mmal_worker_component_destroy msg;
       mmal_worker_reply reply;
       size_t replylen = sizeof(reply);
-      mmal_vc_sendwait_message(mmal_vc_get_client(), &msg.header, sizeof(msg),
-                               MMAL_WORKER_COMPONENT_DESTROY, &reply, &replylen);
+      MMAL_STATUS_T destroy_status;
+
+      destroy_status = mmal_vc_sendwait_message(mmal_vc_get_client(), &msg.header, sizeof(msg),
+                               MMAL_WORKER_COMPONENT_DESTROY, &reply, &replylen, MMAL_FALSE);
+      vcos_assert(destroy_status == MMAL_SUCCESS);
+      mmal_vc_release();
       mmal_vc_deinit();
       return status;
    }
@@ -1141,6 +1301,11 @@ static MMAL_STATUS_T mmal_vc_component_create(const char *name, MMAL_COMPONENT_T
    if (!component->output)
       goto fail;
    component->output_num = reply.output_num;
+   component->clock = mmal_ports_alloc(component, reply.clock_num, MMAL_PORT_TYPE_CLOCK,
+                                        sizeof(MMAL_PORT_MODULE_T));
+   if (!component->clock)
+      goto fail;
+   component->clock_num = reply.clock_num;
 
    /* We want to do the buffer callbacks to the client into a separate thread.
     * We'll need to queue these callbacks and have an action which does the actual callback. */
@@ -1153,7 +1318,6 @@ static MMAL_STATUS_T mmal_vc_component_create(const char *name, MMAL_COMPONENT_T
 
    LOG_TRACE(" handle %i", reply.component_handle);
 
-   component->control->type = MMAL_PORT_TYPE_CONTROL;
    module->ports[module->ports_num] = component->control->priv->module;
    module->ports[module->ports_num]->port = component->control;
    module->ports[module->ports_num]->component_handle = module->component_handle;
@@ -1161,7 +1325,6 @@ static MMAL_STATUS_T mmal_vc_component_create(const char *name, MMAL_COMPONENT_T
 
    for (i = 0; i < component->input_num; i++, module->ports_num++)
    {
-      component->input[i]->type = MMAL_PORT_TYPE_INPUT;
       module->ports[module->ports_num] = component->input[i]->priv->module;
       module->ports[module->ports_num]->port = component->input[i];
       module->ports[module->ports_num]->component_handle = module->component_handle;
@@ -1169,9 +1332,15 @@ static MMAL_STATUS_T mmal_vc_component_create(const char *name, MMAL_COMPONENT_T
 
    for (i = 0; i < component->output_num; i++, module->ports_num++)
    {
-      component->output[i]->type = MMAL_PORT_TYPE_OUTPUT;
       module->ports[module->ports_num] = component->output[i]->priv->module;
       module->ports[module->ports_num]->port = component->output[i];
+      module->ports[module->ports_num]->component_handle = module->component_handle;
+   }
+
+   for (i = 0; i < component->clock_num; i++, module->ports_num++)
+   {
+      module->ports[module->ports_num] = component->clock[i]->priv->module;
+      module->ports[module->ports_num]->port = component->clock[i];
       module->ports[module->ports_num]->component_handle = module->component_handle;
    }
 

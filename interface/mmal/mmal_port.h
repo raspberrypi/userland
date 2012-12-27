@@ -48,6 +48,7 @@ typedef enum
    MMAL_PORT_TYPE_CONTROL,              /**< Control port */
    MMAL_PORT_TYPE_INPUT,                /**< Input port */
    MMAL_PORT_TYPE_OUTPUT,               /**< Output port */
+   MMAL_PORT_TYPE_CLOCK,                /**< Clock port */
    MMAL_PORT_TYPE_INVALID = 0xffffffff  /**< Dummy value to force 32bit enum */
 
 } MMAL_PORT_TYPE_T;
@@ -81,7 +82,8 @@ typedef struct MMAL_PORT_T
    const char *name;                 /**< Port name. Used for debugging purposes (Read Only) */
 
    MMAL_PORT_TYPE_T type;            /**< Type of the port (Read Only) */
-   uint32_t index;                   /**< Index of the port (Read Only) */
+   uint16_t index;                   /**< Index of the port in its type list (Read Only) */
+   uint16_t index_all;               /**< Index of the port in the list of all ports (Read Only) */
 
    uint32_t is_enabled;              /**< Indicates whether the port is enabled or not (Read Only) */
    MMAL_ES_FORMAT_T *format;         /**< Format of the elementary stream */

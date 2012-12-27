@@ -73,6 +73,7 @@ typedef struct
 struct MMAL_CLIENT_T
 {
    int refcount;
+   int usecount;
    VCOS_MUTEX_T lock;
    VCHIQ_SERVICE_HANDLE_T service;
    MMAL_WAITPOOL_T waitpool;
@@ -149,9 +150,12 @@ static MMAL_WAITER_T *get_waiter(MMAL_CLIENT_T *client)
       if (client->waitpool.waiters[i].inuse == 0)
          break;
    }
-   vcos_assert(i != MAX_WAITERS);   /* If we get here, semaphore not working */
-   waiter = client->waitpool.waiters+i;
-   waiter->inuse = 1;
+   /* If this fails, the semaphore is not working */
+   if (vcos_verify(i != MAX_WAITERS))
+   {
+      waiter = client->waitpool.waiters+i;
+      waiter->inuse = 1;
+   }
    vcos_mutex_unlock(&client->lock);
 
    return waiter;
@@ -181,6 +185,9 @@ static MMAL_PORT_T *mmal_vc_port_by_number(MMAL_COMPONENT_T *component, uint32_t
       case MMAL_PORT_TYPE_OUTPUT:
          vcos_assert(number < component->output_num);
          return component->output[number];
+      case MMAL_PORT_TYPE_CLOCK:
+         vcos_assert(number < component->clock_num);
+         return component->clock[number];
    }
 
    return NULL;
@@ -255,6 +262,39 @@ error:
    vchiq_release_message(service, vchiq_header);
 }
 
+static MMAL_STATUS_T mmal_vc_use_internal(MMAL_CLIENT_T *client)
+{
+   MMAL_STATUS_T status = MMAL_SUCCESS;
+   vcos_mutex_lock(&client->lock);
+   if(client->usecount++ == 0)
+   {
+      if(vchiq_use_service(client->service) != VCHIQ_SUCCESS)
+      {
+         client->usecount--;
+         status = MMAL_EIO;
+      }
+   }
+   vcos_mutex_unlock(&client->lock);
+   return status;
+}
+
+static MMAL_STATUS_T mmal_vc_release_internal(MMAL_CLIENT_T *client)
+{
+   MMAL_STATUS_T status = MMAL_SUCCESS;
+   vcos_mutex_lock(&client->lock);
+   if(--client->usecount == 0)
+   {
+      if(vchiq_release_service(client->service) != VCHIQ_SUCCESS)
+      {
+         client->usecount++;
+         status = MMAL_EIO;
+      }
+   }
+   vcos_mutex_unlock(&client->lock);
+   return status;
+}
+
+
 /** Callback invoked by VCHIQ
   */
 static VCHIQ_STATUS_T mmal_vc_vchiq_callback(VCHIQ_REASON_T reason,
@@ -263,8 +303,6 @@ static VCHIQ_STATUS_T mmal_vc_vchiq_callback(VCHIQ_REASON_T reason,
                                              void *context)
 {
    LOG_TRACE("reason %d", reason);
-
-   vchiq_use_service(service);
 
    switch (reason)
    {
@@ -281,6 +319,13 @@ static VCHIQ_STATUS_T mmal_vc_vchiq_callback(VCHIQ_REASON_T reason,
             vcos_assert(msg->drvbuf.client_context);
             vcos_assert(msg->drvbuf.client_context->magic == MMAL_MAGIC);
 
+            /* If the buffer is referencing another, need to replicate it here
+             * in order to use the reference buffer's payload and ensure the
+             * reference is not released prematurely */
+            if (msg->has_reference)
+               mmal_buffer_header_replicate(msg->drvbuf.client_context->buffer,
+                                            msg->drvbuf_ref.client_context->buffer);
+
             /* Sanity check the size of the transfer so we don't overrun our buffer */
             if (!vcos_verify(msg->buffer_header.offset + msg->buffer_header.length <=
                              msg->drvbuf.client_context->buffer->alloc_size))
@@ -288,13 +333,15 @@ static VCHIQ_STATUS_T mmal_vc_vchiq_callback(VCHIQ_REASON_T reason,
                LOG_TRACE("buffer too small (%i, %i)",
                          msg->buffer_header.offset + msg->buffer_header.length,
                          msg->drvbuf.client_context->buffer->alloc_size);
-               msg->buffer_header.length = 0; // FIXME: set a buffer flag to signal error
+               msg->buffer_header.length = 0; /* FIXME: set a buffer flag to signal error */
                msg->drvbuf.client_context->callback(msg);
                vchiq_release_message(service, vchiq_header);
                break;
             }
-
-            if (msg->buffer_header.length != 0 && !msg->is_zero_copy)
+            /*To handle VC to HOST filled buffer callback of EOS buffer to receive in sync with data buffers*/
+            if (!msg->is_zero_copy &&
+                  (msg->buffer_header.length != 0 ||
+                     (msg->buffer_header.flags & MMAL_BUFFER_HEADER_FLAG_EOS)))
             {
                /* a buffer full of data for us to process */
                VCHIQ_STATUS_T vst = VCHIQ_SUCCESS;
@@ -302,7 +349,11 @@ static VCHIQ_STATUS_T mmal_vc_vchiq_callback(VCHIQ_REASON_T reason,
                          msg->buffer_header.offset, msg->buffer_header.length);
                int len = msg->buffer_header.length;
                len = (len+3) & (~3);
-               
+
+               if (!len && (msg->buffer_header.flags & MMAL_BUFFER_HEADER_FLAG_EOS))
+               {
+                  len = 8;
+               }
                if (!msg->payload_in_message)
                {
                   /* buffer transferred using vchiq bulk xfer */
@@ -376,14 +427,16 @@ static VCHIQ_STATUS_T mmal_vc_vchiq_callback(VCHIQ_REASON_T reason,
           * has emptied the buffer before we can recycle it, otherwise we
           * end up feeding the copro with buffers it cannot handle.
           */
+#ifdef VCOS_LOGGING_ENABLED
          mmal_worker_buffer_from_host *msg = (mmal_worker_buffer_from_host *)context;
+#endif
          LOG_TRACE("bulk tx done: %p, %d", msg->buffer_header.data, msg->buffer_header.length);
       }
       break;
    case VCHIQ_BULK_RECEIVE_DONE:
       {
-         VCHIQ_HEADER_T *vchiq_header = (VCHIQ_HEADER_T *)context;
-         mmal_worker_msg_header *msg_hdr = (mmal_worker_msg_header*)vchiq_header->data;
+         VCHIQ_HEADER_T *header = (VCHIQ_HEADER_T *)context;
+         mmal_worker_msg_header *msg_hdr = (mmal_worker_msg_header*)header->data;
          if (msg_hdr->msgid == MMAL_WORKER_BUFFER_TO_HOST)
          {
             mmal_worker_buffer_from_host *msg = (mmal_worker_buffer_from_host *)msg_hdr;
@@ -400,19 +453,19 @@ static VCHIQ_STATUS_T mmal_vc_vchiq_callback(VCHIQ_REASON_T reason,
             mmal_port_event_send(port, msg->delayed_buffer);
             LOG_DEBUG("event bulk rx done, length %d", msg->length);
          }
-         vchiq_release_message(service, vchiq_header);
+         vchiq_release_message(service, header);
       }
       break;
    case VCHIQ_BULK_RECEIVE_ABORTED:
       {
-         VCHIQ_HEADER_T *vchiq_header = (VCHIQ_HEADER_T *)context;
-         mmal_worker_msg_header *msg_hdr = (mmal_worker_msg_header*)vchiq_header->data;
+         VCHIQ_HEADER_T *header = (VCHIQ_HEADER_T *)context;
+         mmal_worker_msg_header *msg_hdr = (mmal_worker_msg_header*)header->data;
          if (msg_hdr->msgid == MMAL_WORKER_BUFFER_TO_HOST)
          {
             mmal_worker_buffer_from_host *msg = (mmal_worker_buffer_from_host *)msg_hdr;
             LOG_TRACE("bulk rx aborted: %p, %d", msg->buffer_header.data, msg->buffer_header.length);
             vcos_assert(msg->drvbuf.client_context->magic == MMAL_MAGIC);
-            msg->buffer_header.length = 0; /* FIXME: set a buffer flag to signal error */
+            msg->buffer_header.flags |= MMAL_BUFFER_HEADER_FLAG_TRANSMISSION_FAILED;
             msg->drvbuf.client_context->callback(msg);
          }
          else
@@ -422,10 +475,10 @@ static VCHIQ_STATUS_T mmal_vc_vchiq_callback(VCHIQ_REASON_T reason,
 
             vcos_assert(port);
             LOG_DEBUG("event bulk rx aborted");
-            msg->delayed_buffer->length = 0;    /* FIXME: set a buffer flag to signal error */
+            msg->delayed_buffer->flags |= MMAL_BUFFER_HEADER_FLAG_TRANSMISSION_FAILED;
             mmal_port_event_send(port, msg->delayed_buffer);
          }
-         vchiq_release_message(service, vchiq_header);
+         vchiq_release_message(service, header);
       }
       break;
    case VCHIQ_BULK_TRANSMIT_ABORTED:
@@ -433,14 +486,12 @@ static VCHIQ_STATUS_T mmal_vc_vchiq_callback(VCHIQ_REASON_T reason,
          mmal_worker_buffer_from_host *msg = (mmal_worker_buffer_from_host *)context;
          LOG_INFO("bulk tx aborted: %p, %d", msg->buffer_header.data, msg->buffer_header.length);
          vcos_assert(msg->drvbuf.client_context->magic == MMAL_MAGIC);
-         msg->buffer_header.length = 0; // FIXME: set a buffer flag to signal error
-         msg->drvbuf.client_context->callback(msg);
+         /* Nothing to do as the VC side will release the buffer and notify us of the error */
       }
       break;
    default:
       break;
    }
-   vchiq_release_service(service);
 
    return VCHIQ_SUCCESS;
 }
@@ -453,13 +504,15 @@ static VCHIQ_STATUS_T mmal_vc_vchiq_callback(VCHIQ_REASON_T reason,
   * @param msgid        message id
   * @param dest         destination for reply
   * @param destlen      size of destination, updated with actual length
+  * @param send_dummy_bulk whether to send a dummy bulk transfer
   */
 MMAL_STATUS_T mmal_vc_sendwait_message(struct MMAL_CLIENT_T *client,
                                        mmal_worker_msg_header *msg_header,
                                        size_t size,
                                        uint32_t msgid,
                                        void *dest,
-                                       size_t *destlen)
+                                       size_t *destlen,
+                                       MMAL_BOOL_T send_dummy_bulk)
 {
    MMAL_STATUS_T ret;
    MMAL_WAITER_T *waiter;
@@ -475,6 +528,9 @@ MMAL_STATUS_T mmal_vc_sendwait_message(struct MMAL_CLIENT_T *client,
       return MMAL_EINVAL;
    }
 
+   if (send_dummy_bulk)
+      vcos_mutex_lock(&client->bulk_lock);
+
    waiter = get_waiter(client);
    msg_header->msgid  = msgid;
    msg_header->u.waiter = waiter;
@@ -483,14 +539,36 @@ MMAL_STATUS_T mmal_vc_sendwait_message(struct MMAL_CLIENT_T *client,
    waiter->dest    = dest;
    waiter->destlen = *destlen;
    LOG_TRACE("wait %p, reply to %p", waiter, dest);
-   vchiq_use_service(client->service);
+   mmal_vc_use_internal(client);
 
    vst = vchiq_queue_message(client->service, elems, 1);
 
    if (vst != VCHIQ_SUCCESS)
    {
       ret = MMAL_EIO;
+      if (send_dummy_bulk)
+        vcos_mutex_unlock(&client->bulk_lock);
       goto fail_msg;
+   }
+
+   if (send_dummy_bulk)
+   {
+      uint32_t data_size = 8;
+      /* The data is just some dummy bytes so it's fine for it to be static */
+      static uint8_t data[8];
+      vst = vchiq_queue_bulk_transmit(client->service, data, data_size, msg_header);
+
+      vcos_mutex_unlock(&client->bulk_lock);
+
+      if (!vcos_verify(vst == VCHIQ_SUCCESS))
+      {
+         LOG_ERROR("failed bulk transmit");
+         /* This really should not happen and if it does, things will go wrong as
+          * we've already queued the vchiq message above. */
+         vcos_assert(0);
+         ret = MMAL_EIO;
+         goto fail_msg;
+      }
    }
 
    /* now wait for the reply...
@@ -500,8 +578,7 @@ MMAL_STATUS_T mmal_vc_sendwait_message(struct MMAL_CLIENT_T *client,
     */
    vcos_semaphore_wait(&waiter->sem);
 
-   vchiq_release_service(client->service);
-
+   mmal_vc_release_internal(client);
    LOG_TRACE("got reply (len %i/%i)", (int)*destlen, (int)waiter->destlen);
    *destlen = waiter->destlen;
 
@@ -509,13 +586,17 @@ MMAL_STATUS_T mmal_vc_sendwait_message(struct MMAL_CLIENT_T *client,
    return MMAL_SUCCESS;
 
 fail_msg:
-   vchiq_release_service(client->service);
+   mmal_vc_release_internal(client);
 
    release_waiter(client, waiter);
    return ret;
 }
 
 /** Send a message and do not wait for a reply.
+  *
+  * @note
+  * This function should only be called from within a mmal component, so
+  * vchiq_use/release_service calls aren't required (dealt with at higher level).
   *
   * @param client       client to send message for
   * @param msg_header   message header to send
@@ -545,8 +626,6 @@ MMAL_STATUS_T mmal_vc_send_message(MMAL_CLIENT_T *client,
 
    msg_header->msgid  = msgid;
    msg_header->magic  = MMAL_MAGIC;
-
-   vchiq_use_service(client->service);
 
    vst = vchiq_queue_message(client->service, elems, 1);
 
@@ -578,21 +657,33 @@ MMAL_STATUS_T mmal_vc_send_message(MMAL_CLIENT_T *client,
       }
    }
 
-   // TBD - do we need to release later if this is a message which gets and async response.
-   vchiq_release_service(client->service);
-
    return MMAL_SUCCESS;
 
  error:
-   vchiq_release_service(client->service);
    return MMAL_EIO;
+}
+
+MMAL_STATUS_T mmal_vc_use(void)
+{
+   MMAL_STATUS_T status = MMAL_ENOTCONN;
+   if(client.inited)
+      status = mmal_vc_use_internal(&client);
+   return status;
+}
+
+MMAL_STATUS_T mmal_vc_release(void)
+{
+   MMAL_STATUS_T status = MMAL_ENOTCONN;
+   if(client.inited)
+      status = mmal_vc_release_internal(&client);
+   return status;
 }
 
 MMAL_STATUS_T mmal_vc_init(void)
 {
    VCHIQ_SERVICE_PARAMS_T vchiq_params;
    MMAL_BOOL_T vchiq_initialised = 0, waitpool_initialised = 0;
-   MMAL_BOOL_T service_initialised = 0, bulk_lock_initialised = 0;
+   MMAL_BOOL_T service_initialised = 0;
    MMAL_STATUS_T status = MMAL_EIO;
    VCHIQ_STATUS_T vchiq_status;
    int count;
@@ -636,17 +727,15 @@ MMAL_STATUS_T mmal_vc_init(void)
    vchiq_params.version = WORKER_VER_MAJOR;
    vchiq_params.version_min = WORKER_VER_MINIMUM;
 
-   vchiq_status = vchiq_open_service_params(mmal_vchiq_instance, &vchiq_params, &client.service);
+   vchiq_status = vchiq_open_service(mmal_vchiq_instance, &vchiq_params, &client.service);
    if (vchiq_status != VCHIQ_SUCCESS)
    {
       LOG_ERROR("could not open vchiq service");
       status = MMAL_EIO;
       goto error;
    }
+   client.usecount = 1; /* usecount set to 1 by the open call. */
    service_initialised = 1;
-
-   // not using the service immediately, so release it.
-   vchiq_release_service(client.service);
 
    status = create_waitpool(&client.waitpool);
    if (status != MMAL_SUCCESS)
@@ -662,20 +751,24 @@ MMAL_STATUS_T mmal_vc_init(void)
       status = MMAL_ENOSPC;
       goto error;
    }
-   bulk_lock_initialised = 1;
 
    client.inited = 1;
+
    vcos_mutex_unlock(&client.lock);
+   /* assume we're not using VC immediately.  Do this outside the lock */
+   mmal_vc_release();
+
 
    return MMAL_SUCCESS;
 
  error:
-   if (bulk_lock_initialised)
-      vcos_mutex_delete(&client.bulk_lock);
    if (waitpool_initialised)
       destroy_waitpool(&client.waitpool);
    if (service_initialised)
-      vchiq_remove_service(client.service);
+   {
+      client.usecount = 0;
+      vchiq_close_service(client.service);
+   }
    if (vchiq_initialised)
       vchiq_shutdown(mmal_vchiq_instance);
    vcos_log_unregister(VCOS_LOG_CATEGORY);
@@ -700,11 +793,11 @@ void mmal_vc_deinit(void)
 
    vcos_mutex_delete(&client.bulk_lock);
    destroy_waitpool(&client.waitpool);
-   vchiq_remove_service(client.service);
+   vchiq_close_service(client.service);
    vchiq_shutdown(mmal_vchiq_instance);
    vcos_log_unregister(VCOS_LOG_CATEGORY);
 
-   client.service = NULL;
+   client.service = VCHIQ_SERVICE_HANDLE_INVALID;
    client.inited = 0;
    vcos_mutex_unlock(&client.lock);
 }

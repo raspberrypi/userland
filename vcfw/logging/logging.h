@@ -227,7 +227,7 @@ int logging_fifo_extract_entry(logging_fifo_log_t *log, const unsigned char *ent
 
 /* Log a hexadecimal representation of the first num_bytes of byte_array,
    formatted to format using logging_message() at logging-level level. */
-int logging_message_hex(int level, const char *format, const char *byte_array, int num_bytes);
+int logging_message_hex(int level, const char *format, const void *byte_array, int num_bytes);
 
 /* Log a hexadecimal representation of the Vector Register File contents.*/
 int logging_message_vrf(int level);
@@ -246,6 +246,8 @@ void logging_level_uart(int level);
 /* Get the current UART logging level. */
 int logging_get_level_uart(void);
 #endif
+
+unsigned char* get_message_log_ptr_and_size (int* size);
 
 #else   // BLOGGING
 

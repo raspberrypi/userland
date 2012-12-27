@@ -123,14 +123,81 @@ typedef struct
 //! Arbitrary maximum number of elements per scene
 #define WFC_MAX_ELEMENTS_IN_SCENE 8
 
+//! Arbitrary maximum number of WFC stream ids per client
+#define WFC_MAX_STREAMS_PER_CLIENT     128
+
 //! Data for a "scene" (i.e. context and element data associated with a commit).
 typedef struct
 {
     WFC_CONTEXT_DYNAMIC_ATTRIB_T context;    //!< Dynamic attributes for this scene's context
-    uint32_t wait;                           //!< When true, signal when scene has been sent to compositor
+    uint32_t commit_count;                   //!< Count of the scenes committed for this context
     uint32_t element_count;                  //!< Number of elements to be committed
     WFC_ELEMENT_ATTRIB_T elements[WFC_MAX_ELEMENTS_IN_SCENE];  //!< Attributes of committed elements
 } WFC_SCENE_T;
+
+//definitions moved from wfc_server_stream.h so can be included on client
+
+typedef enum
+{
+   WFC_IMAGE_NO_FLAGS         = 0,
+   WFC_IMAGE_FLIP_VERT        = (1 << 0), //< Vertically flip image
+   WFC_IMAGE_DISP_NOTHING     = (1 << 1), //< Display nothing on screen
+   WFC_IMAGE_CB_ON_NO_CHANGE  = (1 << 2), //< Callback, even if the image is the same
+   WFC_IMAGE_CB_ON_COMPOSE    = (1 << 3), //< Callback on composition, instead of when not in use
+   WFC_IMAGE_PROTECTION_HDCP  = (1 << 4), //< HDCP required if output to HDMI display
+   WFC_IMAGE_FLIP_HORZ        = (1 << 5), //< Horizontally flip image
+   WFC_IMAGE_SENTINEL         = 0x7FFFFFFF
+} WFC_IMAGE_FLAGS_T;
+
+//! Define the type of generic WFC image
+typedef enum
+{
+   WFC_STREAM_IMAGE_TYPE_OPAQUE = 0,    //< Handle to a multimedia opaque image
+   WFC_STREAM_IMAGE_TYPE_RAW,           //< Handle to a raw pixel buffer in shared memory
+   WFC_STREAM_IMAGE_TYPE_EGL,           //< Handle to an EGL storage
+
+   WFC_STREAM_IMAGE_TYPE_SENTINEL = 0x7FFFFFFF
+} WFC_STREAM_IMAGE_TYPE_T;
+
+//! DRM protection attributes for an image. Currently tis just maps to
+//! WFC_IMAGE_PROTECTION_HDCP and DISPMANX_PROTECTION_HDCP but in future
+//! could contain other options e.g. to down-sample output.
+typedef enum
+{
+   WFC_PROTECTION_NONE = 0,         //< Image is unprotected
+   WFC_PROTECTION_HDCP = (1 << 0),  //< HDCP required if output to HDMI display
+
+   WFC_PROTECTION_SENTINEL = 0x7FFFFFFF
+} WFC_PROTECTION_FLAGS_T;
+
+//! Horizontal and vertical flip combinations
+typedef enum
+{
+   WFC_STREAM_IMAGE_FLIP_NONE = 0,     //< No flip
+   WFC_STREAM_IMAGE_FLIP_VERT,         //< Vertical flip only
+   WFC_STREAM_IMAGE_FLIP_HORZ,         //< Horizontal flip only
+   WFC_STREAM_IMAGE_FLIP_BOTH,         //< Horizontal and vertical flip (180 degree rotation)
+
+   WFC_STREAM_IMAGE_FLIP_SENTINEL = 0x7FFFFFFF
+} WFC_STREAM_IMAGE_FLIP_T;
+
+//! Describes a generic buffer on the reloctable heap.
+typedef struct
+{
+   uint32_t length;                    //< The size of the structure passed in the message. Used for versioning.
+   WFC_STREAM_IMAGE_TYPE_T type;       //< The type of the image buffer e.g. opaque.
+   uint32_t handle;                    //< The relocatable heap handle for the buffer
+   uint32_t width;                     //< Width of the image in pixels
+   uint32_t height;                    //< Height of the image in pixels
+   uint32_t format;                    //< The pixel format. Specific to type.
+   uint32_t pitch;                     //< The horizontal pitch of the image in bytes
+   uint32_t vpitch;                    //< The vertical pitch of the image in rows. Zero implies vpitch == height
+   WFC_PROTECTION_FLAGS_T protection;  //< DRM protection
+   uint32_t offset;                    //< The starting offset within the heap handle for the buffer
+   uint32_t flags;                     //< Type-specific flags associated with the buffer
+   WFC_STREAM_IMAGE_FLIP_T flip;       //< Flips to apply to the buffer for display
+} WFC_STREAM_IMAGE_T;
+
 
 //==============================================================================
 // VideoCore-specific definitions
@@ -159,8 +226,11 @@ typedef enum
 {
    WFC_PIXEL_FORMAT_NONE,
    WFC_PIXEL_FORMAT_YVU420PLANAR,
+   WFC_PIXEL_FORMAT_YUV420PLANAR,
    WFC_PIXEL_FORMAT_FORCE_32BIT   = 0x7FFFFFFF
 } WFC_PIXEL_FORMAT_T;
+
+
 
 //------------------------------------------------------------------------------
 // Non-standard functions
@@ -168,4 +238,16 @@ typedef enum
 void wfc_set_deferral_stream(WFCDevice dev, WFCContext ctx, WFCNativeStreamType stream);
 
 //==============================================================================
+
+// Callback function types.
+
+/** Called when the buffer of a stream is no longer in use.
+ *
+ * @param The client stream handle.
+ * @param The value passed in when the buffer was set as the front buffer.
+ */
+typedef void (*WFC_SERVER_STREAM_CALLBACK_T)(WFCNativeStreamType stream, void *cb_data);
+
+//==============================================================================
+
 #endif /* WFC_INT_H */

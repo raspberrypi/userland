@@ -29,22 +29,28 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mmal_vc_msgs.h"
 #include "mmal_vc_client_priv.h"
 
-MMAL_OPAQUE_IMAGE_HANDLE_T mmal_vc_opaque_alloc(void)
+MMAL_OPAQUE_IMAGE_HANDLE_T mmal_vc_opaque_alloc_desc(const char *description)
 {
    MMAL_STATUS_T ret;
    MMAL_OPAQUE_IMAGE_HANDLE_T h = 0;
    mmal_worker_opaque_allocator msg;
    size_t len = sizeof(msg);
    msg.op = MMAL_WORKER_OPAQUE_MEM_ALLOC;
+   vcos_safe_strcpy(msg.description, description, sizeof(msg.description), 0);
    ret = mmal_vc_sendwait_message(mmal_vc_get_client(),
                                   &msg.header, sizeof(msg),
-                                  MMAL_WORKER_OPAQUE_ALLOCATOR,
-                                  &msg, &len);
+                                  MMAL_WORKER_OPAQUE_ALLOCATOR_DESC,
+                                  &msg, &len, MMAL_FALSE);
    if (ret == MMAL_SUCCESS)
    {
       h = msg.handle;
    }
    return h;
+}
+
+MMAL_OPAQUE_IMAGE_HANDLE_T mmal_vc_opaque_alloc(void)
+{
+   return mmal_vc_opaque_alloc_desc("?");
 }
 
 MMAL_STATUS_T mmal_vc_opaque_acquire(unsigned int handle)
@@ -57,7 +63,7 @@ MMAL_STATUS_T mmal_vc_opaque_acquire(unsigned int handle)
    ret = mmal_vc_sendwait_message(mmal_vc_get_client(),
                                   &msg.header, sizeof(msg),
                                   MMAL_WORKER_OPAQUE_ALLOCATOR,
-                                  &msg, &len);
+                                  &msg, &len, MMAL_FALSE);
    if (ret == MMAL_SUCCESS)
       ret = msg.status;
    return ret;
@@ -73,7 +79,7 @@ MMAL_STATUS_T mmal_vc_opaque_release(unsigned int handle)
    ret = mmal_vc_sendwait_message(mmal_vc_get_client(),
                                   &msg.header, sizeof(msg),
                                   MMAL_WORKER_OPAQUE_ALLOCATOR,
-                                  &msg, &len);
+                                  &msg, &len, MMAL_FALSE);
    if (ret == MMAL_SUCCESS)
       ret = msg.status;
    return ret;

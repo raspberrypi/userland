@@ -124,6 +124,10 @@ typedef struct MMAL_BUFFER_HEADER_T
 #define MMAL_BUFFER_HEADER_FLAG_CODECSIDEINFO          (1<<7)
 /** Signals a buffer which is the snapshot/postview image from a stills capture */
 #define MMAL_BUFFER_HEADER_FLAGS_SNAPSHOT              (1<<8)
+/** Signals a buffer which contains data known to be corrupted */
+#define MMAL_BUFFER_HEADER_FLAG_CORRUPTED              (1<<9)
+/** Signals that a buffer failed to be transmitted */
+#define MMAL_BUFFER_HEADER_FLAG_TRANSMISSION_FAILED    (1<<10)
 /* @} */
 
 /** \name Video buffer header flags
@@ -150,13 +154,58 @@ typedef struct MMAL_BUFFER_HEADER_T
  */
 void mmal_buffer_header_acquire(MMAL_BUFFER_HEADER_T *header);
 
+/** Reset a buffer header.
+ * Resets all header variables to default values.
+ *
+ * @param header buffer header to reset
+ */
+void mmal_buffer_header_reset(MMAL_BUFFER_HEADER_T *header);
+
 /** Release a buffer header.
  * Releasing a buffer header will decrease its reference counter and when no more references
  * are left, the buffer header will be recycled by calling its 'release' callback function.
  *
+ * If a pre-release callback is set (\ref MMAL_BH_PRE_RELEASE_CB_T), this will be invoked
+ * before calling the buffer's release callback and potentially postpone buffer recycling.
+ * Once pre-release is complete the buffer header is recycled with
+ * \ref mmal_buffer_header_release_continue.
+ *
  * @param header buffer header to release
  */
 void mmal_buffer_header_release(MMAL_BUFFER_HEADER_T *header);
+
+/** Continue the buffer header release process.
+ * This should be called to complete buffer header recycling once all pre-release activity
+ * has been completed.
+ *
+ * @param header buffer header to release
+ */
+void mmal_buffer_header_release_continue(MMAL_BUFFER_HEADER_T *header);
+
+/** Buffer header pre-release callback.
+ * The callback is invoked just before a buffer is released back into a
+ * pool. This is used by clients who need to trigger additional actions
+ * before the buffer can finally be released (e.g. wait for a bulk transfer
+ * to complete).
+ *
+ * The callback should return TRUE if the buffer release need to be post-poned.
+ *
+ * @param header   buffer header about to be released
+ * @param userdata user-specific data
+ *
+ * @return TRUE if the buffer should not be released
+ */
+typedef MMAL_BOOL_T (*MMAL_BH_PRE_RELEASE_CB_T)(MMAL_BUFFER_HEADER_T *header, void *userdata);
+
+/** Set a buffer header pre-release callback.
+ * If the callback is NULL, the buffer will be released back into the pool
+ * immediately as usual.
+ *
+ * @param header   buffer header to associate callback with
+ * @param cb       pre-release callback to invoke
+ * @param userdata user-specific data
+ */
+void mmal_buffer_header_pre_release_cb_set(MMAL_BUFFER_HEADER_T *header, MMAL_BH_PRE_RELEASE_CB_T cb, void *userdata);
 
 /** Replicate a buffer header into another one.
  * Replicating a buffer header will not only do an exact copy of all the public fields of the

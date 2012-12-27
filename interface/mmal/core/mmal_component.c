@@ -80,10 +80,13 @@ static MMAL_STATUS_T mmal_component_create_core(const char *name,
    MMAL_STATUS_T status = MMAL_ENOMEM;
    unsigned int size = sizeof(MMAL_COMPONENT_T) + sizeof(MMAL_COMPONENT_CORE_PRIVATE_T);
    unsigned int i, name_length = strlen(name) + 1;
+   unsigned int port_index;
    char *component_name;
 
    if(!component)
       return MMAL_EINVAL;
+
+   mmal_core_init();
 
    *component = vcos_calloc(1, size + name_length, "mmal component");
    if(!*component)
@@ -94,14 +97,13 @@ static MMAL_STATUS_T mmal_component_create_core(const char *name,
    (*component)->name = component_name= (char *)&((MMAL_COMPONENT_CORE_PRIVATE_T *)(*component)->priv)[1];
    memcpy(component_name, name, name_length);
    (*component)->priv->refcount = 1;
+   (*component)->priv->priority = VCOS_THREAD_PRI_NORMAL;
 
    if(vcos_mutex_create(&private->lock, "mmal component lock") != VCOS_SUCCESS)
    {
       vcos_free(*component);
       return MMAL_ENOMEM;
    }
-
-   mmal_core_init();
 
    vcos_mutex_lock(&mmal_core_lock);
    (*component)->id=mmal_core_instance_count++;
@@ -147,30 +149,52 @@ static MMAL_STATUS_T mmal_component_create_core(const char *name,
       goto error;
    }
 
+   /* Build the list of all the ports */
+   (*component)->port_num = (*component)->input_num + (*component)->output_num + (*component)->clock_num + 1;
+   (*component)->port = vcos_malloc((*component)->port_num * sizeof(MMAL_PORT_T *), "mmal ports");
+   if (!(*component)->port)
+   {
+      status = MMAL_ENOMEM;
+      LOG_ERROR("could not create list of ports");
+      goto error;
+   }
+   port_index = 0;
+   (*component)->port[port_index++] = (*component)->control;
+   for (i = 0; i < (*component)->input_num; i++)
+      (*component)->port[port_index++] = (*component)->input[i];
+   for (i = 0; i < (*component)->output_num; i++)
+      (*component)->port[port_index++] = (*component)->output[i];
+   for (i = 0; i < (*component)->clock_num; i++)
+      (*component)->port[port_index++] = (*component)->clock[i];
+   for (i = 0; i < (*component)->port_num; i++)
+      (*component)->port[i]->index_all = i;
+
    LOG_INFO("created '%s' %d %p", name, (*component)->id, *component);
 
    /* Make sure the port types, indexes and buffer sizes are set correctly */
    (*component)->control->type = MMAL_PORT_TYPE_CONTROL;
    (*component)->control->index = 0;
-   if ((*component)->control->buffer_size < (*component)->control->buffer_size_min)
-      (*component)->control->buffer_size = (*component)->control->buffer_size_min;
-   if ((*component)->control->buffer_num < (*component)->control->buffer_num_min)
-      (*component)->control->buffer_num = (*component)->control->buffer_num_min;
    for (i = 0; i < (*component)->input_num; i++)
    {
       MMAL_PORT_T *port = (*component)->input[i];
       port->type = MMAL_PORT_TYPE_INPUT;
       port->index = i;
-      if (port->buffer_size < port->buffer_size_min)
-         port->buffer_size = port->buffer_size_min;
-      if (port->buffer_num < port->buffer_num_min)
-         port->buffer_num = port->buffer_num_min;
    }
    for (i = 0; i < (*component)->output_num; i++)
    {
       MMAL_PORT_T *port = (*component)->output[i];
       port->type = MMAL_PORT_TYPE_OUTPUT;
       port->index = i;
+   }
+   for (i = 0; i < (*component)->clock_num; i++)
+   {
+      MMAL_PORT_T *port = (*component)->clock[i];
+      port->type = MMAL_PORT_TYPE_CLOCK;
+      port->index = i;
+   }
+   for (i = 0; i < (*component)->port_num; i++)
+   {
+      MMAL_PORT_T *port = (*component)->port[i];
       if (port->buffer_size < port->buffer_size_min)
          port->buffer_size = port->buffer_size_min;
       if (port->buffer_num < port->buffer_num_min)
@@ -229,6 +253,9 @@ static MMAL_STATUS_T mmal_component_destroy_internal(MMAL_COMPONENT_T *component
    if (component->control)
       mmal_port_free(component->control);
 
+   if (component->port)
+      vcos_free(component->port);
+
    vcos_mutex_delete(&private->lock);
    vcos_free(component);
    mmal_core_deinit();
@@ -261,6 +288,8 @@ static MMAL_STATUS_T mmal_component_release_internal(MMAL_COMPONENT_T *component
       mmal_port_disconnect(component->input[i]);
    for(i = 0; i < component->output_num; i++)
       mmal_port_disconnect(component->output[i]);
+   for(i = 0; i < component->clock_num; i++)
+      mmal_port_disconnect(component->clock[i]);
 
    /* Make sure the ports are all disabled */
    for(i = 0; i < component->input_num; i++)
@@ -269,6 +298,9 @@ static MMAL_STATUS_T mmal_component_release_internal(MMAL_COMPONENT_T *component
    for(i = 0; i < component->output_num; i++)
       if(component->output[i]->is_enabled)
          mmal_port_disable(component->output[i]);
+   for(i = 0; i < component->clock_num; i++)
+      if(component->clock[i]->is_enabled)
+         mmal_port_disable(component->clock[i]);
    if(component->control->is_enabled)
       mmal_port_disable(component->control);
 
@@ -313,6 +345,9 @@ void mmal_component_acquire(MMAL_COMPONENT_T *component)
 /** Release a reference to a component */
 MMAL_STATUS_T mmal_component_release(MMAL_COMPONENT_T *component)
 {
+   if(!component)
+      return MMAL_EINVAL;
+
    LOG_TRACE("component %s(%d), refcount %i", component->name, component->id,
              component->priv->refcount);
 
@@ -322,16 +357,38 @@ MMAL_STATUS_T mmal_component_release(MMAL_COMPONENT_T *component)
 /** Enable processing on a component */
 MMAL_STATUS_T mmal_component_enable(MMAL_COMPONENT_T *component)
 {
+   MMAL_COMPONENT_CORE_PRIVATE_T *private;
    MMAL_STATUS_T status;
+   unsigned int i;
 
    if(!component)
       return MMAL_EINVAL;
 
+   private = (MMAL_COMPONENT_CORE_PRIVATE_T *)component->priv;
+
    LOG_TRACE("%s %d", component->name, component->id);
 
+   vcos_mutex_lock(&private->lock);
+
+   /* Check we have anything to do */
+   if (component->is_enabled)
+   {
+      vcos_mutex_unlock(&private->lock);
+      return MMAL_SUCCESS;
+   }
+
    status = component->priv->pf_enable(component);
+
+   /* Resume all input / output ports */
+   for (i = 0; status == MMAL_SUCCESS && i < component->input_num; i++)
+      status = mmal_port_pause(component->input[i], MMAL_FALSE);
+   for (i = 0; status == MMAL_SUCCESS && i < component->output_num; i++)
+      status = mmal_port_pause(component->output[i], MMAL_FALSE);
+
    if (status == MMAL_SUCCESS)
       component->is_enabled = 1;
+
+   vcos_mutex_unlock(&private->lock);
 
    return status;
 }
@@ -339,16 +396,38 @@ MMAL_STATUS_T mmal_component_enable(MMAL_COMPONENT_T *component)
 /** Disable processing on a component */
 MMAL_STATUS_T mmal_component_disable(MMAL_COMPONENT_T *component)
 {
+   MMAL_COMPONENT_CORE_PRIVATE_T *private;
    MMAL_STATUS_T status;
+   unsigned int i;
 
    if (!component)
       return MMAL_EINVAL;
 
+   private = (MMAL_COMPONENT_CORE_PRIVATE_T *)component->priv;
+
    LOG_TRACE("%s %d", component->name, component->id);
 
+   vcos_mutex_lock(&private->lock);
+
+   /* Check we have anything to do */
+   if (!component->is_enabled)
+   {
+      vcos_mutex_unlock(&private->lock);
+      return MMAL_SUCCESS;
+   }
+
    status = component->priv->pf_disable(component);
+
+   /* Pause all input / output ports */
+   for (i = 0; status == MMAL_SUCCESS && i < component->input_num; i++)
+      status = mmal_port_pause(component->input[i], MMAL_TRUE);
+   for (i = 0; status == MMAL_SUCCESS && i < component->output_num; i++)
+      status = mmal_port_pause(component->output[i], MMAL_TRUE);
+
    if (status == MMAL_SUCCESS)
       component->is_enabled = 0;
+
+   vcos_mutex_unlock(&private->lock);
 
    return status;
 }
@@ -373,7 +452,7 @@ MMAL_STATUS_T mmal_component_parameter_set(MMAL_PORT_T *control_port,
    (void)param;
    /* No generic component control parameters */
    LOG_ERROR("parameter id 0x%08x not supported", param->id);
-   return MMAL_EINVAL;
+   return MMAL_ENOSYS;
 }
 
 MMAL_STATUS_T mmal_component_parameter_get(MMAL_PORT_T *control_port,
@@ -383,7 +462,7 @@ MMAL_STATUS_T mmal_component_parameter_get(MMAL_PORT_T *control_port,
    (void)param;
    /* No generic component control parameters */
    LOG_ERROR("parameter id 0x%08x not supported", param->id);
-   return MMAL_EINVAL;
+   return MMAL_ENOSYS;
 }
 
 static void mmal_component_init_control_port(MMAL_PORT_T *port)
@@ -476,6 +555,7 @@ MMAL_STATUS_T mmal_component_action_register(MMAL_COMPONENT_T *component,
                                              void (*pf_action)(MMAL_COMPONENT_T *) )
 {
    MMAL_COMPONENT_CORE_PRIVATE_T *private = (MMAL_COMPONENT_CORE_PRIVATE_T *)component->priv;
+   VCOS_THREAD_ATTR_T attrs;
    VCOS_STATUS_T status;
 
    if (private->pf_action)
@@ -492,7 +572,10 @@ MMAL_STATUS_T mmal_component_action_register(MMAL_COMPONENT_T *component,
       return MMAL_ENOMEM;
    }
 
-   status = vcos_thread_create(&private->action_thread, component->name, NULL,
+   vcos_thread_attr_init(&attrs);
+   vcos_thread_attr_setpriority(&attrs,
+                                private->private.priority);
+   status = vcos_thread_create(&private->action_thread, component->name, &attrs,
                                mmal_component_action_thread_func, component);
    if (status != VCOS_SUCCESS)
    {
@@ -570,6 +653,7 @@ static void mmal_core_init_once(void)
 static void mmal_core_init(void)
 {
    static VCOS_ONCE_T once = VCOS_ONCE_INIT;
+   vcos_init();
    vcos_once(&once, mmal_core_init_once);
 
    vcos_mutex_lock(&mmal_core_lock);
@@ -579,7 +663,6 @@ static void mmal_core_init(void)
       return;
    }
 
-   vcos_init();
    mmal_logging_init();
    vcos_mutex_unlock(&mmal_core_lock);
 }
@@ -595,6 +678,7 @@ static void mmal_core_deinit(void)
 
    mmal_logging_deinit();
    vcos_mutex_unlock(&mmal_core_lock);
+   vcos_deinit();
 }
 
 /*****************************************************************************

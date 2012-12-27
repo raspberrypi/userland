@@ -35,6 +35,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/mmal/mmal_parameters.h"
 #include <stdio.h>
 
+#ifdef _VIDEOCORE
+#include "vcfw/rtos/common/rtos_common_mem.h" /* mem_alloc */
+#endif
+
 /** Only collect port stats if enabled in build. Performance could be
  * affected on an ARM since gettimeofday() involves a system call.
  */
@@ -45,7 +49,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 static MMAL_STATUS_T mmal_port_private_parameter_get(MMAL_PORT_T *port,
-                                                     const MMAL_PARAMETER_HEADER_T *param);
+                                                     MMAL_PARAMETER_HEADER_T *param);
 
 static MMAL_STATUS_T mmal_port_private_parameter_set(MMAL_PORT_T *port,
                                                      const MMAL_PARAMETER_HEADER_T *param);
@@ -82,12 +86,19 @@ typedef struct MMAL_PORT_PRIVATE_CORE_T
    /** Pool of buffers used between connected ports - output port only */
    MMAL_POOL_T* pool_for_connection;
 
+   /** Indicates whether the port is paused or not. Buffers received on
+    * a paused port will be queued instead of being sent to the component. */
+   MMAL_BOOL_T is_paused;
+   /** Queue for buffers received from the client when in paused state */
+   MMAL_BUFFER_HEADER_T* queue_first;
+   /** Queue for buffers received from the client when in paused state */
+   MMAL_BUFFER_HEADER_T** queue_last;
+
    /** Per-port statistics collected directly by the MMAL core */
    MMAL_CORE_PORT_STATISTICS_T stats;
 
    char *name; /**< Port name */
    unsigned int name_size; /** Size of the memory area reserved for the name string */
-
 } MMAL_PORT_PRIVATE_CORE_T;
 
 /*****************************************************************************
@@ -97,6 +108,7 @@ static MMAL_STATUS_T mmal_port_enable_locked(MMAL_PORT_T *port, MMAL_PORT_BH_CB_
 static MMAL_STATUS_T mmal_port_enable_locked_connected(MMAL_PORT_T* output, MMAL_PORT_T* input);
 static MMAL_STATUS_T mmal_port_disable_locked(MMAL_PORT_T *port);
 static MMAL_STATUS_T mmal_port_populate_from_pool(MMAL_PORT_T* port, MMAL_POOL_T* pool);
+static MMAL_STATUS_T mmal_port_populate_clock_ports(MMAL_PORT_T* output, MMAL_PORT_T* input, MMAL_POOL_T* pool);
 static MMAL_STATUS_T mmal_port_connect_default(MMAL_PORT_T *port, MMAL_PORT_T *other_port);
 static void mmal_port_set_input_or_output(MMAL_PORT_T* port, MMAL_PORT_T** input_port, MMAL_PORT_T** output_port);
 static void mmal_port_connected_input_cb(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);
@@ -166,6 +178,7 @@ MMAL_PORT_T *mmal_port_alloc(MMAL_COMPONENT_T *component, MMAL_PORT_TYPE_T type,
    port->name = core->name = ((char *)(port->priv->core+1)) + extra_size;
    core->name_size = name_size;
    mmal_port_name_update(port);
+   core->queue_last = &core->queue_first;
 
    port->priv->pf_connect = mmal_port_connect_default;
 
@@ -283,9 +296,9 @@ MMAL_STATUS_T mmal_port_format_commit(MMAL_PORT_T *port)
    }
 
    if (port->format->encoding == 0)
-      strcpy(encoding_string, "<NO-FORMAT>");
+      snprintf(encoding_string, sizeof(encoding_string), "<NO-FORMAT>");
    else
-      sprintf(encoding_string, "%4.4s", (char*)&port->format->encoding);
+      snprintf(encoding_string, sizeof(encoding_string), "%4.4s", (char*)&port->format->encoding);
 
    LOG_TRACE("%s(%i:%i) port %p format %i:%s",
              port->component->name, (int)port->type, (int)port->index, port,
@@ -406,7 +419,7 @@ static MMAL_STATUS_T mmal_port_enable_locked(MMAL_PORT_T *port, MMAL_PORT_BH_CB_
    //FIXME: move before is_enabled is set ?
    if (connected_port)
    {
-      if (port->type == MMAL_PORT_TYPE_INPUT)
+      if (port->type == MMAL_PORT_TYPE_INPUT || (port->type == MMAL_PORT_TYPE_CLOCK && !core->allocate_pool))
          core->buffer_header_callback = mmal_port_connected_input_cb;
       else
          status = mmal_port_enable_locked_connected(port, connected_port);
@@ -461,13 +474,18 @@ static MMAL_STATUS_T mmal_port_enable_locked_connected(MMAL_PORT_T* output, MMAL
 
       UNLOCK_PORT(input);
       if (pool_port == output)
+      {
          UNLOCK_PORT(output);
+      }
 
       /* Port pool creation must be done without the lock held */
       pool = mmal_port_pool_create(pool_port, pool_port->buffer_num, buffer_size);
 
       if (pool_port == output)
+      {
+         /* coverity[missing_unlock] Output port was already locked by caller; we should leave it locked */
          LOCK_PORT(output);
+      }
       LOCK_PORT(input);
 
       if (!pool)
@@ -479,8 +497,17 @@ static MMAL_STATUS_T mmal_port_enable_locked_connected(MMAL_PORT_T* output, MMAL
       pool_core->pool_for_connection = pool;
       mmal_pool_callback_set(pool_core->pool_for_connection, mmal_port_connected_pool_cb, output);
 
-      /* Put the buffers into the output port */
-      status = mmal_port_populate_from_pool(output, pool_port->priv->core->pool_for_connection);
+      if ((output->type == MMAL_PORT_TYPE_CLOCK) && (input->type == MMAL_PORT_TYPE_CLOCK))
+      {
+         /* Clock ports need buffers to send clock updates, so
+          * populate both clock ports */
+         status = mmal_port_populate_clock_ports(output, input, pool_port->priv->core->pool_for_connection);
+      }
+      else
+      {
+         /* Put the buffers into the output port */
+         status = mmal_port_populate_from_pool(output, pool_port->priv->core->pool_for_connection);
+      }
    }
 
 finish:
@@ -531,6 +558,7 @@ MMAL_STATUS_T mmal_port_disable(MMAL_PORT_T *port)
 static MMAL_STATUS_T mmal_port_disable_locked(MMAL_PORT_T *port)
 {
    MMAL_PORT_PRIVATE_CORE_T* core = port->priv->core;
+   MMAL_BUFFER_HEADER_T *buffer;
    MMAL_STATUS_T status;
 
    if (!port->is_enabled)
@@ -561,6 +589,17 @@ static MMAL_STATUS_T mmal_port_disable_locked(MMAL_PORT_T *port)
       return status;
    }
 
+   /* Flush our internal queue */
+   buffer = port->priv->core->queue_first;
+   while (buffer)
+   {
+      MMAL_BUFFER_HEADER_T *next = buffer->next;
+      mmal_port_buffer_header_callback(port, buffer);
+      buffer = next;
+   }
+   port->priv->core->queue_first = 0;
+   port->priv->core->queue_last = &port->priv->core->queue_first;
+
    /* Wait for all the buffers to have come back from the component */
    LOG_DEBUG("%s waiting for %i buffers left in transit", port->name, (int)IN_TRANSIT_COUNT(port));
    IN_TRANSIT_WAIT(port);
@@ -568,7 +607,8 @@ static MMAL_STATUS_T mmal_port_disable_locked(MMAL_PORT_T *port)
 
    port->priv->core->buffer_header_callback = NULL;
 
-   if (core->connected_port && port->type == MMAL_PORT_TYPE_OUTPUT)
+   if ((core->connected_port && port->type == MMAL_PORT_TYPE_OUTPUT) ||
+       (port->type == MMAL_PORT_TYPE_CLOCK && core->allocate_pool))
       mmal_port_disable(core->connected_port);
 
    return status;
@@ -578,7 +618,7 @@ static MMAL_STATUS_T mmal_port_disable_locked(MMAL_PORT_T *port)
 MMAL_STATUS_T mmal_port_send_buffer(MMAL_PORT_T *port,
    MMAL_BUFFER_HEADER_T *buffer)
 {
-   MMAL_STATUS_T status;
+   MMAL_STATUS_T status = MMAL_SUCCESS;
 
    if (!port || !port->priv)
    {
@@ -617,7 +657,18 @@ MMAL_STATUS_T mmal_port_send_buffer(MMAL_PORT_T *port,
    }
 
    IN_TRANSIT_INCREMENT(port);
-   status = port->priv->pf_send(port, buffer);
+
+   if (port->priv->core->is_paused)
+   {
+      /* Add buffer to our internal queue */
+      *port->priv->core->queue_last = buffer;
+      port->priv->core->queue_last = &buffer->next;
+   }
+   else
+   {
+      /* Send buffer to component */
+      status = port->priv->pf_send(port, buffer);
+   }
 
    if (status != MMAL_SUCCESS)
    {
@@ -636,6 +687,7 @@ MMAL_STATUS_T mmal_port_send_buffer(MMAL_PORT_T *port,
 /** Flush a port */
 MMAL_STATUS_T mmal_port_flush(MMAL_PORT_T *port)
 {
+   MMAL_BUFFER_HEADER_T *buffer = 0;
    MMAL_STATUS_T status;
 
    if (!port || !port->priv)
@@ -647,9 +699,25 @@ MMAL_STATUS_T mmal_port_flush(MMAL_PORT_T *port)
    if (!port->priv->pf_flush)
       return MMAL_ENOSYS;
 
+   mmal_component_action_lock(port->component);
    LOCK_SENDING(port);
    status = port->priv->pf_flush(port);
+   if (status == MMAL_SUCCESS)
+   {
+      /* Flush our internal queue */
+      buffer = port->priv->core->queue_first;
+      port->priv->core->queue_first = 0;
+      port->priv->core->queue_last = &port->priv->core->queue_first;
+   }
    UNLOCK_SENDING(port);
+   mmal_component_action_unlock(port->component);
+
+   while (buffer)
+   {
+      MMAL_BUFFER_HEADER_T *next = buffer->next;
+      mmal_port_buffer_header_callback(port, buffer);
+      buffer = next;
+   }
    return status;
 }
 
@@ -730,8 +798,6 @@ void mmal_port_buffer_header_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *b
              buffer ? (int)buffer->offset : 0, buffer ? (int)buffer->length : 0);
 #endif
 
-   IN_TRANSIT_DECREMENT(port);
-
    if (!vcos_verify(IN_TRANSIT_COUNT(port) >= 0))
       LOG_ERROR("%s: buffer headers in transit < 0 (%d)", port->name, (int)IN_TRANSIT_COUNT(port));
 
@@ -741,6 +807,8 @@ void mmal_port_buffer_header_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *b
    }
 
    port->priv->core->buffer_header_callback(port, buffer);
+
+   IN_TRANSIT_DECREMENT(port);
 }
 
 /** Event callback */
@@ -773,6 +841,12 @@ MMAL_STATUS_T mmal_port_connect(MMAL_PORT_T *port, MMAL_PORT_T *other_port)
       return MMAL_EINVAL;
    }
 
+   if ((port->type == MMAL_PORT_TYPE_CLOCK) && (port->type != other_port->type))
+   {
+      LOG_ERROR("invalid port connection");
+      return MMAL_EINVAL;
+   }
+
    LOG_TRACE("connecting %s(%p) to %s(%p)", port->name, port, other_port->name, other_port);
 
    if (!port->priv->pf_connect || !other_port->priv->pf_connect)
@@ -781,8 +855,16 @@ MMAL_STATUS_T mmal_port_connect(MMAL_PORT_T *port, MMAL_PORT_T *other_port)
       return MMAL_ENOSYS;
    }
 
-   mmal_port_set_input_or_output(port, &input_port, &output_port);
-   mmal_port_set_input_or_output(other_port, &input_port, &output_port);
+   if (port->type == MMAL_PORT_TYPE_CLOCK)
+   {
+      output_port = port;
+      input_port = other_port;
+   }
+   else
+   {
+      mmal_port_set_input_or_output(port, &input_port, &output_port);
+      mmal_port_set_input_or_output(other_port, &input_port, &output_port);
+   }
 
    if (!input_port || !output_port)
    {
@@ -799,8 +881,10 @@ MMAL_STATUS_T mmal_port_connect(MMAL_PORT_T *port, MMAL_PORT_T *other_port)
 
    if (core->connected_port || other_core->connected_port)
    {
+#ifdef VCOS_LOGGING_ENABLED
       MMAL_PORT_T* problem_port = core->connected_port ? port : other_port;
       MMAL_PORT_T* connected_port = problem_port->priv->core->connected_port;
+#endif
 
       LOG_ERROR("port %p is already connected to port %p", problem_port, connected_port);
       status = MMAL_EISCONN;
@@ -842,6 +926,7 @@ MMAL_STATUS_T mmal_port_disconnect(MMAL_PORT_T *port)
 {
    MMAL_PORT_PRIVATE_CORE_T* core;
    MMAL_PORT_T* other_port;
+   MMAL_POOL_T* pool = NULL;
    MMAL_STATUS_T status = MMAL_SUCCESS;
 
    if (!port || !port->priv)
@@ -874,7 +959,7 @@ MMAL_STATUS_T mmal_port_disconnect(MMAL_PORT_T *port)
       }
 
       if (port->priv->core->pool_for_connection)
-         mmal_pool_destroy(port->priv->core->pool_for_connection);
+         pool = port->priv->core->pool_for_connection;
       port->priv->core->pool_for_connection = NULL;
    }
 
@@ -893,6 +978,10 @@ MMAL_STATUS_T mmal_port_disconnect(MMAL_PORT_T *port)
 
 finish:
    UNLOCK_PORT(port);
+
+   if (pool)
+      mmal_pool_destroy(pool);
+
    return status;
 }
 
@@ -915,7 +1004,11 @@ uint8_t *mmal_port_payload_alloc(MMAL_PORT_T *port, uint32_t payload_size)
    if (!port->priv->pf_payload_alloc)
    {
       /* Revert to using the heap */
+#ifdef _VIDEOCORE
+      mem = (void *)mem_alloc(payload_size, 32, MEM_FLAG_DIRECT, port->name);
+#else
       mem = vcos_malloc(payload_size, "mmal payload");
+#endif
       goto end;
    }
 
@@ -943,7 +1036,11 @@ void mmal_port_payload_free(MMAL_PORT_T *port, uint8_t *payload)
    if (!port->priv->pf_payload_alloc)
    {
       /* Revert to using the heap */
+#ifdef _VIDEOCORE
+      mem_release((MEM_HANDLE_T)payload);
+#else
       vcos_free(payload);
+#endif
       mmal_port_release(port);
       return;
    }
@@ -1000,6 +1097,45 @@ error:
       mmal_buffer_header_release(*buffer);
    *buffer = NULL;
    return MMAL_ENOSPC;
+}
+
+/** Populate clock ports from the given pool */
+static MMAL_STATUS_T mmal_port_populate_clock_ports(MMAL_PORT_T* output, MMAL_PORT_T* input, MMAL_POOL_T* pool)
+{
+   MMAL_STATUS_T status = MMAL_SUCCESS;
+   MMAL_BUFFER_HEADER_T *buffer;
+
+   if (!output->priv->pf_send || !input->priv->pf_send)
+      return MMAL_ENOSYS;
+
+   LOG_TRACE("output %s %p, input %s %p, pool: %p", output->name, output, input->name, input, pool);
+
+   buffer = mmal_queue_get(pool->queue);
+   while (buffer)
+   {
+      status = mmal_port_send_buffer(output, buffer);
+      if (status != MMAL_SUCCESS)
+      {
+         LOG_ERROR("failed to send buffer to clock port %s", output->name);
+         mmal_buffer_header_release(buffer);
+         break;
+      }
+
+      buffer = mmal_queue_get(pool->queue);
+      if (buffer)
+      {
+         status = mmal_port_send_buffer(input, buffer);
+         if (status != MMAL_SUCCESS)
+         {
+            LOG_ERROR("failed to send buffer to clock port %s", output->name);
+            mmal_buffer_header_release(buffer);
+            break;
+         }
+         buffer = mmal_queue_get(pool->queue);
+      }
+   }
+
+   return status;
 }
 
 /** Populate an output port with a pool of buffers */
@@ -1160,16 +1296,13 @@ static void mmal_port_name_update(MMAL_PORT_T *port)
 {
    MMAL_PORT_PRIVATE_CORE_T* core = port->priv->core;
 
-   snprintf(core->name, core->name_size - 1, PORT_NAME_FORMAT,
-            port->component->name,
-            port->type == MMAL_PORT_TYPE_CONTROL ? "ctr" :
-               port->type == MMAL_PORT_TYPE_INPUT ? "in" :
-               port->type == MMAL_PORT_TYPE_OUTPUT ? "out" : "invalid", (int)port->index,
+   vcos_snprintf(core->name, core->name_size - 1, PORT_NAME_FORMAT,
+            port->component->name, mmal_port_type_to_string(port->type), (int)port->index,
             port->format && port->format->encoding ? '(' : '\0',
             port->format && port->format->encoding ? (char *)&port->format->encoding : "");
 }
 
-static MMAL_STATUS_T mmal_port_get_core_stats(MMAL_PORT_T *port, const MMAL_PARAMETER_HEADER_T *param)
+static MMAL_STATUS_T mmal_port_get_core_stats(MMAL_PORT_T *port, MMAL_PARAMETER_HEADER_T *param)
 {
    MMAL_PARAMETER_CORE_STATISTICS_T *stats_param = (MMAL_PARAMETER_CORE_STATISTICS_T*)param;
    MMAL_CORE_STATISTICS_T *stats = &stats_param->stats;
@@ -1187,7 +1320,7 @@ static MMAL_STATUS_T mmal_port_get_core_stats(MMAL_PORT_T *port, const MMAL_PARA
    }
    *stats = *src_stats;
    if (stats_param->reset)
-      memset(src_stats, 0, sizeof(port->priv->core->stats));
+      memset(src_stats, 0, sizeof(*src_stats));
    vcos_mutex_unlock(&core->stats_lock);
    return MMAL_SUCCESS;
 }
@@ -1220,7 +1353,7 @@ static void mmal_port_update_port_stats(MMAL_PORT_T *port, MMAL_CORE_STATS_DIR d
 }
 
 static MMAL_STATUS_T mmal_port_private_parameter_get(MMAL_PORT_T *port,
-                                                     const MMAL_PARAMETER_HEADER_T *param)
+                                                     MMAL_PARAMETER_HEADER_T *param)
 {
    switch (param->id)
    {
@@ -1242,4 +1375,44 @@ static MMAL_STATUS_T mmal_port_private_parameter_set(MMAL_PORT_T *port,
    }
 }
 
+MMAL_STATUS_T mmal_port_pause(MMAL_PORT_T *port, MMAL_BOOL_T pause)
+{
+   MMAL_STATUS_T status = MMAL_SUCCESS;
 
+   LOCK_SENDING(port);
+
+   /* When resuming from pause, we send all our queued buffers to the port */
+   if (!pause && port->is_enabled)
+   {
+      MMAL_BUFFER_HEADER_T *buffer = port->priv->core->queue_first;
+      while (buffer)
+      {
+         MMAL_BUFFER_HEADER_T *next = buffer->next;
+         status = port->priv->pf_send(port, buffer);
+         if (status != MMAL_SUCCESS)
+         {
+            buffer->next = next;
+            break;
+         }
+         buffer = next;
+      }
+
+      /* If for some reason we could not send one of the buffers, we just
+       * leave all the buffers in our internal queue and return an error. */
+      if (status != MMAL_SUCCESS)
+      {
+         port->priv->core->queue_first = buffer;
+      }
+      else
+      {
+         port->priv->core->queue_first = 0;
+         port->priv->core->queue_last = &port->priv->core->queue_first;
+      }
+   }
+
+   if (status == MMAL_SUCCESS)
+      port->priv->core->is_paused = pause;
+
+   UNLOCK_SENDING(port);
+   return status;
+}

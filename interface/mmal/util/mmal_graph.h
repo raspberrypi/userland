@@ -42,15 +42,41 @@ extern "C" {
 #endif
 
 /** Structure describing a graph */
-typedef struct MMAL_GRAPH_T MMAL_GRAPH_T;
+typedef struct MMAL_GRAPH_T
+{
+   /** Pointer to private data of the client */
+   struct MMAL_GRAPH_USERDATA_T *userdata;
+
+   /** Optional callback that the client can set to get notified when the graph is going to be destroyed */
+   void (*pf_destroy)(struct MMAL_GRAPH_T *);
+
+   /** Optional callback that the client can set to intercept parameter requests on ports exposed by the graph */
+   MMAL_STATUS_T (*pf_parameter_set)(struct MMAL_GRAPH_T *, MMAL_PORT_T *port, const MMAL_PARAMETER_HEADER_T *param);
+   /** Optional callback that the client can set to intercept parameter requests on ports exposed by the graph */
+   MMAL_STATUS_T (*pf_parameter_get)(struct MMAL_GRAPH_T *, MMAL_PORT_T *port, MMAL_PARAMETER_HEADER_T *param);
+   /** Optional callback that the client can set to intercept format commit calls on ports exposed by the graph */
+   MMAL_STATUS_T (*pf_format_commit)(struct MMAL_GRAPH_T *, MMAL_PORT_T *port);
+   /** Optional callback that the client can set to intercept send buffer calls on ports exposed by the graph */
+   MMAL_STATUS_T (*pf_send_buffer)(struct MMAL_GRAPH_T *, MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);
+   /** Optional callback that the client can set to intercept buffer callbacks on ports exposed by the graph */
+   MMAL_STATUS_T (*pf_return_buffer)(struct MMAL_GRAPH_T *, MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);
+   /** Optional callback that the client can set to intercept payload alloc calls on ports exposed by the graph */
+   MMAL_STATUS_T (*pf_payload_alloc)(struct MMAL_GRAPH_T *, MMAL_PORT_T *port, uint32_t payload_size, uint8_t **);
+   /** Optional callback that the client can set to intercept payload free calls on ports exposed by the graph */
+   MMAL_STATUS_T (*pf_payload_free)(struct MMAL_GRAPH_T *, MMAL_PORT_T *port, uint8_t *payload);
+   /** Optional callback that the client can set to intercept flush calls on ports exposed by the graph */
+   MMAL_STATUS_T (*pf_flush)(struct MMAL_GRAPH_T *, MMAL_PORT_T *port);
+
+} MMAL_GRAPH_T;
 
 /** Create an instance of a graph.
  * The newly created graph will need to be populated by the client.
  *
  * @param graph returned graph
+ * @param userdata_size size to be allocated for the userdata field
  * @return MMAL_SUCCESS on success
  */
-MMAL_STATUS_T mmal_graph_create(MMAL_GRAPH_T **graph);
+MMAL_STATUS_T mmal_graph_create(MMAL_GRAPH_T **graph, unsigned int userdata_size);
 
 /** Add a component to a graph.
  * Allows the client to add a component to the graph.

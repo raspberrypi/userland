@@ -31,11 +31,29 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mmal_common.h"
 #include "mmal_parameters_camera.h"
 #include "mmal_parameters_video.h"
+#include "mmal_parameters_audio.h"
+#include "mmal_parameters_clock.h"
 
 /** \defgroup MmalParameters List of pre-defined parameters
  * This defines a list of standard parameters. Components can define proprietary
  * parameters by creating a new group and defining their own structures. */
 /* @{ */
+
+/** Generic unsigned 64-bit integer parameter type. */
+typedef struct MMAL_PARAMETER_UINT64_T
+{
+   MMAL_PARAMETER_HEADER_T hdr;
+
+   uint64_t value; /**< Parameter value */
+} MMAL_PARAMETER_UINT64_T;
+
+/** Generic signed 64-bit integer parameter type. */
+typedef struct MMAL_PARAMETER_INT64_T
+{
+   MMAL_PARAMETER_HEADER_T hdr;
+
+   int64_t value; /**< Parameter value */
+} MMAL_PARAMETER_INT64_T;
 
 /** Generic unsigned 32-bit integer parameter type. */
 typedef struct MMAL_PARAMETER_UINT32_T
@@ -68,8 +86,21 @@ typedef struct MMAL_PARAMETER_BOOLEAN_T
    MMAL_BOOL_T enable; /**< Parameter value */
 } MMAL_PARAMETER_BOOLEAN_T;
 
-/** Unsigned 16.16 fixed point value, also known as Q16.16 */
-typedef uint32_t MMAL_FIXED_16_16_T;
+/** Generic string parameter type. */
+typedef struct MMAL_PARAMETER_STRING_T
+{
+   MMAL_PARAMETER_HEADER_T hdr;
+
+   char str[1];        /**< Null-terminated string */
+} MMAL_PARAMETER_STRING_T;
+
+/** Generic array of bytes parameter type. */
+typedef struct MMAL_PARAMETER_BYTES_T
+{
+   MMAL_PARAMETER_HEADER_T hdr;
+
+   uint8_t data[1];   /**< Array of bytes */
+} MMAL_PARAMETER_BYTES_T;
 
 /** The value 1 in 16.16 fixed point form */
 #define MMAL_FIXED_16_16_ONE  (1 << 16)
@@ -133,6 +164,30 @@ typedef struct MMAL_PARAMETER_FRAME_RATE_T {
 
    MMAL_RATIONAL_T frame_rate;   /**< Frame-rate value */
 } MMAL_PARAMETER_FRAME_RATE_T;
+
+/** Generic configuration-file setup type.
+ * Configuration files are transferred in small chunks. The component can
+ * save all the chunks into a buffer, then process the entire file later.
+ * This parameter initialises a config file to have the given size.
+ */
+typedef struct MMAL_PARAMETER_CONFIGFILE_T {
+   MMAL_PARAMETER_HEADER_T hdr;
+
+   uint32_t file_size;           /**< Size of complete file data */
+} MMAL_PARAMETER_CONFIGFILE_T;
+
+/** Generic configuration-file chunk data type.
+ * Once a config file has been initialised, this parameter can be used to
+ * write an arbitrary chunk of the file data (limited by the maximum MMAL
+ * message size).
+ */
+typedef struct MMAL_PARAMETER_CONFIGFILE_CHUNK_T {
+   MMAL_PARAMETER_HEADER_T hdr;
+
+   uint32_t size;                /**< Number of bytes being transferred in this chunk */
+   uint32_t offset;              /**< Offset of this chunk in the file */
+   char data[1];                 /**< Chunk data */
+} MMAL_PARAMETER_CONFIGFILE_CHUNK_T;
 
 /* @} */
 

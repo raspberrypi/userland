@@ -286,3 +286,18 @@ void mmal_pool_callback_set(MMAL_POOL_T *pool, MMAL_POOL_BH_CB_T cb, void *userd
    private->cb = cb;
    private->userdata = userdata;
 }
+
+/* Set a pre-release callback for all buffer headers in the pool */
+void mmal_pool_pre_release_callback_set(MMAL_POOL_T *pool, MMAL_BH_PRE_RELEASE_CB_T cb, void *userdata)
+{
+   unsigned int i;
+   MMAL_POOL_PRIVATE_T *private = (MMAL_POOL_PRIVATE_T *)pool;
+   MMAL_BUFFER_HEADER_T *header =
+         (MMAL_BUFFER_HEADER_T*)((uint8_t*)pool->header + ROUND_UP(sizeof(void*)*pool->headers_num,ALIGN));
+
+   for (i = 0; i < pool->headers_num; ++i)
+   {
+      mmal_buffer_header_pre_release_cb_set(header, cb, userdata);
+      header = (MMAL_BUFFER_HEADER_T *)((uint8_t*)header + private->header_size);
+   }
+}

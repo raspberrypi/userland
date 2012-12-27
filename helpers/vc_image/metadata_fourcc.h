@@ -55,6 +55,7 @@ typedef enum {
    METADATA_AGC_DEBUG            = ('A'<<24)+('G'<<16)+('C'<<8)+('D'),   // 'AGCD'    struct ISP_TUNER_BRCM_AGC_DEBUG_T in /middleware/ISP/tuner/isp_tuner_agc.h
    METADATA_FOCUS_REGION         = ('F'<<24)+('R'<<16)+('G'<<8)+('N'),   // 'FRGN'    struct ISP_TUNER_BRCM_AF_STATISTICS_PARAMS_T in /middleware/ISP/tuner/isp_tuner_brcm_common.h
    METADATA_FOCUS_WOI            = ('F'<<24)+('W'<<16)+('O'<<8)+('I'),   // 'FWOI'    struct ISP_WOI_METADATA_T in /middleware/ISP/tuner/isp_tuner_ctrl.h
+   METADATA_FOCUS_CAF            = ('F'<<24)+('C'<<16)+('A'<<8)+('F'),   // 'FCAF'    struct ISP_CAF_METADATA_T in /middleware/ISP/tuner/isp_tuner_ctrl.h
    METADATA_AUTOFOCUS            = ( 0 <<24)+( 0 <<16)+('A'<<8)+('F'),   // '\x00\x00AF'  struct ISP_AF_METADATA_T in /middleware/ISP/tuner/isp_tuner_ctrl.h
    METADATA_EV                   = ('E'<<24)+('V'<<16)+('M'<<8)+('D'),   // 'EVMD'    struct ISP_TUNER_BRCM_EV_METADATA_T in /middleware/ISP/tuner/isp_tuner_brcm_common.h
    METADATA_ISP                  = ('I'<<24)+('S'<<16)+('P'<<8)+('M'),   // 'ISPM'    struct ISP_ISP_METADATA_T in /middleware/ISP/tuner/isp_tuner_ctrl.h
@@ -64,7 +65,8 @@ typedef enum {
    METADATA_SCENEDETECTION       = ( 0 <<24)+('A'<<16)+('S'<<8)+('D'),   // '\x00ASD'    struct ASD_METADATA_T defined in /middleware/camplus/sw/asd_metadata.h
    METADATA_TUNER_SYNC           = ('S'<<24)+('Y'<<16)+('N'<<8)+('C'),   // 'SYNC'    NULL data, just adds the item header.   
    METADATA_DARK_FRAME_CORRECT   = ('D'<<24)+('F'<<16)+('R'<<8)+('C'),   // 'DFRC'    5 byte literal string "dfrc"
-   METADATA_DARK_FRAME_SUB       = ('D'<<24)+('F'<<16)+('S'<<8)+('B'),   // 'DFSB'    3 byte literal string "on"   
+   METADATA_DARK_FRAME_SUB       = ('D'<<24)+('F'<<16)+('S'<<8)+('B'),   // 'DFSB'    3 byte literal string "on"
+   METADATA_TUNER_DROP_FRAME     = ('T'<<24)+('D'<<16)+('R'<<8)+('P'),
    METADATA_ABL                  = ( 0 <<24)+('A'<<16)+('B'<<8)+('L'),   // '\x00ABL'    struct ISP_TUNER_BRCM_BLACK_LEVEL_ABL_T defined in /middleware/ISP/tuner/isp_tuner_brcm_black_level.h
    METADATA_DRC                  = ( 0 <<24)+('D'<<16)+('R'<<8)+('C'),	 // 'DRC'	  struct DRC_METADATA_T defined in /middleware/camplus/sw/drc/drc.h
    METADATA_REGISTRATION         = ( 0 <<24)+('R'<<16)+('E'<<8)+('G'),    // 'REG'         struct REGISTRATION_OFFSETS_T defined in /middleware/camplus/sw/registration/registration.h
@@ -96,6 +98,10 @@ typedef enum {
    METADATA_ACUTE_AWB_LOG        = ('A'<<24)+('E'<<16)+('L'<<8)+('C'), // 'AELC' : ISP_ACUTE_AWB_LOG
    METADATA_DF               = ( 0 <<24)+(   0<<16)+('D'<<8)+('F'), // '\x00\x00DF' : DF_METADATA_T defined in /middleware/camplus/sw/df/df_metadata.h
    METADATA_MAGIC_MEASURE    = ('S'<<24)+('S'<<16)+('M'<<8) + ('M'), // 'SSMM' : A statistic from the ISP used to determine the JPEG quality setting for a certain customer.
+   METADATA_SNAPSHOT_JPEG_QUANTISER = ('S'<<24)+('S'<<16)+('J'<<8) + ('S'), // 'SSJQ' : The size of the snapshot frame when JPEG-encoded.
+
+   METADATA_SUPPLEMENTARY_INFO   = ('S'<<24)+('U'<<16)+('P'<<8) + ('P'), // 'SUPP' : Supplimentary info defined in /codecs/video/hw/enc/venc_supplementary_info.h
+   
    METADATA_UNKNOWN        = ('U'<<24)+('N'<<16)+('K'<<8)+('N') // 'UNKN'
 
 } METADATA_CODE_T;

@@ -24,3 +24,32 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+#ifndef MMAL_VC_API_DRM_H
+#define MMAL_VC_API_DRM_H
+
+/** @file
+  *
+  * Public API for MMAL VC client. (Divx DRM part)
+  */
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Reads the current clock (in microseconds) into the "time" variable.
+// Returns zero on success, nonszero on failure
+int mmal_vc_drm_get_time(unsigned int * time);
+
+// Reads the local hardware secret into the "into" variable (needs to be 32 bytes of space for this)
+// Returns 0 on success, nonzero on failure
+// Usage:
+//   unsigned char buffer[32];
+//   success = mmal_vc_divx_drm_get_lhs(buffer);
+int mmal_vc_drm_get_lhs32(unsigned char * into);
+
+
+#ifdef __cplusplus
+}
+#endif
+#endif

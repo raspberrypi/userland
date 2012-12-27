@@ -31,6 +31,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MMAL_VIDEO_DECODE  "video_decode"
 #define MMAL_VIDEO_ENCODE  "video_encode"
 #define MMAL_VIDEO_RENDER  "video_render"
+#define MMAL_AUDIO_DECODE  "audio_decode"
+#define MMAL_AUDIO_ENCODE  "audio_encode"
+#define MMAL_AUDIO_RENDER  "audio_render"
 #define MMAL_CAMERA        "camera"
 
 #if defined(__GNUC__) && (__GNUC__ > 2)
@@ -62,6 +65,10 @@ struct MMAL_COMPONENT_PRIVATE_T
    /** Reference counting of the ports. Component won't be destroyed until this
     * goes to 0 */
    int refcount_ports;
+
+   /** Priority associated with the 'action thread' for this component, when
+    * such action thread is applicable. */
+   int priority;
 };
 
 /** Set a generic component control parameter.

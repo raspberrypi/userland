@@ -43,6 +43,16 @@ void mmal_buffer_header_acquire(MMAL_BUFFER_HEADER_T *header)
    header->priv->refcount++;
 }
 
+/** Reset a buffer header */
+void mmal_buffer_header_reset(MMAL_BUFFER_HEADER_T *header)
+{
+   header->length = 0;
+   header->offset = 0;
+   header->flags = 0;
+   header->pts = MMAL_TIME_UNKNOWN;
+   header->dts = MMAL_TIME_UNKNOWN;
+}
+
 /** Release a buffer header */
 void mmal_buffer_header_release(MMAL_BUFFER_HEADER_T *header)
 {
@@ -53,11 +63,18 @@ void mmal_buffer_header_release(MMAL_BUFFER_HEADER_T *header)
    if(--header->priv->refcount != 0)
       return;
 
-   header->length = 0;
-   header->offset = 0;
-   header->flags = 0;
-   header->pts = 0;
-   header->dts = 0;
+   if (header->priv->pf_pre_release)
+   {
+      if (header->priv->pf_pre_release(header, header->priv->pre_release_userdata))
+         return; /* delay releasing the buffer */
+   }
+   mmal_buffer_header_release_continue(header);
+}
+
+/** Finalise buffer release following a pre-release event */
+void mmal_buffer_header_release_continue(MMAL_BUFFER_HEADER_T *header)
+{
+   mmal_buffer_header_reset(header);
    if (header->priv->reference)
       mmal_buffer_header_release(header->priv->reference);
    header->priv->reference = 0;
@@ -126,6 +143,12 @@ MMAL_DRIVER_BUFFER_T *mmal_buffer_header_driver_data(MMAL_BUFFER_HEADER_T *heade
    return (MMAL_DRIVER_BUFFER_T *)header->priv->driver_area;
 }
 
+/** Return a pointer to a referenced buffer header */
+MMAL_BUFFER_HEADER_T *mmal_buffer_header_reference(MMAL_BUFFER_HEADER_T *header)
+{
+   return header->priv->reference;
+}
+
 #ifdef __VIDEOCORE__
 # include "vcfw/rtos/common/rtos_common_mem.h"
 #endif
@@ -155,4 +178,11 @@ void mmal_buffer_header_mem_unlock(MMAL_BUFFER_HEADER_T *header)
 #else
    MMAL_PARAM_UNUSED(header);
 #endif
+}
+
+/** Set a pre-release callback for a buffer header */
+void mmal_buffer_header_pre_release_cb_set(MMAL_BUFFER_HEADER_T *header, MMAL_BH_PRE_RELEASE_CB_T cb, void *userdata)
+{
+   header->priv->pf_pre_release = cb;
+   header->priv->pre_release_userdata = userdata;
 }

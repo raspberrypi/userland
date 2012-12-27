@@ -25,14 +25,18 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
 #ifndef MMAL_UTIL_PARAMS_H
 #define MMAL_UTIL_PARAMS_H
 
 #include "interface/mmal/mmal.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
- * @file Utility functions to set some common parameters.
+ * @file
+ * Utility functions to set some common parameters.
  */
 
 /** Helper function to set the value of a boolean parameter.
@@ -52,6 +56,42 @@ MMAL_STATUS_T mmal_port_parameter_set_boolean(MMAL_PORT_T *port, uint32_t id, MM
  * @return MMAL_SUCCESS or error
  */
 MMAL_STATUS_T mmal_port_parameter_get_boolean(MMAL_PORT_T *port, uint32_t id, MMAL_BOOL_T *value);
+
+/** Helper function to set the value of a 64 bits unsigned integer parameter.
+ * @param port   port on which to set the parameter
+ * @param id     parameter id
+ * @param value  value to set the parameter to
+ *
+ * @return MMAL_SUCCESS or error
+ */
+MMAL_STATUS_T mmal_port_parameter_set_uint64(MMAL_PORT_T *port, uint32_t id, uint64_t value);
+
+/** Helper function to get the value of a 64 bits unsigned integer parameter.
+ * @param port   port on which to get the parameter
+ * @param id     parameter id
+ * @param value  pointer to where the value will be returned
+ *
+ * @return MMAL_SUCCESS or error
+ */
+MMAL_STATUS_T mmal_port_parameter_get_uint64(MMAL_PORT_T *port, uint32_t id, uint64_t *value);
+
+/** Helper function to set the value of a 64 bits signed integer parameter.
+ * @param port   port on which to set the parameter
+ * @param id     parameter id
+ * @param value  value to set the parameter to
+ *
+ * @return MMAL_SUCCESS or error
+ */
+MMAL_STATUS_T mmal_port_parameter_set_int64(MMAL_PORT_T *port, uint32_t id, int64_t value);
+
+/** Helper function to get the value of a 64 bits signed integer parameter.
+ * @param port   port on which to get the parameter
+ * @param id     parameter id
+ * @param value  pointer to where the value will be returned
+ *
+ * @return MMAL_SUCCESS or error
+ */
+MMAL_STATUS_T mmal_port_parameter_get_int64(MMAL_PORT_T *port, uint32_t id, int64_t *value);
 
 /** Helper function to set the value of a 32 bits unsigned integer parameter.
  * @param port   port on which to set the parameter
@@ -107,6 +147,26 @@ MMAL_STATUS_T mmal_port_parameter_set_rational(MMAL_PORT_T *port, uint32_t id, M
  */
 MMAL_STATUS_T mmal_port_parameter_get_rational(MMAL_PORT_T *port, uint32_t id, MMAL_RATIONAL_T *value);
 
+/** Helper function to set the value of a string parameter.
+ * @param port   port on which to set the parameter
+ * @param id     parameter id
+ * @param value  null-terminated string value
+ *
+ * @return MMAL_SUCCESS or error
+ */
+MMAL_STATUS_T mmal_port_parameter_set_string(MMAL_PORT_T *port, uint32_t id, const char *value);
+
+/** Helper function to set the value of an array of bytes parameter.
+ * @param port   port on which to set the parameter
+ * @param id     parameter id
+ * @param data   pointer to the array of bytes
+ * @param size   size of the array of bytes
+ *
+ * @return MMAL_SUCCESS or error
+ */
+MMAL_STATUS_T mmal_port_parameter_set_bytes(MMAL_PORT_T *port, uint32_t id,
+   const uint8_t *data, unsigned int size);
+
 /** Helper function to set a MMAL_PARAMETER_URI_T parameter on a port.
  * @param port   port on which to set the parameter
  * @param uri    URI string
@@ -135,10 +195,16 @@ MMAL_STATUS_T mmal_util_camera_use_stc_timestamp(MMAL_PORT_T *port, MMAL_CAMERA_
 /** Get the MMAL core statistics for a given port.
  *
  * @param port  port to query
+ * @param dir   port direction
  * @param reset reset the stats as well
  * @param stats filled in with results
  * @return MMAL_SUCCESS or error
  */
 MMAL_STATUS_T mmal_util_get_core_port_stats(MMAL_PORT_T *port, MMAL_CORE_STATS_DIR dir, MMAL_BOOL_T reset,
                                             MMAL_CORE_STATISTICS_T *stats);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

@@ -78,6 +78,8 @@ OMX_U32 mmalil_buffer_flags_to_omx(uint32_t flags)
       omx_flags |= OMX_BUFFERFLAG_CODECSIDEINFO;
    if (flags & MMAL_BUFFER_HEADER_FLAGS_SNAPSHOT)
       omx_flags |= OMX_BUFFERFLAG_CAPTURE_PREVIEW;
+   if (flags & MMAL_BUFFER_HEADER_FLAG_CORRUPTED)
+      omx_flags |= OMX_BUFFERFLAG_DATACORRUPT;
 
    return omx_flags;
 }
@@ -100,6 +102,8 @@ uint32_t mmalil_buffer_flags_to_mmal(OMX_U32 flags)
       mmal_flags |= MMAL_BUFFER_HEADER_FLAG_CODECSIDEINFO;
    if (flags & OMX_BUFFERFLAG_CAPTURE_PREVIEW)
       mmal_flags |= MMAL_BUFFER_HEADER_FLAGS_SNAPSHOT;
+   if (flags & OMX_BUFFERFLAG_DATACORRUPT)
+      mmal_flags |= MMAL_BUFFER_HEADER_FLAG_CORRUPTED;
 
    return mmal_flags;
 }
@@ -169,6 +173,19 @@ static struct {
 } mmal_omx_audio_coding_table[] =
 {
    {MMAL_ENCODING_MP4A,           OMX_AUDIO_CodingAAC},
+   {MMAL_ENCODING_MPGA,           OMX_AUDIO_CodingMP3},
+   {MMAL_ENCODING_WMA2,           OMX_AUDIO_CodingWMA},
+   {MMAL_ENCODING_WMA1,           OMX_AUDIO_CodingWMA},
+   {MMAL_ENCODING_AMRNB,          OMX_AUDIO_CodingAMR},
+   {MMAL_ENCODING_AMRWB,          OMX_AUDIO_CodingAMR},
+   {MMAL_ENCODING_AMRWBP,         OMX_AUDIO_CodingAMR},
+   {MMAL_ENCODING_VORBIS,         OMX_AUDIO_CodingVORBIS},
+   {MMAL_ENCODING_ALAW,           OMX_AUDIO_CodingPCM},
+   {MMAL_ENCODING_MULAW,          OMX_AUDIO_CodingPCM},
+   {MMAL_ENCODING_PCM_SIGNED_LE,  OMX_AUDIO_CodingPCM},
+   {MMAL_ENCODING_PCM_UNSIGNED_LE,OMX_AUDIO_CodingPCM},
+   {MMAL_ENCODING_PCM_SIGNED_BE,  OMX_AUDIO_CodingPCM},
+   {MMAL_ENCODING_PCM_UNSIGNED_BE,OMX_AUDIO_CodingPCM},
    {MMAL_ENCODING_UNKNOWN,        OMX_AUDIO_CodingUnused}
 };
 
@@ -180,12 +197,300 @@ uint32_t mmalil_omx_audio_coding_to_encoding(OMX_AUDIO_CODINGTYPE coding)
    return mmal_omx_audio_coding_table[i].encoding;
 }
 
-OMX_VIDEO_CODINGTYPE mmalil_encoding_to_omx_audio_coding(uint32_t encoding)
+OMX_AUDIO_CODINGTYPE mmalil_encoding_to_omx_audio_coding(uint32_t encoding)
 {
    unsigned int i;
    for(i = 0; mmal_omx_audio_coding_table[i].encoding != MMAL_ENCODING_UNKNOWN; i++)
       if(mmal_omx_audio_coding_table[i].encoding == encoding) break;
    return mmal_omx_audio_coding_table[i].coding;
+}
+
+static struct {
+   OMX_AUDIO_CODINGTYPE coding;
+   OMX_INDEXTYPE index;
+   unsigned int size;
+} mmal_omx_audio_format_table[] =
+{
+   {OMX_AUDIO_CodingPCM, OMX_IndexParamAudioPcm, sizeof(OMX_AUDIO_PARAM_PCMMODETYPE)},
+   {OMX_AUDIO_CodingADPCM, OMX_IndexParamAudioAdpcm, sizeof(OMX_AUDIO_PARAM_ADPCMTYPE)},
+   {OMX_AUDIO_CodingAMR, OMX_IndexParamAudioAmr, sizeof(OMX_AUDIO_PARAM_AMRTYPE)},
+   {OMX_AUDIO_CodingGSMFR, OMX_IndexParamAudioGsm_FR, sizeof(OMX_AUDIO_PARAM_GSMFRTYPE)},
+   {OMX_AUDIO_CodingGSMEFR, OMX_IndexParamAudioGsm_EFR, sizeof(OMX_AUDIO_PARAM_GSMEFRTYPE)},
+   {OMX_AUDIO_CodingGSMHR, OMX_IndexParamAudioGsm_HR, sizeof(OMX_AUDIO_PARAM_GSMHRTYPE)},
+   {OMX_AUDIO_CodingPDCFR, OMX_IndexParamAudioPdc_FR, sizeof(OMX_AUDIO_PARAM_PDCFRTYPE)},
+   {OMX_AUDIO_CodingPDCEFR, OMX_IndexParamAudioPdc_EFR, sizeof(OMX_AUDIO_PARAM_PDCEFRTYPE)},
+   {OMX_AUDIO_CodingPDCHR, OMX_IndexParamAudioPdc_HR, sizeof(OMX_AUDIO_PARAM_PDCHRTYPE)},
+   {OMX_AUDIO_CodingTDMAFR, OMX_IndexParamAudioTdma_FR, sizeof(OMX_AUDIO_PARAM_TDMAFRTYPE)},
+   {OMX_AUDIO_CodingTDMAEFR, OMX_IndexParamAudioTdma_EFR, sizeof(OMX_AUDIO_PARAM_TDMAEFRTYPE)},
+   {OMX_AUDIO_CodingQCELP8, OMX_IndexParamAudioQcelp8, sizeof(OMX_AUDIO_PARAM_QCELP8TYPE)},
+   {OMX_AUDIO_CodingQCELP13, OMX_IndexParamAudioQcelp13, sizeof(OMX_AUDIO_PARAM_QCELP13TYPE)},
+   {OMX_AUDIO_CodingEVRC, OMX_IndexParamAudioEvrc, sizeof(OMX_AUDIO_PARAM_EVRCTYPE)},
+   {OMX_AUDIO_CodingSMV, OMX_IndexParamAudioSmv, sizeof(OMX_AUDIO_PARAM_SMVTYPE)},
+   {OMX_AUDIO_CodingG723, OMX_IndexParamAudioG723, sizeof(OMX_AUDIO_PARAM_G723TYPE)},
+   {OMX_AUDIO_CodingG726, OMX_IndexParamAudioG726, sizeof(OMX_AUDIO_PARAM_G726TYPE)},
+   {OMX_AUDIO_CodingG729, OMX_IndexParamAudioG729, sizeof(OMX_AUDIO_PARAM_G729TYPE)},
+   {OMX_AUDIO_CodingAAC, OMX_IndexParamAudioAac, sizeof(OMX_AUDIO_PARAM_AACPROFILETYPE)},
+   {OMX_AUDIO_CodingMP3, OMX_IndexParamAudioMp3, sizeof(OMX_AUDIO_PARAM_MP3TYPE)},
+   {OMX_AUDIO_CodingSBC, OMX_IndexParamAudioSbc, sizeof(OMX_AUDIO_PARAM_SBCTYPE)},
+   {OMX_AUDIO_CodingVORBIS, OMX_IndexParamAudioVorbis, sizeof(OMX_AUDIO_PARAM_VORBISTYPE)},
+   {OMX_AUDIO_CodingWMA, OMX_IndexParamAudioWma, sizeof(OMX_AUDIO_PARAM_WMATYPE)},
+   {OMX_AUDIO_CodingRA, OMX_IndexParamAudioRa, sizeof(OMX_AUDIO_PARAM_RATYPE)},
+   {OMX_AUDIO_CodingMIDI, OMX_IndexParamAudioMidi, sizeof(OMX_AUDIO_PARAM_MIDITYPE)},
+   {OMX_AUDIO_CodingUnused, 0, 0}
+};
+
+OMX_INDEXTYPE mmalil_omx_audio_param_index(OMX_AUDIO_CODINGTYPE coding, OMX_U32 *size)
+{
+   unsigned int i;
+   for(i = 0; mmal_omx_audio_format_table[i].coding != OMX_AUDIO_CodingUnused; i++)
+      if(mmal_omx_audio_format_table[i].coding == coding) break;
+
+   if(size) *size = mmal_omx_audio_format_table[i].size;
+   return mmal_omx_audio_format_table[i].index;
+}
+
+MMAL_FOURCC_T mmalil_omx_audio_param_to_format(MMAL_ES_FORMAT_T *format,
+   OMX_AUDIO_CODINGTYPE coding, OMX_FORMAT_PARAM_TYPE *param)
+{
+   MMAL_AUDIO_FORMAT_T *audio = &format->es->audio;
+   format->encoding = MMAL_ENCODING_UNKNOWN;
+
+   switch(coding)
+   {
+   case OMX_AUDIO_CodingPCM:
+      audio->channels = param->pcm.nChannels;
+      audio->sample_rate = param->pcm.nSamplingRate;
+      audio->bits_per_sample = param->pcm.nBitPerSample;
+      if(param->pcm.ePCMMode == OMX_AUDIO_PCMModeLinear && param->pcm.bInterleaved)
+      {
+         if(param->pcm.eEndian == OMX_EndianBig &&
+            param->pcm.eNumData == OMX_NumericalDataSigned)
+            format->encoding = MMAL_ENCODING_PCM_SIGNED_BE;
+         else if(param->pcm.eEndian == OMX_EndianLittle &&
+            param->pcm.eNumData == OMX_NumericalDataSigned)
+            format->encoding = MMAL_ENCODING_PCM_SIGNED_LE;
+         if(param->pcm.eEndian == OMX_EndianBig &&
+            param->pcm.eNumData == OMX_NumericalDataUnsigned)
+            format->encoding = MMAL_ENCODING_PCM_UNSIGNED_BE;
+         if(param->pcm.eEndian == OMX_EndianLittle &&
+            param->pcm.eNumData == OMX_NumericalDataUnsigned)
+            format->encoding = MMAL_ENCODING_PCM_UNSIGNED_LE;
+      }
+      else if(param->pcm.ePCMMode == OMX_AUDIO_PCMModeALaw)
+         format->encoding = MMAL_ENCODING_ALAW;
+      else if(param->pcm.ePCMMode == OMX_AUDIO_PCMModeMULaw)
+         format->encoding = MMAL_ENCODING_MULAW;
+      break;
+   case OMX_AUDIO_CodingAAC:
+      audio->channels = param->aac.nChannels;
+      audio->sample_rate = param->aac.nSampleRate;
+      format->bitrate = param->aac.nBitRate;
+      switch(param->aac.eAACStreamFormat)
+      {
+      case OMX_AUDIO_AACStreamFormatMP2ADTS:
+      case OMX_AUDIO_AACStreamFormatMP4ADTS:
+         format->encoding = MMAL_ENCODING_MP4A;
+         format->encoding_variant = MMAL_ENCODING_VARIANT_MP4A_ADTS;
+         break;
+      case OMX_AUDIO_AACStreamFormatMP4FF:
+      case OMX_AUDIO_AACStreamFormatRAW:
+         format->encoding = MMAL_ENCODING_MP4A;
+         format->encoding_variant = MMAL_ENCODING_VARIANT_MP4A_DEFAULT;
+         break;
+      default: break;
+      }
+      break;
+   case OMX_AUDIO_CodingMP3:
+      format->encoding = MMAL_ENCODING_MPGA;
+      audio->channels = param->mp3.nChannels;
+      audio->sample_rate = param->mp3.nSampleRate;
+      format->bitrate = param->mp3.nBitRate;
+      break;
+   case OMX_AUDIO_CodingWMA:
+      audio->channels = param->wma.nChannels;
+      audio->sample_rate = param->wma.nSamplingRate;
+      audio->block_align = param->wma.nBlockAlign;
+      format->bitrate = param->wma.nBitRate;
+      switch(param->wma.eFormat)
+      {
+      case OMX_AUDIO_WMAFormat7:
+         format->encoding = MMAL_ENCODING_WMA1;
+         break;
+      case OMX_AUDIO_WMAFormat8:
+      case OMX_AUDIO_WMAFormat9:
+         format->encoding = MMAL_ENCODING_WMA2;
+         break;
+      default: break;
+      }
+      break;
+   case OMX_AUDIO_CodingVORBIS:
+      format->encoding = MMAL_ENCODING_VORBIS;
+      audio->channels = param->vorbis.nChannels;
+      audio->sample_rate = param->vorbis.nSampleRate;
+      format->bitrate = param->vorbis.nBitRate;
+      break;
+   case OMX_AUDIO_CodingAMR:
+      audio->channels = param->amr.nChannels;
+      audio->sample_rate = 8000;
+      format->bitrate = param->amr.nBitRate;
+      if(param->amr.eAMRBandMode >= OMX_AUDIO_AMRBandModeNB0 &&
+         param->amr.eAMRBandMode <= OMX_AUDIO_AMRBandModeNB7)
+         format->encoding = MMAL_ENCODING_AMRNB;
+      if(param->amr.eAMRBandMode >= OMX_AUDIO_AMRBandModeWB0 &&
+         param->amr.eAMRBandMode <= OMX_AUDIO_AMRBandModeWB8)
+         format->encoding = MMAL_ENCODING_AMRWB;
+      break;
+   case OMX_AUDIO_CodingADPCM:
+   case OMX_AUDIO_CodingGSMFR:
+   case OMX_AUDIO_CodingGSMEFR:
+   case OMX_AUDIO_CodingGSMHR:
+   case OMX_AUDIO_CodingPDCFR:
+   case OMX_AUDIO_CodingPDCEFR:
+   case OMX_AUDIO_CodingPDCHR:
+   case OMX_AUDIO_CodingTDMAFR:
+   case OMX_AUDIO_CodingTDMAEFR:
+   case OMX_AUDIO_CodingQCELP8:
+   case OMX_AUDIO_CodingQCELP13:
+   case OMX_AUDIO_CodingEVRC:
+   case OMX_AUDIO_CodingSMV:
+   case OMX_AUDIO_CodingG711:
+   case OMX_AUDIO_CodingG723:
+   case OMX_AUDIO_CodingG726:
+   case OMX_AUDIO_CodingG729:
+   case OMX_AUDIO_CodingSBC:
+   case OMX_AUDIO_CodingRA:
+   case OMX_AUDIO_CodingMIDI:
+   default:
+      vcos_assert(0);
+      break;
+   }
+
+   return format->encoding;
+}
+
+OMX_AUDIO_CODINGTYPE mmalil_format_to_omx_audio_param(OMX_FORMAT_PARAM_TYPE *param,
+   OMX_INDEXTYPE *param_index, MMAL_ES_FORMAT_T *format)
+{
+   MMAL_AUDIO_FORMAT_T *audio = &format->es->audio;
+   OMX_AUDIO_CODINGTYPE coding = mmalil_encoding_to_omx_audio_coding(format->encoding);
+   OMX_U32 size = 0;
+   OMX_INDEXTYPE index = mmalil_omx_audio_param_index(coding, &size);
+
+   if(param_index) *param_index = index;
+   memset(param, 0, size);
+   param->common.nSize = size;
+
+   switch(coding)
+   {
+   case OMX_AUDIO_CodingPCM:
+      param->pcm.nChannels = audio->channels;
+      param->pcm.nSamplingRate = audio->sample_rate;
+      param->pcm.nBitPerSample = audio->bits_per_sample;
+      if(audio->channels == 1)
+      {
+         param->pcm.eChannelMapping[0] = OMX_AUDIO_ChannelCF;
+      }
+      else if(audio->channels == 2)
+      {
+         param->pcm.eChannelMapping[0] = OMX_AUDIO_ChannelLF;
+         param->pcm.eChannelMapping[1] = OMX_AUDIO_ChannelRF;
+      }
+      if(format->encoding == MMAL_ENCODING_PCM_SIGNED_BE ||
+         format->encoding == MMAL_ENCODING_PCM_SIGNED_LE ||
+         format->encoding == MMAL_ENCODING_PCM_UNSIGNED_BE ||
+         format->encoding == MMAL_ENCODING_PCM_UNSIGNED_LE)
+      {
+         param->pcm.ePCMMode = OMX_AUDIO_PCMModeLinear;
+         param->pcm.bInterleaved = OMX_TRUE;
+         param->pcm.eEndian = OMX_EndianLittle;
+         param->pcm.eNumData = OMX_NumericalDataSigned;
+         if(format->encoding == MMAL_ENCODING_PCM_SIGNED_BE ||
+            format->encoding == MMAL_ENCODING_PCM_UNSIGNED_BE)
+            param->pcm.eEndian = OMX_EndianBig;
+         if(format->encoding == MMAL_ENCODING_PCM_UNSIGNED_LE ||
+            format->encoding == MMAL_ENCODING_PCM_UNSIGNED_BE)
+            param->pcm.eNumData = OMX_NumericalDataUnsigned;
+      }
+      else if(format->encoding == MMAL_ENCODING_ALAW)
+         param->pcm.ePCMMode = OMX_AUDIO_PCMModeALaw;
+      else if(format->encoding == MMAL_ENCODING_MULAW)
+         param->pcm.ePCMMode = OMX_AUDIO_PCMModeMULaw;
+      break;
+   case OMX_AUDIO_CodingAAC:
+      param->aac.nChannels = audio->channels;
+      param->aac.nSampleRate = audio->sample_rate;
+      param->aac.nBitRate = format->bitrate;
+      switch(format->encoding_variant)
+      {
+      case MMAL_ENCODING_VARIANT_MP4A_ADTS:
+         param->aac.eAACStreamFormat = OMX_AUDIO_AACStreamFormatMP4ADTS;
+         break;
+      case MMAL_ENCODING_VARIANT_MP4A_DEFAULT:
+         param->aac.eAACStreamFormat = OMX_AUDIO_AACStreamFormatRAW;
+         break;
+      default: break;
+      }
+      break;
+   case OMX_AUDIO_CodingMP3:
+      param->mp3.nChannels = audio->channels;
+      param->mp3.nSampleRate = audio->sample_rate;
+      param->mp3.nBitRate = format->bitrate;
+      break;
+   case OMX_AUDIO_CodingWMA:
+      param->wma.nChannels = audio->channels;
+      param->wma.nSamplingRate = audio->sample_rate;
+      param->wma.nBlockAlign = audio->block_align;
+      param->wma.nBitRate = format->bitrate;
+      switch(format->encoding)
+      {
+      case MMAL_ENCODING_WMA1:
+         param->wma.eFormat = OMX_AUDIO_WMAFormat7;
+         break;
+      case MMAL_ENCODING_WMA2:
+         param->wma.eFormat = OMX_AUDIO_WMAFormat8;
+         break;
+      default: break;
+      }
+      break;
+   case OMX_AUDIO_CodingVORBIS:
+      param->vorbis.nChannels = audio->channels;
+      param->vorbis.nSampleRate = audio->sample_rate;
+      param->vorbis.nBitRate = format->bitrate;
+      break;
+   case OMX_AUDIO_CodingAMR:
+      param->amr.nChannels = audio->channels;
+      param->amr.nBitRate = format->bitrate;
+      if(format->encoding == MMAL_ENCODING_AMRNB)
+         param->amr.eAMRBandMode = OMX_AUDIO_AMRBandModeNB0;
+      if(format->encoding == MMAL_ENCODING_AMRWB)
+         param->amr.eAMRBandMode = OMX_AUDIO_AMRBandModeWB0;
+      break;
+   case OMX_AUDIO_CodingADPCM:
+   case OMX_AUDIO_CodingGSMFR:
+   case OMX_AUDIO_CodingGSMEFR:
+   case OMX_AUDIO_CodingGSMHR:
+   case OMX_AUDIO_CodingPDCFR:
+   case OMX_AUDIO_CodingPDCEFR:
+   case OMX_AUDIO_CodingPDCHR:
+   case OMX_AUDIO_CodingTDMAFR:
+   case OMX_AUDIO_CodingTDMAEFR:
+   case OMX_AUDIO_CodingQCELP8:
+   case OMX_AUDIO_CodingQCELP13:
+   case OMX_AUDIO_CodingEVRC:
+   case OMX_AUDIO_CodingSMV:
+   case OMX_AUDIO_CodingG711:
+   case OMX_AUDIO_CodingG723:
+   case OMX_AUDIO_CodingG726:
+   case OMX_AUDIO_CodingG729:
+   case OMX_AUDIO_CodingSBC:
+   case OMX_AUDIO_CodingRA:
+   case OMX_AUDIO_CodingMIDI:
+   default:
+      vcos_assert(0);
+      break;
+   }
+
+   return coding;
 }
 
 /*****************************************************************************/
@@ -278,10 +583,18 @@ static struct {
 {
    {MMAL_ENCODING_I420,           OMX_COLOR_FormatYUV420PackedPlanar},
    {MMAL_ENCODING_I422,           OMX_COLOR_FormatYUV422PackedPlanar},
+   {MMAL_ENCODING_I420_SLICE,     OMX_COLOR_FormatYUV420PackedPlanar},
+   {MMAL_ENCODING_I422_SLICE,     OMX_COLOR_FormatYUV422PackedPlanar},
    {MMAL_ENCODING_I420,           OMX_COLOR_FormatYUV420Planar},
-   {MMAL_ENCODING_NV21,           OMX_COLOR_FormatYUV420PackedSemiPlanar},
-   {MMAL_ENCODING_NV21,           OMX_COLOR_FormatYUV420SemiPlanar},
+   {MMAL_ENCODING_YV12,           OMX_COLOR_FormatYVU420PackedPlanar},
+   {MMAL_ENCODING_NV12,           OMX_COLOR_FormatYUV420PackedSemiPlanar},
+   {MMAL_ENCODING_NV12,           OMX_COLOR_FormatYUV420SemiPlanar},
+   {MMAL_ENCODING_NV21,           OMX_COLOR_FormatYVU420PackedSemiPlanar},
    {MMAL_ENCODING_YUVUV128,       OMX_COLOR_FormatYUVUV128},
+   {MMAL_ENCODING_YUYV,           OMX_COLOR_FormatYCbYCr},
+   {MMAL_ENCODING_YVYU,           OMX_COLOR_FormatYCrYCb},
+   {MMAL_ENCODING_UYVY,           OMX_COLOR_FormatCbYCrY},
+   {MMAL_ENCODING_VYUY,           OMX_COLOR_FormatCrYCbY},
    {MMAL_ENCODING_RGB16,          OMX_COLOR_Format16bitRGB565},
    {MMAL_ENCODING_BGR24,          OMX_COLOR_Format24bitRGB888},
    {MMAL_ENCODING_BGRA,           OMX_COLOR_Format32bitARGB8888},
@@ -290,6 +603,7 @@ static struct {
    {MMAL_ENCODING_ARGB,           OMX_COLOR_Format32bitBGRA8888},
    {MMAL_ENCODING_RGBA,           OMX_COLOR_Format32bitABGR8888},
    {MMAL_ENCODING_EGL_IMAGE,      OMX_COLOR_FormatBRCMEGL},
+   {MMAL_ENCODING_OPAQUE,         OMX_COLOR_FormatBRCMOpaque},
    {MMAL_ENCODING_UNKNOWN,        OMX_COLOR_FormatUnused}
 };
 
@@ -307,6 +621,39 @@ OMX_COLOR_FORMATTYPE mmalil_encoding_to_omx_color_format(uint32_t encoding)
    for(i = 0; mmal_omx_colorformat_coding_table[i].encoding != MMAL_ENCODING_UNKNOWN; i++)
       if(mmal_omx_colorformat_coding_table[i].encoding == encoding) break;
    return mmal_omx_colorformat_coding_table[i].coding;
+}
+
+/*****************************************************************************/
+static struct {
+   uint32_t mmal;
+   OMX_COLORSPACETYPE omx;
+} mmal_omx_colorspace_coding_table[] =
+{
+   {MMAL_COLOR_SPACE_ITUR_BT601,    OMX_COLORSPACE_ITU_R_BT601},
+   {MMAL_COLOR_SPACE_ITUR_BT709,    OMX_COLORSPACE_ITU_R_BT709},
+   {MMAL_COLOR_SPACE_JPEG_JFIF,     OMX_COLORSPACE_JPEG_JFIF},
+   {MMAL_COLOR_SPACE_FCC,           OMX_COLORSPACE_FCC},
+   {MMAL_COLOR_SPACE_SMPTE240M,     OMX_COLORSPACE_SMPTE240M},
+   {MMAL_COLOR_SPACE_BT470_2_M,     OMX_COLORSPACE_BT470_2_M},
+   {MMAL_COLOR_SPACE_BT470_2_BG,    OMX_COLORSPACE_BT470_2_BG},
+   {MMAL_COLOR_SPACE_JFIF_Y16_255,  OMX_COLORSPACE_JFIF_Y16_255},
+   {MMAL_COLOR_SPACE_UNKNOWN,       OMX_COLORSPACE_UNKNOWN}
+};
+
+uint32_t mmalil_omx_color_space_to_mmal(OMX_COLORSPACETYPE coding)
+{
+   unsigned int i;
+   for(i = 0; mmal_omx_colorspace_coding_table[i].mmal != MMAL_COLOR_SPACE_UNKNOWN; i++)
+      if(mmal_omx_colorspace_coding_table[i].omx == coding) break;
+   return mmal_omx_colorspace_coding_table[i].mmal;
+}
+
+OMX_COLORSPACETYPE mmalil_color_space_to_omx(uint32_t coding)
+{
+   unsigned int i;
+   for(i = 0; mmal_omx_colorspace_coding_table[i].mmal != MMAL_COLOR_SPACE_UNKNOWN; i++)
+      if(mmal_omx_colorspace_coding_table[i].mmal == coding) break;
+   return mmal_omx_colorspace_coding_table[i].omx;
 }
 
 /*****************************************************************************/
@@ -348,6 +695,7 @@ static struct {
    { MMAL_VIDEO_PROFILE_H264_HIGH10,             OMX_VIDEO_AVCProfileHigh10,              OMX_VIDEO_CodingAVC},
    { MMAL_VIDEO_PROFILE_H264_HIGH422,            OMX_VIDEO_AVCProfileHigh422,             OMX_VIDEO_CodingAVC},
    { MMAL_VIDEO_PROFILE_H264_HIGH444,            OMX_VIDEO_AVCProfileHigh444,             OMX_VIDEO_CodingAVC},
+   { MMAL_VIDEO_PROFILE_H264_CONSTRAINED_BASELINE, OMX_VIDEO_AVCProfileConstrainedBaseline,             OMX_VIDEO_CodingAVC},
    { MMAL_VIDEO_PROFILE_DUMMY,                   OMX_VIDEO_AVCProfileMax,                 OMX_VIDEO_CodingAVC},
 };
 

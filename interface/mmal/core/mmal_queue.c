@@ -68,7 +68,9 @@ MMAL_QUEUE_T *mmal_queue_create(void)
 /** Put a MMAL_BUFFER_HEADER_T into a QUEUE */
 void mmal_queue_put(MMAL_QUEUE_T *queue, MMAL_BUFFER_HEADER_T *buffer)
 {
-   vcos_mutex_lock(&queue->lock);
+   if(!queue || !buffer) return;
+
+	vcos_mutex_lock(&queue->lock);
    queue->length++;
    *queue->last = buffer;
    buffer->next = 0;
@@ -80,7 +82,9 @@ void mmal_queue_put(MMAL_QUEUE_T *queue, MMAL_BUFFER_HEADER_T *buffer)
 /** Put a MMAL_BUFFER_HEADER_T back at the start of a QUEUE. */
 void mmal_queue_put_back(MMAL_QUEUE_T *queue, MMAL_BUFFER_HEADER_T *buffer)
 {
-   vcos_mutex_lock(&queue->lock);
+   if(!queue || !buffer) return;
+
+	vcos_mutex_lock(&queue->lock);
    queue->length++;
    buffer->next = queue->first;
    queue->first = buffer;
@@ -94,6 +98,8 @@ MMAL_BUFFER_HEADER_T *mmal_queue_get(MMAL_QUEUE_T *queue)
 {
    MMAL_BUFFER_HEADER_T *buffer;
 
+	if(!queue) return 0;
+
    vcos_mutex_lock(&queue->lock);
    buffer = queue->first;
    if(!buffer)
@@ -102,6 +108,7 @@ MMAL_BUFFER_HEADER_T *mmal_queue_get(MMAL_QUEUE_T *queue)
       return 0;
    }
 
+   /* coverity[lock] This semaphore isn't being used as a mutex */
    vcos_semaphore_wait(&queue->semaphore); /* Will always succeed */
 
    queue->first = buffer->next;
@@ -116,7 +123,9 @@ MMAL_BUFFER_HEADER_T *mmal_queue_get(MMAL_QUEUE_T *queue)
 /** Wait for a MMAL_BUFFER_HEADER_T from a QUEUE. */
 MMAL_BUFFER_HEADER_T *mmal_queue_wait(MMAL_QUEUE_T *queue)
 {
-   vcos_semaphore_wait(&queue->semaphore);
+	if(!queue) return 0;
+
+	vcos_semaphore_wait(&queue->semaphore);
    vcos_semaphore_post(&queue->semaphore);
    return mmal_queue_get(queue);
 }
@@ -124,7 +133,9 @@ MMAL_BUFFER_HEADER_T *mmal_queue_wait(MMAL_QUEUE_T *queue)
 /** Get the number of MMAL_BUFFER_HEADER_T currently in a QUEUE */
 unsigned int mmal_queue_length(MMAL_QUEUE_T *queue)
 {
-   return queue->length;
+	if(!queue) return 0;
+
+	return queue->length;
 }
 
 /** Destroy a queue of MMAL_BUFFER_HEADER_T */

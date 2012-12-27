@@ -47,7 +47,7 @@ typedef struct MMAL_COMPONENT_PRIVATE_T MMAL_COMPONENT_PRIVATE_T;
 /** Definition of a component. */
 typedef struct MMAL_COMPONENT_T
 {
-   /** Pointer to the private data of the container module in use */
+   /** Pointer to the private data of the module in use */
    struct MMAL_COMPONENT_PRIVATE_T *priv;
 
    /** Pointer to private data of the client */
@@ -71,6 +71,12 @@ typedef struct MMAL_COMPONENT_T
 
    uint32_t    output_num;  /**< Number of output ports */
    MMAL_PORT_T **output;    /**< Array of output ports */
+
+   uint32_t    clock_num;   /**< Number of clock ports */
+   MMAL_PORT_T **clock;     /**< Array of clock ports */
+
+   uint32_t    port_num;    /**< Total number of ports */
+   MMAL_PORT_T **port;      /**< Array of all the ports (control/input/output/clock) */
 
    /** Uniquely identifies the component's instance within the MMAL
     * context / process. For debugging. */
