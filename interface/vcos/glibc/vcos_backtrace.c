@@ -26,7 +26,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <interface/vcos/vcos.h>
-#ifdef __linux__
+#ifdef HAVE_CMAKE_CONFIG
+#include "cmake_config.h"
+#endif
+#ifdef HAVE_EXECINFO_H
 #include <execinfo.h>
 #endif
 #include <stdio.h>
@@ -35,7 +38,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 void vcos_backtrace_self(void)
 {
-#ifdef __linux__
+#ifdef HAVE_EXECINFO_H
    void *stack[64];
    int depth = backtrace(stack, sizeof(stack)/sizeof(stack[0]));
    char **names = backtrace_symbols(stack, depth);

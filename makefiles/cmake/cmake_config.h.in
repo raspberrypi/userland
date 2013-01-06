@@ -8,5 +8,8 @@
 /** Do we have support for GLIBC mtrace() ? */
 #cmakedefine                    HAVE_MTRACE
 
+/** Do we have the execinfo.h include file ? */
+#cmakedefine                    HAVE_EXECINFO_H
+
 #endif
 
