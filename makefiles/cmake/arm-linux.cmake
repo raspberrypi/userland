@@ -115,6 +115,10 @@ try_compile(HAVE_MTRACE
             ${CMAKE_SOURCE_DIR}/makefiles/cmake/srcs/test-mtrace.c
             OUTPUT_VARIABLE foo)
 
+# test for existence of execinfo.h header
+include(CheckIncludeFile)
+check_include_file(execinfo.h HAVE_EXECINFO_H)
+
 add_definitions(-DHAVE_CMAKE_CONFIG)
 configure_file (
     "makefiles/cmake/cmake_config.h.in"
