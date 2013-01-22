@@ -101,6 +101,7 @@ typedef enum {
    MMAL_WORKER_DRM_GET_TIME,
    MMAL_WORKER_BUFFER_FROM_HOST_ZEROLEN,
    MMAL_WORKER_PORT_FLUSH,
+   MMAL_WORKER_HOST_LOG,
    MMAL_WORKER_MSG_LAST
 } MMAL_WORKER_CMD_T;
 
@@ -466,6 +467,15 @@ typedef struct
    /* Handle to newly allocated memory or MEM_HANDLE_INVALD on failure */
    uint32_t handle;
 } mmal_worker_consume_mem;
+vcos_static_assert(sizeof(mmal_worker_consume_mem) <= MMAL_WORKER_MAX_MSG_LEN);
+
+typedef struct
+{
+   mmal_worker_msg_header header;
+   /* Message text to add to the circular buffer */
+   char msg[MMAL_WORKER_MAX_MSG_LEN - sizeof(mmal_worker_msg_header)];
+} mmal_worker_host_log;
+vcos_static_assert(sizeof(mmal_worker_host_log) <= MMAL_WORKER_MAX_MSG_LEN);
 
 typedef struct
 {
@@ -474,7 +484,7 @@ typedef struct
     * allocation for this amount of memory. */
    uint32_t alloc_size;
 } mmal_worker_lmk;
-
+vcos_static_assert(sizeof(mmal_worker_lmk) <= MMAL_WORKER_MAX_MSG_LEN);
 
 static inline void mmal_vc_buffer_header_to_msg(mmal_worker_buffer_from_host *msg,
                                                 MMAL_BUFFER_HEADER_T *header)

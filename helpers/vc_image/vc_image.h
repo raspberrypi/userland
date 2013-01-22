@@ -99,16 +99,16 @@ extern "C" {
       VC_IMAGE_PROP_INFO,
       VC_IMAGE_PROP_METADATA,
       VC_IMAGE_PROP_NEW_LIST,
-#ifdef CONFIG_VC_IMAGE_LINKED_MULTICHANN
-      /* Linked-multichannel properties*/
-      VC_IMAGE_PROP_LINKED_MULTICHANN,
-#endif
       /* Multi-channel properties */
       VC_IMAGE_PROP_NUM_CHANNELS,
       VC_IMAGE_PROP_IS_TOP_BOTTOM,
       VC_IMAGE_PROP_IS_DECIMATED,
       VC_IMAGE_PROP_IS_PACKED,
-      VC_IMAGE_PROP_YUV_COLOURSPACE
+      VC_IMAGE_PROP_YUV_COLOURSPACE,
+#ifdef CONFIG_VC_IMAGE_LINKED_MULTICHANN
+      /* Linked-multichannel properties*/
+      VC_IMAGE_PROP_LINKED_MULTICHANN
+#endif
    } VC_IMAGE_PROPERTY_T;
 
    /* A property key and value */
@@ -513,6 +513,10 @@ unsigned int cube_map           : 1;
 
    int calculate_pitch(VC_IMAGE_TYPE_T type, int width, int height, uint8_t num_channels, VC_IMAGE_INFO_T *info, VC_IMAGE_EXTRA_T *extra);
 
+   /* Check if an image will use an alternate memory layout, in order to cope with
+    * codec limitation. Applies to YUV_UV images taller than 1344 lines. */
+   int vc_image_is_tall_yuv_uv(VC_IMAGE_TYPE_T type, int height);
+
    /******************************************************************************
    Data member access.
    ******************************************************************************/
@@ -543,6 +547,7 @@ unsigned int cube_map           : 1;
 
 #ifdef CONFIG_VC_IMAGE_LINKED_MULTICHANN
    void vc_image_lock_channel(VC_IMAGE_BUF_T *dst, const VC_IMAGE_T *chann);
+   void vc_image_lock_channel_perma(VC_IMAGE_BUF_T *dst, const VC_IMAGE_T *chann); //lightweight version of lock channel
 #endif
 
    void vc_image_unlock( VC_IMAGE_BUF_T *img );

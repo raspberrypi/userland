@@ -47,6 +47,9 @@ typedef struct MMAL_VC_CLIENT_BUFFER_CONTEXT_T
    /** Called when VC is done with the buffer */
    void (*callback)(struct mmal_worker_buffer_from_host *);
 
+   /** Called when VC sends an event */
+   void (*callback_event)(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *event);
+
    /** The port this buffer was sent to */
    MMAL_PORT_T *port;
 

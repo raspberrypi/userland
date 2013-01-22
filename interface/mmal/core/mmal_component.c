@@ -282,15 +282,6 @@ static MMAL_STATUS_T mmal_component_release_internal(MMAL_COMPONENT_T *component
 
    LOG_TRACE("%s %d preparing for destruction", component->name, component->id);
 
-   /* Make sure all the ports are disconnected. This is necessary to prevent
-    * connected ports from referencing destroyed components */
-   for(i = 0; i < component->input_num; i++)
-      mmal_port_disconnect(component->input[i]);
-   for(i = 0; i < component->output_num; i++)
-      mmal_port_disconnect(component->output[i]);
-   for(i = 0; i < component->clock_num; i++)
-      mmal_port_disconnect(component->clock[i]);
-
    /* Make sure the ports are all disabled */
    for(i = 0; i < component->input_num; i++)
       if(component->input[i]->is_enabled)
@@ -303,6 +294,15 @@ static MMAL_STATUS_T mmal_component_release_internal(MMAL_COMPONENT_T *component
          mmal_port_disable(component->clock[i]);
    if(component->control->is_enabled)
       mmal_port_disable(component->control);
+
+   /* Make sure all the ports are disconnected. This is necessary to prevent
+    * connected ports from referencing destroyed components */
+   for(i = 0; i < component->input_num; i++)
+      mmal_port_disconnect(component->input[i]);
+   for(i = 0; i < component->output_num; i++)
+      mmal_port_disconnect(component->output[i]);
+   for(i = 0; i < component->clock_num; i++)
+      mmal_port_disconnect(component->clock[i]);
 
    /* If there is any reference pending on the ports we will delay the actual destruction */
    vcos_mutex_lock(&private->lock);

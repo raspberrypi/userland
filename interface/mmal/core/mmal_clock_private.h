@@ -198,6 +198,24 @@ MMAL_STATUS_T mmal_clock_discont_threshold_get(MMAL_CLOCK_T *clock, MMAL_PARAMET
  */
 MMAL_STATUS_T mmal_clock_discont_threshold_set(MMAL_CLOCK_T *clock, const MMAL_PARAMETER_CLOCK_DISCONT_THRESHOLD_T *discont);
 
+/** Get the clock's request threshold values.
+ *
+ * @param clock      The clock
+ * @param future     Pointer to clock request threshold values to fill
+ *
+ * @return MMAL_SUCCESS on success
+ */
+MMAL_STATUS_T mmal_clock_request_threshold_get(MMAL_CLOCK_T *clock, MMAL_PARAMETER_CLOCK_REQUEST_THRESHOLD_T *req);
+
+/** Set the clock's request threshold values.
+ *
+ * @param clock      The clock
+ * @param discont    Pointer to new clock request threshold values
+ *
+ * @return MMAL_SUCCESS on success
+ */
+MMAL_STATUS_T mmal_clock_request_threshold_set(MMAL_CLOCK_T *clock, const MMAL_PARAMETER_CLOCK_REQUEST_THRESHOLD_T *req);
+
 #ifdef __cplusplus
 }
 #endif

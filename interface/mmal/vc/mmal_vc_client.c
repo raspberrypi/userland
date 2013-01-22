@@ -229,6 +229,16 @@ static void mmal_vc_handle_event_msg(VCHIQ_HEADER_T *vchiq_header,
    }
    buffer->length = msg->length;
 
+   /* Sanity check that the event buffers have the proper vc client context */
+   if (!vcos_verify(mmal_buffer_header_driver_data(buffer)->magic == MMAL_MAGIC &&
+          mmal_buffer_header_driver_data(buffer)->client_context &&
+          mmal_buffer_header_driver_data(buffer)->client_context->magic == MMAL_MAGIC &&
+          mmal_buffer_header_driver_data(buffer)->client_context->callback_event))
+   {
+      LOG_ERROR("event buffers not configured properly by component");
+      goto error;
+   }
+
    if (buffer->length > MMAL_WORKER_EVENT_SPACE)
    {
       /* a buffer full of data for us to process */
@@ -249,7 +259,8 @@ static void mmal_vc_handle_event_msg(VCHIQ_HEADER_T *vchiq_header,
    {
       if (msg->length)
          memcpy(buffer->data, msg->data, msg->length);
-      mmal_port_event_send(port, buffer);
+
+      mmal_buffer_header_driver_data(buffer)->client_context->callback_event(port, buffer);
       LOG_DEBUG("done callback back to client");
       vchiq_release_message(service, vchiq_header);
    }
@@ -450,7 +461,8 @@ static VCHIQ_STATUS_T mmal_vc_vchiq_callback(VCHIQ_REASON_T reason,
             MMAL_PORT_T *port = mmal_vc_port_by_number(msg->client_component, msg->port_type, msg->port_num);
 
             vcos_assert(port);
-            mmal_port_event_send(port, msg->delayed_buffer);
+            mmal_buffer_header_driver_data(msg->delayed_buffer)->
+               client_context->callback_event(port, msg->delayed_buffer);
             LOG_DEBUG("event bulk rx done, length %d", msg->length);
          }
          vchiq_release_message(service, header);
@@ -476,7 +488,8 @@ static VCHIQ_STATUS_T mmal_vc_vchiq_callback(VCHIQ_REASON_T reason,
             vcos_assert(port);
             LOG_DEBUG("event bulk rx aborted");
             msg->delayed_buffer->flags |= MMAL_BUFFER_HEADER_FLAG_TRANSMISSION_FAILED;
-            mmal_port_event_send(port, msg->delayed_buffer);
+            mmal_buffer_header_driver_data(msg->delayed_buffer)->
+               client_context->callback_event(port, msg->delayed_buffer);
          }
          vchiq_release_message(service, header);
       }

@@ -980,7 +980,6 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_explicit_new(HDMI_MODE_T mode, HDMI_RES
 
    vcos_log_trace("[%s] mode %d group %d code %d", VCOS_FUNCTION,
          mode, group, code);
-
    param.hdmi_mode = mode;
    param.group = group;
    param.mode = code;
@@ -1039,14 +1038,16 @@ VCHPRE_ int VCHPOST_ vc_tv_power_off( void ) {
  *       array of TV_SUPPORT_MODE_T structs, length of array, pointer to preferred group,
  *       pointer to prefer mode code (the last two pointers can be NULL, if the caller
  *       is not interested to learn what the preferred mode is)
- *       If passed in a null supported_modes array, the number of
- *       supported modes in that particular group will be returned instead
+ *       If passed in a null supported_modes array, or the length of array
+ *       is zero, the number of supported modes in that particular group
+ *       will be returned instead
  *
  * Description: Get supported modes for a particular group,
  *              the length of array limits no. of modes returned
  *
  * Returns: Returns the number of modes actually written (or the number
- *          of supported modes if passed in a null array). (< 0 for error)
+ *          of supported modes if passed in a null array or length of array==0).
+ *          Returns < 0 for error.
  *
  ***********************************************************/
 VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes_new(HDMI_RES_GROUP_T group,
@@ -1550,7 +1551,28 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes(HDMI_RES_GROUP_T group,
    }
    free(supported_modes_new);
 
-   return j;
+}
+
+/**
+ * Get the unique device ID from the EDID
+ * @param pointer to device ID struct
+ * @return zero if successful, non-zero if failed.
+ */
+VCHPRE_ int VCHPOST_  vc_tv_get_device_id(TV_DEVICE_ID_T *id) {
+   int ret = -1;
+   TV_DEVICE_ID_T param;
+   memset(&param, 0, sizeof(TV_DEVICE_ID_T));
+   if(vcos_verify(id)) {
+      if((ret = tvservice_send_command_reply( VC_TV_GET_DEVICE_ID, NULL, 0,
+                                              &param, sizeof(param))) == VC_HDMI_SUCCESS) {
+         memcpy(id, &param, sizeof(TV_DEVICE_ID_T));
+      } else {
+         id->vendor[0] = '\0';
+         id->monitor_name[0] = '\0';
+         id->serial_num = 0;
+      }
+   }
+   return ret;
 }
 
 // temporary: maintain backwards compatibility

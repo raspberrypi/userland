@@ -142,6 +142,9 @@ typedef struct MMAL_CLOCK_PRIVATE_T
                                    as a discontinuity  (microseconds) */
    int64_t  discont_duration; /**< Duration (wall-time) for which a discontinuity applies */
 
+   int64_t  request_threshold;/**< Threshold after which frames exceeding the media-time are
+                                   dropped (microseconds) */
+   MMAL_BOOL_T request_threshold_enable;/**< Enable the request threshold */
    int64_t  update_threshold_lower;
                               /**< Time differences below this threshold are ignored */
    int64_t  update_threshold_upper;
@@ -332,7 +335,6 @@ static void mmal_clock_process_requests(MMAL_CLOCK_PRIVATE_T *private)
    if (private->media_time_at_timer != 0)
    {
       media_time_now = mmal_clock_media_time_get(&private->clock);
-
       /* Currently only applied to forward speeds */
       if (private->scale > 0 &&
           media_time_now + private->discont_threshold < private->media_time_at_timer)
@@ -513,6 +515,8 @@ MMAL_STATUS_T mmal_clock_create(MMAL_CLOCK_T **clock)
    private->update_threshold_upper = CLOCK_UPDATE_THRESHOLD_UPPER;
    private->discont_threshold      = CLOCK_DISCONT_THRESHOLD;
    private->discont_duration       = CLOCK_DISCONT_DURATION;
+   private->request_threshold      = 0;
+   private->request_threshold_enable = MMAL_FALSE;
 
    if (vcos_thread_create(&private->thread, "mmal-clock thread", NULL,
                           mmal_clock_worker_thread, private) != VCOS_SUCCESS)
@@ -573,9 +577,19 @@ MMAL_STATUS_T mmal_clock_request_add(MMAL_CLOCK_T *clock, int64_t media_time, in
    MMAL_CLOCK_PRIVATE_T *private = (MMAL_CLOCK_PRIVATE_T*)clock;
    MMAL_CLOCK_REQUEST_T *request;
    MMAL_BOOL_T success;
+   int64_t media_time_now;
 
    LOG_TRACE("media time %"PRIi64" offset %"PRIi64, media_time, offset);
 
+   /* Drop the request if request_threshold_enable and the frame exceeds the request threshold */
+   media_time_now = mmal_clock_media_time_get(&private->clock);
+   LOCK(private);
+   if(private->request_threshold_enable && (media_time > (media_time_now + private->request_threshold))) {
+      LOG_TRACE("dropping request: media time %"PRIi64" now %"PRIi64, media_time, media_time_now);
+      UNLOCK(private);
+      return MMAL_ECORRUPT;
+   }
+   UNLOCK(private);
    request = (MMAL_CLOCK_REQUEST_T*)mmal_list_pop_front(private->request.list_free);
    if (request == NULL)
    {
@@ -796,6 +810,35 @@ MMAL_STATUS_T mmal_clock_discont_threshold_set(MMAL_CLOCK_T *clock, const MMAL_P
    LOCK(private);
    private->discont_threshold = discont->threshold;
    private->discont_duration  = discont->duration;
+   UNLOCK(private);
+
+   return MMAL_SUCCESS;
+}
+
+/* Get the clock's request threshold values */
+MMAL_STATUS_T mmal_clock_request_threshold_get(MMAL_CLOCK_T *clock, MMAL_PARAMETER_CLOCK_REQUEST_THRESHOLD_T *req)
+{
+   MMAL_CLOCK_PRIVATE_T *private = (MMAL_CLOCK_PRIVATE_T *)clock;
+
+   LOCK(private);
+   req->threshold = private->request_threshold;
+   req->threshold_enable = private->request_threshold_enable;
+   UNLOCK(private);
+
+   return MMAL_SUCCESS;
+}
+
+/* Set the clock's request threshold values */
+MMAL_STATUS_T mmal_clock_request_threshold_set(MMAL_CLOCK_T *clock, const MMAL_PARAMETER_CLOCK_REQUEST_THRESHOLD_T *req)
+{
+   MMAL_CLOCK_PRIVATE_T *private = (MMAL_CLOCK_PRIVATE_T *)clock;
+
+   LOG_TRACE("new clock request values: threshold %"PRIi64,
+         req->threshold);
+
+   LOCK(private);
+   private->request_threshold = req->threshold;
+   private->request_threshold_enable = req->threshold_enable;
    UNLOCK(private);
 
    return MMAL_SUCCESS;

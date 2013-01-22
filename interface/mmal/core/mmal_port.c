@@ -63,6 +63,7 @@ typedef struct MMAL_PORT_PRIVATE_CORE_T
    VCOS_MUTEX_T lock; /**< Used to lock access to the port */
    VCOS_MUTEX_T send_lock; /**< Used to lock access while sending buffer to the port */
    VCOS_MUTEX_T stats_lock; /**< Used to lock access to the stats */
+   VCOS_MUTEX_T connection_lock; /**< Used to lock access to a connection */
 
    /** Callback set by client to call when buffer headers need to be returned */
    MMAL_PORT_BH_CB_T buffer_header_callback;
@@ -79,9 +80,6 @@ typedef struct MMAL_PORT_PRIVATE_CORE_T
    MMAL_PORT_T* connected_port;
 
    MMAL_BOOL_T core_owns_connection; /**< Connection is handled by the core */
-
-   /** Whether a pool needs to be allocated on port enable */
-   uint32_t allocate_pool;
 
    /** Pool of buffers used between connected ports - output port only */
    MMAL_POOL_T* pool_for_connection;
@@ -104,16 +102,19 @@ typedef struct MMAL_PORT_PRIVATE_CORE_T
 /*****************************************************************************
  * Static declarations
  *****************************************************************************/
-static MMAL_STATUS_T mmal_port_enable_locked(MMAL_PORT_T *port, MMAL_PORT_BH_CB_T cb);
-static MMAL_STATUS_T mmal_port_enable_locked_connected(MMAL_PORT_T* output, MMAL_PORT_T* input);
-static MMAL_STATUS_T mmal_port_disable_locked(MMAL_PORT_T *port);
+static MMAL_STATUS_T mmal_port_enable_internal(MMAL_PORT_T *port, MMAL_PORT_BH_CB_T cb);
+static MMAL_STATUS_T mmal_port_disable_internal(MMAL_PORT_T *port);
+
+static MMAL_STATUS_T mmal_port_connection_enable(MMAL_PORT_T *port, MMAL_PORT_T *connected_port);
+static MMAL_STATUS_T mmal_port_connection_disable(MMAL_PORT_T *port, MMAL_PORT_T *connected_port);
+static MMAL_STATUS_T mmal_port_connection_start(MMAL_PORT_T *port, MMAL_PORT_T *connected_port);
 static MMAL_STATUS_T mmal_port_populate_from_pool(MMAL_PORT_T* port, MMAL_POOL_T* pool);
 static MMAL_STATUS_T mmal_port_populate_clock_ports(MMAL_PORT_T* output, MMAL_PORT_T* input, MMAL_POOL_T* pool);
 static MMAL_STATUS_T mmal_port_connect_default(MMAL_PORT_T *port, MMAL_PORT_T *other_port);
-static void mmal_port_set_input_or_output(MMAL_PORT_T* port, MMAL_PORT_T** input_port, MMAL_PORT_T** output_port);
 static void mmal_port_connected_input_cb(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);
 static void mmal_port_connected_output_cb(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);
 static MMAL_BOOL_T mmal_port_connected_pool_cb(MMAL_POOL_T *pool, MMAL_BUFFER_HEADER_T *buffer, void *userdata);
+
 static void mmal_port_name_update(MMAL_PORT_T *port);
 static void mmal_port_update_port_stats(MMAL_PORT_T *port, MMAL_CORE_STATS_DIR direction);
 
@@ -126,6 +127,10 @@ static void mmal_port_update_port_stats(MMAL_PORT_T *port, MMAL_CORE_STATS_DIR d
 /* Macros used to make the buffer sending / flushing thread safe */
 #define LOCK_SENDING(a) vcos_mutex_lock(&(a)->priv->core->send_lock);
 #define UNLOCK_SENDING(a) vcos_mutex_unlock(&(a)->priv->core->send_lock);
+
+/* Macros used to make the port connection API thread safe */
+#define LOCK_CONNECTION(a) vcos_mutex_lock(&(a)->priv->core->connection_lock);
+#define UNLOCK_CONNECTION(a) vcos_mutex_unlock(&(a)->priv->core->connection_lock);
 
 /* Macros used to make mmal_port_disable() blocking until all
  * the buffers have been sent back to the client */
@@ -158,7 +163,7 @@ MMAL_PORT_T *mmal_port_alloc(MMAL_COMPONENT_T *component, MMAL_PORT_TYPE_T type,
    unsigned int size = sizeof(*port) + sizeof(MMAL_PORT_PRIVATE_T) +
       sizeof(MMAL_PORT_PRIVATE_CORE_T) + name_size + extra_size;
    MMAL_BOOL_T lock = 0, lock_send = 0, lock_transit = 0, sema_transit = 0;
-   MMAL_BOOL_T lock_stats = 0;
+   MMAL_BOOL_T lock_stats = 0, lock_connection = 0;
 
    LOG_TRACE("component:%s type:%u extra:%u", component->name, type, extra_size);
 
@@ -187,11 +192,12 @@ MMAL_PORT_T *mmal_port_alloc(MMAL_COMPONENT_T *component, MMAL_PORT_TYPE_T type,
    lock_transit = vcos_mutex_create(&port->priv->core->transit_lock, "mmal port transit lock") == VCOS_SUCCESS;
    sema_transit = vcos_semaphore_create(&port->priv->core->transit_sema, "mmal port transit sema", 1) == VCOS_SUCCESS;
    lock_stats = vcos_mutex_create(&port->priv->core->stats_lock, "mmal stats lock") == VCOS_SUCCESS;
+   lock_connection = vcos_mutex_create(&port->priv->core->connection_lock, "mmal connection lock") == VCOS_SUCCESS;
 
-   if (!lock || !lock_send || !lock_transit || !sema_transit || !lock_stats)
+   if (!lock || !lock_send || !lock_transit || !sema_transit || !lock_stats || !lock_connection)
    {
-      LOG_ERROR("%s: failed to create sync objects (%u,%u,%u,%u,%u)",
-            port->name, lock, lock_send, lock_transit, sema_transit, lock_stats);
+      LOG_ERROR("%s: failed to create sync objects (%u,%u,%u,%u,%u,%u)",
+            port->name, lock, lock_send, lock_transit, sema_transit, lock_stats, lock_connection);
       goto error;
    }
 
@@ -212,6 +218,7 @@ MMAL_PORT_T *mmal_port_alloc(MMAL_COMPONENT_T *component, MMAL_PORT_TYPE_T type,
    if (lock_transit) vcos_mutex_delete(&port->priv->core->transit_lock);
    if (sema_transit) vcos_semaphore_delete(&port->priv->core->transit_sema);
    if (lock_stats) vcos_mutex_delete(&port->priv->core->stats_lock);
+   if (lock_connection) vcos_mutex_delete(&port->priv->core->connection_lock);
    if (port->format) mmal_format_free(port->format);
    vcos_free(port);
    return 0;
@@ -227,6 +234,8 @@ void mmal_port_free(MMAL_PORT_T *port)
 
    vcos_assert(port->format == port->priv->core->format_ptr_copy);
    mmal_format_free(port->priv->core->format_ptr_copy);
+   vcos_mutex_delete(&port->priv->core->connection_lock);
+   vcos_mutex_delete(&port->priv->core->stats_lock);
    vcos_semaphore_delete(&port->priv->core->transit_sema);
    vcos_mutex_delete(&port->priv->core->transit_lock);
    vcos_mutex_delete(&port->priv->core->send_lock);
@@ -342,6 +351,8 @@ MMAL_STATUS_T mmal_port_format_commit(MMAL_PORT_T *port)
 MMAL_STATUS_T mmal_port_enable(MMAL_PORT_T *port, MMAL_PORT_BH_CB_T cb)
 {
    MMAL_STATUS_T status;
+   MMAL_PORT_T *connected_port;
+   MMAL_PORT_PRIVATE_CORE_T *core;
 
    if (!port || !port->priv)
       return MMAL_EINVAL;
@@ -354,172 +365,208 @@ MMAL_STATUS_T mmal_port_enable(MMAL_PORT_T *port, MMAL_PORT_BH_CB_T cb)
    if (!port->priv->pf_enable)
       return MMAL_ENOSYS;
 
-   LOCK_PORT(port);
+   core = port->priv->core;
+   LOCK_CONNECTION(port);
+   connected_port = core->connected_port;
 
-   status = mmal_port_enable_locked(port, cb);
-
-   UNLOCK_PORT(port);
-
-   return status;
-}
-
-static MMAL_STATUS_T mmal_port_enable_locked(MMAL_PORT_T *port, MMAL_PORT_BH_CB_T cb)
-{
-   MMAL_PORT_PRIVATE_CORE_T* core = port->priv->core;
-   MMAL_PORT_T* connected_port = core->connected_port;
-   MMAL_STATUS_T status;
-
+   /* Sanity checking */
    if (port->is_enabled)
    {
-      LOG_DEBUG("already enabled");
+      UNLOCK_CONNECTION(port);
+      LOG_ERROR("%s(%p) already enabled", port->name, port);
+      return MMAL_EINVAL;
+   }
+   if (connected_port && cb) /* Callback must be NULL for connected ports */
+   {
+      UNLOCK_CONNECTION(port);
+      LOG_ERROR("callback (%p) not allowed for connected port (%s)%p",
+         cb, port->name, connected_port);
       return MMAL_EINVAL;
    }
 
-   /* Ensure that the buffer numbers and sizes used are the maxima between connected ports. */
-   if (connected_port && port->type == MMAL_PORT_TYPE_OUTPUT)
+   /* Start by preparing the port connection so that everything is ready for when
+    * both ports are enabled */
+   if (connected_port)
    {
-      LOCK_PORT(connected_port);
+      LOCK_CONNECTION(connected_port);
+      status = mmal_port_connection_enable(port, connected_port);
+      if (status != MMAL_SUCCESS)
+      {
+         UNLOCK_CONNECTION(connected_port);
+         UNLOCK_CONNECTION(port);
+         return status;
+      }
 
-      if (connected_port->buffer_num > port->buffer_num)
-         port->buffer_num = connected_port->buffer_num;
-      if (connected_port->buffer_size > port->buffer_size)
-         port->buffer_size = connected_port->buffer_size;
-
-      UNLOCK_PORT(connected_port);
+      cb = connected_port->type == MMAL_PORT_TYPE_INPUT ?
+         mmal_port_connected_output_cb : mmal_port_connected_input_cb;
    }
+
+   /* Enable the input port of a connection first */
+   if (connected_port && connected_port->type == MMAL_PORT_TYPE_INPUT)
+   {
+      status = mmal_port_enable_internal(connected_port, mmal_port_connected_input_cb);
+      if (status != MMAL_SUCCESS)
+      {
+         LOG_ERROR("failed to enable connected port (%s)%p (%s)", connected_port->name,
+            connected_port, mmal_status_to_string(status));
+         goto error;
+      }
+   }
+
+   status = mmal_port_enable_internal(port, cb);
+   if (status != MMAL_SUCCESS)
+   {
+      LOG_ERROR("failed to enable port %s(%p) (%s)", port->name, port,
+         mmal_status_to_string(status));
+      goto error;
+   }
+
+   /* Enable the output port of a connection last */
+   if (connected_port && connected_port->type != MMAL_PORT_TYPE_INPUT)
+   {
+      status = mmal_port_enable_internal(connected_port, mmal_port_connected_output_cb);
+      if (status != MMAL_SUCCESS)
+      {
+         LOG_ERROR("failed to enable connected port (%s)%p (%s)", connected_port->name,
+            connected_port, mmal_status_to_string(status));
+         goto error;
+      }
+   }
+
+   /* Kick off the connection */
+   if (connected_port && core->core_owns_connection)
+   {
+      status = mmal_port_connection_start(port, connected_port);
+      if (status != MMAL_SUCCESS)
+      {
+         LOG_ERROR("failed to start connection (%s)%p (%s)", port->name,
+            port, mmal_status_to_string(status));
+         goto error;
+      }
+   }
+
+   if (connected_port)
+      UNLOCK_CONNECTION(connected_port);
+   UNLOCK_CONNECTION(port);
+   return MMAL_SUCCESS;
+
+error:
+   if (connected_port && connected_port->is_enabled)
+      mmal_port_disable_internal(connected_port);
+   if (port->is_enabled)
+      mmal_port_disable_internal(port);
+   if (connected_port)
+      mmal_port_connection_disable(port, connected_port);
+
+   if (connected_port)
+      UNLOCK_CONNECTION(connected_port);
+   UNLOCK_CONNECTION(port);
+   return status;
+}
+
+static MMAL_STATUS_T mmal_port_enable_internal(MMAL_PORT_T *port, MMAL_PORT_BH_CB_T cb)
+{
+   MMAL_PORT_PRIVATE_CORE_T* core = port->priv->core;
+   MMAL_STATUS_T status = MMAL_SUCCESS;
+
+   LOCK_PORT(port);
+
+   if (port->is_enabled)
+      goto end;
 
    /* Sanity check the buffer requirements */
    if (port->buffer_num < port->buffer_num_min)
    {
       LOG_ERROR("buffer_num too small (%i/%i)", (int)port->buffer_num, (int)port->buffer_num_min);
-      return MMAL_EINVAL;
+      status = MMAL_EINVAL;
+      goto end;
    }
    if (port->buffer_size < port->buffer_size_min)
    {
       LOG_ERROR("buffer_size too small (%i/%i)", (int)port->buffer_size, (int)port->buffer_size_min);
-      return MMAL_EINVAL;
-   }
-
-   if (!connected_port == !cb)
-   {
-      /* Callback must be NULL if connected port is not NULL */
-      LOG_ERROR("connected port %p, callback %p not allowed", connected_port, cb);
-      return MMAL_EINVAL;
+      status = MMAL_EINVAL;
+      goto end;
    }
 
    core->buffer_header_callback = cb;
    status = port->priv->pf_enable(port, cb);
    if (status != MMAL_SUCCESS)
-      return status;
+      goto end;
 
    LOCK_SENDING(port);
    port->is_enabled = 1;
    UNLOCK_SENDING(port);
 
-   //FIXME: move before is_enabled is set ?
-   if (connected_port)
-   {
-      if (port->type == MMAL_PORT_TYPE_INPUT || (port->type == MMAL_PORT_TYPE_CLOCK && !core->allocate_pool))
-         core->buffer_header_callback = mmal_port_connected_input_cb;
-      else
-         status = mmal_port_enable_locked_connected(port, connected_port);
-   }
-
+end:
+   UNLOCK_PORT(port);
    return status;
 }
 
-static MMAL_STATUS_T mmal_port_enable_locked_connected(MMAL_PORT_T* output, MMAL_PORT_T* input)
+static MMAL_STATUS_T mmal_port_connection_enable(MMAL_PORT_T *port, MMAL_PORT_T *connected_port)
 {
-   MMAL_PORT_PRIVATE_CORE_T* output_core = output->priv->core;
-   MMAL_STATUS_T status = MMAL_SUCCESS;
+   MMAL_PORT_T *output = port->type == MMAL_PORT_TYPE_OUTPUT ? port : connected_port;
+   MMAL_PORT_T *input = connected_port->type == MMAL_PORT_TYPE_INPUT ? connected_port : port;
+   MMAL_PORT_T *pool_port = (output->capabilities & MMAL_PORT_CAPABILITY_ALLOCATION) ? output : input;
+   MMAL_PORT_PRIVATE_CORE_T *pool_core = pool_port->priv->core;
+   uint32_t buffer_size, buffer_num;
+   MMAL_POOL_T *pool;
 
-   output_core->buffer_header_callback = mmal_port_connected_output_cb;
+   /* At this point both ports hold the connection lock */
 
-   /* Output port already locked, lock input port */
-   LOCK_PORT(input);
+   /* Ensure that the buffer numbers and sizes used are the maxima between connected ports. */
+   buffer_num  = MMAL_MAX(port->buffer_num,  connected_port->buffer_num);
+   buffer_size = MMAL_MAX(port->buffer_size, connected_port->buffer_size);
+   port->buffer_num  = connected_port->buffer_num  = buffer_num;
+   port->buffer_size = connected_port->buffer_size = buffer_size;
 
-   /* Disable connected port if its buffer config needs to change */
-   if (input->is_enabled &&
-         (input->buffer_size != output->buffer_size ||
-          input->buffer_num != output->buffer_num))
+   if (output->capabilities & MMAL_PORT_CAPABILITY_PASSTHROUGH)
+      buffer_size = 0;
+
+   if (!port->priv->core->core_owns_connection)
+      return MMAL_SUCCESS;
+
+   pool = mmal_port_pool_create(pool_port, buffer_num, buffer_size);
+   if (!pool)
    {
-      status = mmal_port_disable_locked(input);
-      if (status != MMAL_SUCCESS)
-         goto finish;
+      LOG_ERROR("failed to create pool for connection");
+      return MMAL_ENOMEM;
    }
 
-   /* Ensure the connected port has the same buffer configuration */
-   input->buffer_size = output->buffer_size;
-   input->buffer_num = output->buffer_num;
+   pool_core->pool_for_connection = pool;
+   mmal_pool_callback_set(pool, mmal_port_connected_pool_cb, output);
+   return MMAL_SUCCESS;
+}
 
-   /* Enable other end of the connection, if not already enabled */
-   if (!input->is_enabled)
+static MMAL_STATUS_T mmal_port_connection_disable(MMAL_PORT_T *port, MMAL_PORT_T *connected_port)
+{
+   MMAL_POOL_T *pool = port->priv->core->pool_for_connection ?
+      port->priv->core->pool_for_connection : connected_port->priv->core->pool_for_connection;
+
+   mmal_pool_destroy(pool);
+   port->priv->core->pool_for_connection =
+      connected_port->priv->core->pool_for_connection = NULL;
+   return MMAL_SUCCESS;
+}
+
+static MMAL_STATUS_T mmal_port_connection_start(MMAL_PORT_T *port, MMAL_PORT_T *connected_port)
+{
+   MMAL_PORT_T *output = port->type == MMAL_PORT_TYPE_OUTPUT ? port : connected_port;
+   MMAL_PORT_T *input = connected_port->type == MMAL_PORT_TYPE_INPUT ? connected_port : port;
+   MMAL_POOL_T *pool = port->priv->core->pool_for_connection ?
+      port->priv->core->pool_for_connection : connected_port->priv->core->pool_for_connection;
+   MMAL_STATUS_T status;
+
+   if (output->type == MMAL_PORT_TYPE_CLOCK && input->type == MMAL_PORT_TYPE_CLOCK)
    {
-      status = mmal_port_enable_locked(input, NULL);
-      if (status != MMAL_SUCCESS)
-         goto finish;
+      /* Clock ports need buffers to send clock updates, so
+       * populate both clock ports */
+      status = mmal_port_populate_clock_ports(output, input, pool);
    }
-
-   if (output_core->allocate_pool)
+   else
    {
-      MMAL_POOL_T* pool = NULL;
-      /* Decide which port will be used to allocate the pool */
-      MMAL_PORT_T* pool_port = (output->capabilities & MMAL_PORT_CAPABILITY_ALLOCATION) ? output : input;
-      MMAL_PORT_PRIVATE_CORE_T* pool_core = pool_port->priv->core;
-      uint32_t buffer_size = pool_port->buffer_size;
-
-      /* No need to allocate payload memory for pass-through ports */
-      if (output->capabilities & MMAL_PORT_CAPABILITY_PASSTHROUGH)
-         buffer_size = 0;
-
-      UNLOCK_PORT(input);
-      if (pool_port == output)
-      {
-         UNLOCK_PORT(output);
-      }
-
-      /* Port pool creation must be done without the lock held */
-      pool = mmal_port_pool_create(pool_port, pool_port->buffer_num, buffer_size);
-
-      if (pool_port == output)
-      {
-         /* coverity[missing_unlock] Output port was already locked by caller; we should leave it locked */
-         LOCK_PORT(output);
-      }
-      LOCK_PORT(input);
-
-      if (!pool)
-      {
-         status = MMAL_ENOMEM;
-         goto finish;
-      }
-
-      pool_core->pool_for_connection = pool;
-      mmal_pool_callback_set(pool_core->pool_for_connection, mmal_port_connected_pool_cb, output);
-
-      if ((output->type == MMAL_PORT_TYPE_CLOCK) && (input->type == MMAL_PORT_TYPE_CLOCK))
-      {
-         /* Clock ports need buffers to send clock updates, so
-          * populate both clock ports */
-         status = mmal_port_populate_clock_ports(output, input, pool_port->priv->core->pool_for_connection);
-      }
-      else
-      {
-         /* Put the buffers into the output port */
-         status = mmal_port_populate_from_pool(output, pool_port->priv->core->pool_for_connection);
-      }
+      /* Put the buffers into the output port */
+      status = mmal_port_populate_from_pool(output, pool);
    }
-
-finish:
-   /* At this point, both locks must be held */
-
-   if (status != MMAL_SUCCESS && input->is_enabled)
-      mmal_port_disable_locked(input);
-
-   UNLOCK_PORT(input);
-
-   if (status != MMAL_SUCCESS)
-      mmal_port_disable_locked(output);
 
    return status;
 }
@@ -527,8 +574,9 @@ finish:
 /** Disable processing on a port */
 MMAL_STATUS_T mmal_port_disable(MMAL_PORT_T *port)
 {
-   MMAL_POOL_T* pool = NULL;
    MMAL_STATUS_T status;
+   MMAL_PORT_T *connected_port;
+   MMAL_PORT_PRIVATE_CORE_T *core;
 
    if (!port || !port->priv)
       return MMAL_EINVAL;
@@ -539,33 +587,78 @@ MMAL_STATUS_T mmal_port_disable(MMAL_PORT_T *port)
    if (!port->priv->pf_disable)
       return MMAL_ENOSYS;
 
-   LOCK_PORT(port);
+   core = port->priv->core;
+   LOCK_CONNECTION(port);
+   connected_port = core->connected_port;
 
-   status = mmal_port_disable_locked(port);
+   /* Sanity checking */
+   if (!port->is_enabled)
+   {
+      UNLOCK_CONNECTION(port);
+      LOG_ERROR("port %s(%p) is not enabled", port->name, port);
+      return MMAL_EINVAL;
+   }
 
-   if (status == MMAL_SUCCESS)
-      pool = port->priv->core->pool_for_connection;
-   port->priv->core->pool_for_connection = NULL;
+   if (connected_port)
+      LOCK_CONNECTION(connected_port);
 
-   UNLOCK_PORT(port);
+   /* Disable the output port of a connection first */
+   if (connected_port && connected_port->type != MMAL_PORT_TYPE_INPUT)
+   {
+      status = mmal_port_disable_internal(connected_port);
+      if (status != MMAL_SUCCESS)
+      {
+         LOG_ERROR("failed to disable connected port (%s)%p (%s)", connected_port->name,
+            connected_port, mmal_status_to_string(status));
+         goto end;
+      }
+   }
 
-   if (status == MMAL_SUCCESS && pool)
-      mmal_pool_destroy(pool);
+   status = mmal_port_disable_internal(port);
+   if (status != MMAL_SUCCESS)
+   {
+      LOG_ERROR("failed to disable port (%s)%p", port->name, port);
+      goto end;
+   }
+
+   /* Disable the input port of a connection last */
+   if (connected_port && connected_port->type == MMAL_PORT_TYPE_INPUT)
+   {
+      status = mmal_port_disable_internal(connected_port);
+      if (status != MMAL_SUCCESS)
+      {
+         LOG_ERROR("failed to disable connected port (%s)%p (%s)", connected_port->name,
+            connected_port, mmal_status_to_string(status));
+         goto end;
+      }
+   }
+
+   if (connected_port)
+   {
+      status = mmal_port_connection_disable(port, connected_port);
+      if (status != MMAL_SUCCESS)
+         LOG_ERROR("failed to disable connection (%s)%p (%s)", port->name,
+            port, mmal_status_to_string(status));
+   }
+
+end:
+   if (connected_port)
+      UNLOCK_CONNECTION(connected_port);
+   UNLOCK_CONNECTION(port);
 
    return status;
 }
 
-static MMAL_STATUS_T mmal_port_disable_locked(MMAL_PORT_T *port)
+static MMAL_STATUS_T mmal_port_disable_internal(MMAL_PORT_T *port)
 {
    MMAL_PORT_PRIVATE_CORE_T* core = port->priv->core;
+   MMAL_STATUS_T status = MMAL_SUCCESS;
    MMAL_BUFFER_HEADER_T *buffer;
-   MMAL_STATUS_T status;
+
+   LOCK_PORT(port);
 
    if (!port->is_enabled)
-   {
-      LOG_ERROR("port %p is not enabled", port);
-      return MMAL_EINVAL;
-   }
+      goto end;
 
    LOCK_SENDING(port);
    port->is_enabled = 0;
@@ -586,7 +679,7 @@ static MMAL_STATUS_T mmal_port_disable_locked(MMAL_PORT_T *port)
       LOCK_SENDING(port);
       port->is_enabled = 1;
       UNLOCK_SENDING(port);
-      return status;
+      goto end;
    }
 
    /* Flush our internal queue */
@@ -607,10 +700,8 @@ static MMAL_STATUS_T mmal_port_disable_locked(MMAL_PORT_T *port)
 
    port->priv->core->buffer_header_callback = NULL;
 
-   if ((core->connected_port && port->type == MMAL_PORT_TYPE_OUTPUT) ||
-       (port->type == MMAL_PORT_TYPE_CLOCK && core->allocate_pool))
-      mmal_port_disable(core->connected_port);
-
+ end:
+   UNLOCK_PORT(port);
    return status;
 }
 
@@ -832,7 +923,6 @@ MMAL_STATUS_T mmal_port_connect(MMAL_PORT_T *port, MMAL_PORT_T *other_port)
    MMAL_PORT_PRIVATE_CORE_T* core;
    MMAL_PORT_PRIVATE_CORE_T* other_core;
    MMAL_STATUS_T status = MMAL_SUCCESS;
-   MMAL_PORT_T* input_port = NULL;
    MMAL_PORT_T* output_port = NULL;
 
    if (!port || !port->priv || !other_port || !other_port->priv)
@@ -855,46 +945,33 @@ MMAL_STATUS_T mmal_port_connect(MMAL_PORT_T *port, MMAL_PORT_T *other_port)
       return MMAL_ENOSYS;
    }
 
-   if (port->type == MMAL_PORT_TYPE_CLOCK)
-   {
-      output_port = port;
-      input_port = other_port;
-   }
-   else
-   {
-      mmal_port_set_input_or_output(port, &input_port, &output_port);
-      mmal_port_set_input_or_output(other_port, &input_port, &output_port);
-   }
-
-   if (!input_port || !output_port)
-   {
-      LOG_ERROR("invalid port types used: %i, %i", port->type, other_port->type);
-      return MMAL_EINVAL;
-   }
-
-   /* Always lock output then input to avoid deadlock */
-   LOCK_PORT(output_port);
-   LOCK_PORT(input_port);
-
    core = port->priv->core;
    other_core = other_port->priv->core;
 
-   if (core->connected_port || other_core->connected_port)
+   LOCK_CONNECTION(port);
+   if (core->connected_port)
    {
-#ifdef VCOS_LOGGING_ENABLED
-      MMAL_PORT_T* problem_port = core->connected_port ? port : other_port;
-      MMAL_PORT_T* connected_port = problem_port->priv->core->connected_port;
-#endif
+      LOG_ERROR("port %p is already connected", port);
+      UNLOCK_CONNECTION(port);
+      return MMAL_EISCONN;
+   }
+   if (port->is_enabled)
+   {
+      LOG_ERROR("port %p should not be enabled", port);
+      UNLOCK_CONNECTION(port);
+      return MMAL_EINVAL;
+   }
 
-      LOG_ERROR("port %p is already connected to port %p", problem_port, connected_port);
+   LOCK_CONNECTION(other_port);
+   if (other_core->connected_port)
+   {
+      LOG_ERROR("port %p is already connected", other_port);
       status = MMAL_EISCONN;
       goto finish;
    }
-
-   if (port->is_enabled || other_port->is_enabled)
+   if (other_port->is_enabled)
    {
-      LOG_ERROR("neither port is allowed to be enabled already: %i, %i",
-                (int)port->is_enabled, (int)other_port->is_enabled);
+      LOG_ERROR("port %p should not be enabled", other_port);
       status = MMAL_EINVAL;
       goto finish;
    }
@@ -904,20 +981,20 @@ MMAL_STATUS_T mmal_port_connect(MMAL_PORT_T *port, MMAL_PORT_T *other_port)
 
    core->core_owns_connection = 0;
    other_core->core_owns_connection = 0;
-   output_port->priv->core->allocate_pool = 0;
 
    /* Check to see if the port will manage the connection on its own. If not then the core
     * will manage it. */
+   output_port = port->type == MMAL_PORT_TYPE_OUTPUT ? port : other_port;
    if (output_port->priv->pf_connect(port, other_port) == MMAL_SUCCESS)
       goto finish;
 
    core->core_owns_connection = 1;
    other_core->core_owns_connection = 1;
-   output_port->priv->core->allocate_pool = 1;
+
 
 finish:
-   UNLOCK_PORT(input_port);
-   UNLOCK_PORT(output_port);
+   UNLOCK_CONNECTION(other_port);
+   UNLOCK_CONNECTION(port);
    return status;
 }
 
@@ -926,7 +1003,6 @@ MMAL_STATUS_T mmal_port_disconnect(MMAL_PORT_T *port)
 {
    MMAL_PORT_PRIVATE_CORE_T* core;
    MMAL_PORT_T* other_port;
-   MMAL_POOL_T* pool = NULL;
    MMAL_STATUS_T status = MMAL_SUCCESS;
 
    if (!port || !port->priv)
@@ -937,30 +1013,39 @@ MMAL_STATUS_T mmal_port_disconnect(MMAL_PORT_T *port)
 
    LOG_TRACE("%s(%p)", port->name, port);
 
-   LOCK_PORT(port);
+   LOCK_CONNECTION(port);
 
    core = port->priv->core;
-   if (!core->connected_port)
+   other_port = core->connected_port;
+
+   if (!other_port)
    {
-      UNLOCK_PORT(port);
+      UNLOCK_CONNECTION(port);
       LOG_DEBUG("%s(%p) is not connected", port->name, port);
       return MMAL_ENOTCONN;
    }
 
-   other_port = core->connected_port;
+   LOCK_CONNECTION(other_port);
 
+   /* Make sure the connection is disabled first */
    if (port->is_enabled)
    {
-      status = mmal_port_disable_locked(port);
+      MMAL_PORT_T *output = port->type == MMAL_PORT_TYPE_OUTPUT ? port : other_port;
+      MMAL_PORT_T *input = other_port->type == MMAL_PORT_TYPE_INPUT ? other_port : port;
+
+      status = mmal_port_disable_internal(output);
       if (status != MMAL_SUCCESS)
       {
-         LOG_ERROR("could not disable %s(%p) (%i)", port->name, port, status);
-         goto finish;
+         LOG_ERROR("failed to disable port (%s)%p", port->name, port);
+         goto end;
       }
-
-      if (port->priv->core->pool_for_connection)
-         pool = port->priv->core->pool_for_connection;
-      port->priv->core->pool_for_connection = NULL;
+      status = mmal_port_disable_internal(input);
+      if (status != MMAL_SUCCESS)
+      {
+         LOG_ERROR("failed to disable port (%s)%p", port->name, port);
+         goto end;
+      }
+      status = mmal_port_connection_disable(port, other_port);
    }
 
    if (!core->core_owns_connection)
@@ -969,19 +1054,16 @@ MMAL_STATUS_T mmal_port_disconnect(MMAL_PORT_T *port)
       if (status != MMAL_SUCCESS)
       {
          LOG_ERROR("disconnection of %s(%p) failed (%i)", port->name, port, status);
-         goto finish;
+         goto end;
       }
    }
 
    core->connected_port = NULL;
    other_port->priv->core->connected_port = NULL;
 
-finish:
-   UNLOCK_PORT(port);
-
-   if (pool)
-      mmal_pool_destroy(pool);
-
+end:
+   UNLOCK_CONNECTION(other_port);
+   UNLOCK_CONNECTION(port);
    return status;
 }
 
@@ -1183,16 +1265,6 @@ static MMAL_STATUS_T mmal_port_connect_default(MMAL_PORT_T *port, MMAL_PORT_T *o
    return MMAL_ENOSYS;
 }
 
-/** Set input_port, output_port or neither to the port, depending on the port's type */
-static void mmal_port_set_input_or_output(MMAL_PORT_T* port, MMAL_PORT_T** input_port, MMAL_PORT_T** output_port)
-{
-   if (port->type == MMAL_PORT_TYPE_INPUT)
-      *input_port = port;
-   else
-      if (port->type == MMAL_PORT_TYPE_OUTPUT)
-         *output_port = port;
-}
-
 /** Connected input port buffer callback */
 static void mmal_port_connected_input_cb(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
@@ -1266,7 +1338,7 @@ static void mmal_port_connected_output_cb(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_
    }
 }
 
-/** Callback for when a buffer from a connected output port is finally released */
+/** Callback for when a buffer from a connected input port is finally released */
 static MMAL_BOOL_T mmal_port_connected_pool_cb(MMAL_POOL_T *pool, MMAL_BUFFER_HEADER_T *buffer, void *userdata)
 {
    MMAL_PORT_T* port = (MMAL_PORT_T*)userdata;

@@ -229,6 +229,13 @@ static MMAL_STATUS_T mmal_port_clock_parameter_set(MMAL_PORT_T *port, const MMAL
          event.id = MMAL_CLOCK_PAYLOAD_INVALID;
       }
       break;
+      case MMAL_PARAMETER_CLOCK_REQUEST_THRESHOLD:
+      {
+         const MMAL_PARAMETER_CLOCK_REQUEST_THRESHOLD_T *p = (MMAL_PARAMETER_CLOCK_REQUEST_THRESHOLD_T *)param;
+         status = mmal_clock_request_threshold_set(module->clock, p);
+         event.id = MMAL_CLOCK_PAYLOAD_INVALID;
+      }
+      break;
       default:
          return MMAL_ENOSYS;
    }
@@ -286,6 +293,12 @@ static MMAL_STATUS_T mmal_port_clock_parameter_get(MMAL_PORT_T *port, MMAL_PARAM
       {
          MMAL_PARAMETER_CLOCK_DISCONT_THRESHOLD_T *p = (MMAL_PARAMETER_CLOCK_DISCONT_THRESHOLD_T *)param;
          mmal_clock_discont_threshold_get(module->clock, p);
+      }
+      break;
+      case MMAL_PARAMETER_CLOCK_REQUEST_THRESHOLD:
+      {
+         MMAL_PARAMETER_CLOCK_REQUEST_THRESHOLD_T *p = (MMAL_PARAMETER_CLOCK_REQUEST_THRESHOLD_T *)param;
+         mmal_clock_request_threshold_get(module->clock, p);
       }
       break;
       default:

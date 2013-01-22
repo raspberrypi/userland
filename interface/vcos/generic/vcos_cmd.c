@@ -331,7 +331,8 @@ void vcos_cmd_usage( VCOS_CMD_PARAM_T *param )
     {
         vcos_cmd_printf( param, "Usage: " );
         print_argument_prefix( param );
-        vcos_cmd_printf( param, "%s - %s\n",
+        vcos_cmd_printf( param, "%s %s - %s\n",
+                         param->argv[0],
                          param->cmd_entry->args,
                          param->cmd_entry->descr );
     }

@@ -120,6 +120,21 @@ struct MMAL_VC_STATS_T
 };
 typedef struct MMAL_VC_STATS_T MMAL_VC_STATS_T;
 
+/* Simple circular text buffer used to store 'interesting' data
+ * from MMAL clients. e.g. settings for each picture taken */
+struct MMAL_VC_HOST_LOG_T
+{
+   /** Simple circular buffer of plain text log messages separated by NUL */
+   char buffer[16 << 10];
+   /** For VCDBG validation and to help detect buffer overflow */
+   uint32_t magic;
+   /** Write offset into buffer */
+   int32_t offset;
+   /** Counter of host messages logged since boot */
+   unsigned count;
+};
+typedef struct MMAL_VC_HOST_LOG_T MMAL_VC_HOST_LOG_T;
+
 /** Status from querying MMAL core statistics.
  */
 typedef enum
@@ -159,6 +174,20 @@ MMAL_STATUS_T mmal_vc_get_core_stats(MMAL_CORE_STATISTICS_T *stats,
                                      unsigned port,
                                      MMAL_CORE_STATS_DIR dir,
                                      MMAL_BOOL_T reset);
+/**
+ * Stores an arbitrary text message in a circular buffer inside the MMAL VC server.
+ * The purpose of this message is to log high level events from the host in order
+ * to diagnose problems that require multiple actions to reproduce. e.g. taking
+ * multiple pictures with different settings.
+ *
+ * @param   msg  The message text.
+ * @return  MMAL_SUCCESS if the message was logged or MMAL_ENOSYS if the API
+ *          if not supported.
+ */
+MMAL_STATUS_T mmal_vc_host_log(const char *msg);
+
+/* For backwards compatibility in builds */
+#define MMAL_VC_API_HAVE_HOST_LOG
 
 /* VC DEBUG ONLY ************************************************************/
 /** Consumes memory in the relocatable heap.
