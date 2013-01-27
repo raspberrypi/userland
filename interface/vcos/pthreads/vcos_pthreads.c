@@ -43,6 +43,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/prctl.h>
 #endif
 
+#if defined(__NetBSD__)
+#include <sys/sysctl.h>
+#include <assert.h>
+#endif
+
 #ifdef HAVE_CMAKE_CONFIG
 #include "cmake_config.h"
 #endif
@@ -580,7 +585,18 @@ const char ** vcos_get_argv(void)
  */
 uint32_t _vcos_get_ticks_per_second(void)
 {
+#if defined(__NetBSD__)
+   struct clockinfo ci;
+   size_t cilen = sizeof(ci);
+   int error;
+
+   error = sysctlbyname("kern.clockrate", &ci, &cilen, NULL, 0);
+   assert(error == 0);
+
+   return ci.hz;
+#else
    return HZ;
+#endif
 }
 
 VCOS_STATUS_T vcos_once(VCOS_ONCE_T *once_control,

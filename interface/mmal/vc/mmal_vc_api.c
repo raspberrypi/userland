@@ -1079,7 +1079,7 @@ static MMAL_STATUS_T mmal_vc_port_parameter_set(MMAL_PORT_T *port, const MMAL_PA
 
    if(param->size > MMAL_WORKER_PORT_PARAMETER_SET_MAX)
    {
-      LOG_ERROR("parameter too large (%u > %u)", param->size, MMAL_WORKER_PORT_PARAMETER_SET_MAX);
+      LOG_ERROR("parameter too large (%u > %u)", (unsigned int)param->size, (unsigned int)MMAL_WORKER_PORT_PARAMETER_SET_MAX);
       return MMAL_ENOSPC;
    }
 
@@ -1137,7 +1137,7 @@ static MMAL_STATUS_T mmal_vc_port_parameter_get(MMAL_PORT_T *port, MMAL_PARAMETE
 
    if(param->size > MMAL_WORKER_PORT_PARAMETER_GET_MAX)
    {
-      LOG_ERROR("parameter too large (%u > %u)", param->size, MMAL_WORKER_PORT_PARAMETER_GET_MAX);
+      LOG_ERROR("parameter too large (%u > %u)", (unsigned int)param->size, (unsigned int)MMAL_WORKER_PORT_PARAMETER_GET_MAX);
       return MMAL_ENOMEM;
    }
 

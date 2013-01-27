@@ -83,7 +83,10 @@ add_subdirectory(middleware/openmaxil)
 
 # FIXME: this directory needs a more sensible name and better
 # platform factoring
-add_subdirectory(interface/usbdk)
+
+if(NOT CMAKE_SYSTEM_NAME MATCHES "NetBSD")
+   add_subdirectory(interface/usbdk)
+endif()
 
 # FIXME: we should use a pre-packaged version of freetype
 # rather than the one included in the repo.

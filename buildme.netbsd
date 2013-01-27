@@ -1,0 +1,12 @@
+#/bin/sh
+mkdir -p build/arm-netbsdelf/release/
+cd build/arm-netbsdelf/release/
+cmake -DCMAKE_TOOLCHAIN_FILE=../../../makefiles/cmake/toolchains/arm-netbsdelf.cmake -DCMAKE_BUILD_TYPE=Release ../../..
+gmake
+
+if [ "$1" != "" ]; then
+ sudo gmake install DESTDIR=$1
+fi
+
+cd -
+

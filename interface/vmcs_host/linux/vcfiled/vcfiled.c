@@ -46,6 +46,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <android/log.h>
 #endif
 
+#if defined(__NetBSD__)
+#define getopt_long_only getopt_long
+#endif
+
 #include "vchiq.h"
 #include "interface/vchi/vchi.h"
 #include "interface/vcos/vcos.h"

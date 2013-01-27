@@ -37,6 +37,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <assert.h>
 #include <string.h>
 
+#if defined(__NetBSD__)
+#define getopt_long_only getopt_long
+#endif
+
 #include "interface/vmcs_host/vc_tvservice.h"
 
 #define TV_SUPPORTED_MODE_T TV_SUPPORTED_MODE_NEW_T
