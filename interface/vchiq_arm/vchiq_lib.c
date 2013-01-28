@@ -932,6 +932,11 @@ vchi_msg_dequeue( VCHI_SERVICE_HANDLE_T handle,
       args.bufsize = max_data_size_to_read;
       args.buf = data;
       RETRY(ret, ioctl(service->fd, VCHIQ_IOC_DEQUEUE_MESSAGE, &args));
+#ifdef __NetBSD__
+      if (ret == -1 && errno > 0) {
+         ret = errno;
+      }
+#endif
       if (ret >= 0)
       {
          *actual_msg_size = ret;
@@ -1447,7 +1452,6 @@ completion_thread(void *arg)
       VCHI_CALLBACK_BULK_RECEIVE_ABORTED,  // VCHIQ_BULK_RECEIVE_ABORTED
    };
 
-   args.count = vcos_countof(completions);
    args.buf = completions;
    args.msgbufsize = MSGBUF_SIZE;
    args.msgbufcount = 0;
@@ -1471,18 +1475,19 @@ completion_thread(void *arg)
          }
       }
 
+      args.count = vcos_countof(completions);
       RETRY(ret, ioctl(instance->fd, VCHIQ_IOC_AWAIT_COMPLETION, &args));
 
-      if (ret <= 0)
+      if (ret < 0 || args.count == 0)
          break;
 
-      for (i = 0; i < ret; i++)
+      for (i = 0; i < args.count; i++)
       {
          VCHIQ_COMPLETION_DATA_T *completion = &completions[i];
          VCHIQ_SERVICE_T *service = (VCHIQ_SERVICE_T *)completion->service_userdata;
          if (service->base.callback)
          {
-            vcos_log_trace( "callback(%x, %x, %x, %x)",
+            vcos_log_info( "callback(%x, %x, %x, %x)",
                completion->reason, (uint32_t)completion->header,
                (uint32_t)&service->base, (uint32_t)completion->bulk_userdata );
             service->base.callback(completion->reason, completion->header,
@@ -1493,7 +1498,7 @@ completion_thread(void *arg)
             VCHI_CALLBACK_REASON_T vchi_reason =
                vchiq_reason_to_vchi[completion->reason];
             service->vchi_callback(service->base.userdata, vchi_reason, completion->bulk_userdata);
-         }
+	 }
       }
    }
 
@@ -1641,6 +1646,11 @@ fill_peek_buf(VCHI_SERVICE_T *service,
          args.buf = service->peek_buf;
 
          RETRY(ret, ioctl(service->fd, VCHIQ_IOC_DEQUEUE_MESSAGE, &args));
+#ifdef __NetBSD__
+         if (ret == -1 && errno > 0) {
+            ret = errno;
+         }
+#endif
 
          if (ret >= 0)
          {
