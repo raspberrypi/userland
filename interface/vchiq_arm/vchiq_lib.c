@@ -1614,11 +1614,14 @@ create_service(VCHIQ_INSTANCE_T instance,
    }
    else
    {
-      vcos_mutex_lock(&instance->mutex);
+      if (service)
+      {
+         vcos_mutex_lock(&instance->mutex);
 
-      service->lib_handle = VCHIQ_SERVICE_HANDLE_INVALID;
+         service->lib_handle = VCHIQ_SERVICE_HANDLE_INVALID;
 
-      vcos_mutex_unlock(&instance->mutex);
+         vcos_mutex_unlock(&instance->mutex);
+      }
 
       *phandle = VCHIQ_SERVICE_HANDLE_INVALID;
    }
