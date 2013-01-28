@@ -933,8 +933,10 @@ vchi_msg_dequeue( VCHI_SERVICE_HANDLE_T handle,
       args.buf = data;
       RETRY(ret, ioctl(service->fd, VCHIQ_IOC_DEQUEUE_MESSAGE, &args));
 #ifdef __NetBSD__
-      if (ret == -1 && errno > 0) {
-         ret = errno;
+      if (ret == -1) {
+         ret = -errno;
+      } else if (ret == 0) {
+	 ret = args.bufsize;
       }
 #endif
       if (ret >= 0)
@@ -1647,11 +1649,12 @@ fill_peek_buf(VCHI_SERVICE_T *service,
 
          RETRY(ret, ioctl(service->fd, VCHIQ_IOC_DEQUEUE_MESSAGE, &args));
 #ifdef __NetBSD__
-         if (ret == -1 && errno > 0) {
-            ret = errno;
+         if (ret == -1) {
+            ret = -errno;
+         } else if (ret == 0) {
+	    ret = args.bufsize;
          }
 #endif
-
          if (ret >= 0)
          {
             service->peek_size = ret;
