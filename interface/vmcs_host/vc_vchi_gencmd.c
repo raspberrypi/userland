@@ -315,8 +315,17 @@ int vc_gencmd_read_response (char *response, int maxlen) {
             //otherwise wait for the event and read again
             success = (int) vchi_msg_dequeue( gencmd_client.open_handle[i], gencmd_client.response_buffer,
                                               sizeof(gencmd_client.response_buffer), &gencmd_client.response_length, VCHI_FLAGS_NONE);
+
             if(success == 0) {
+#ifdef __NetBSD__
+	       uint32_t v;
+#endif
+#ifdef __NetBSD__
+	       memcpy(&v, gencmd_client.response_buffer, sizeof(v));
+               ret_code = VC_VTOH32(v);
+#else
                ret_code = VC_VTOH32( *(int *)gencmd_client.response_buffer );
+#endif
                break;
             } else {
                gencmd_client.response_length = 0;
