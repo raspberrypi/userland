@@ -837,14 +837,14 @@ MMAL_STATUS_T mmal_vc_host_log(const char *msg)
    {
       mmal_worker_host_log req;
       mmal_worker_reply reply;
-      size_t reply_len = sizeof(reply);
+      size_t replylen = sizeof(reply);
       size_t msg_len = vcos_safe_strcpy(req.msg, msg, sizeof(req.msg), 0);
 
       /* Reduce the length if it is shorter than the max message length */
       status = mmal_vc_sendwait_message(mmal_vc_get_client(), &req.header,
             sizeof(req) - sizeof(req.msg) + vcos_min(sizeof(req.msg), msg_len + 1),
             MMAL_WORKER_HOST_LOG,
-            &reply, &reply_len, MMAL_FALSE);
+            &reply, &replylen, MMAL_FALSE);
 
       if (status == MMAL_SUCCESS)
       {
