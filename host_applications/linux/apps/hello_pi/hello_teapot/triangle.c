@@ -42,7 +42,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "EGL/eglext.h"
 
 #include "cube_texture_and_coords.h"
-
+#include "models.h"
 #include "triangle.h"
 #include <pthread.h>
 
@@ -77,6 +77,7 @@ typedef struct
 // current distance from camera
    GLfloat distance;
    GLfloat distance_inc;
+   MODEL_T model;
 } CUBE_STATE_T;
 
 static void init_ogl(CUBE_STATE_T *state);
@@ -127,7 +128,7 @@ static void init_ogl(CUBE_STATE_T *state)
       EGL_BLUE_SIZE, 8,
       EGL_ALPHA_SIZE, 8,
       EGL_DEPTH_SIZE, 16,
-      //EGL_SAMPLES, 4,
+      EGL_SAMPLES, 4,
       EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
       EGL_NONE
    };
@@ -185,12 +186,19 @@ static void init_ogl(CUBE_STATE_T *state)
    assert(EGL_FALSE != result);
 
    // Set background color and clear buffers
-   glClearColor(0.15f, 0.25f, 0.35f, 1.0f);
+   glClearColor((0.3922f+7*0.5f)/8, (0.1176f+7*0.5f)/8, (0.5882f+7*0.5f)/8, 1.0f);
 
    // Enable back face culling.
    glEnable(GL_CULL_FACE);
 
-   glMatrixMode(GL_MODELVIEW);
+   glEnable(GL_DEPTH_TEST);
+   glClearDepthf(1.0);
+   glDepthFunc(GL_LEQUAL);
+
+   float noAmbient[] = {1.0f, 1.0f, 1.0f, 1.0f};
+   glLightfv(GL_LIGHT0, GL_AMBIENT, noAmbient);
+   glEnable(GL_LIGHT0);
+   glEnable(GL_LIGHTING);
 }
 
 /***********************************************************
@@ -206,7 +214,7 @@ static void init_ogl(CUBE_STATE_T *state)
  ***********************************************************/
 static void init_model_proj(CUBE_STATE_T *state)
 {
-   float nearp = 1.0f;
+   float nearp = 0.1f;
    float farp = 500.0f;
    float hht;
    float hwd;
@@ -224,7 +232,6 @@ static void init_model_proj(CUBE_STATE_T *state)
    glFrustumf(-hwd, hwd, -hht, hht, nearp, farp);
    
    glEnableClientState( GL_VERTEX_ARRAY );
-   glVertexPointer( 3, GL_BYTE, 0, quadx );
 
    reset_model(state);
 }
@@ -244,13 +251,11 @@ static void reset_model(CUBE_STATE_T *state)
 {
    // reset model position
    glMatrixMode(GL_MODELVIEW);
-   glLoadIdentity();
-   glTranslatef(0.f, 0.f, -50.f);
 
    // reset model rotation
    state->rot_angle_x = 45.f; state->rot_angle_y = 30.f; state->rot_angle_z = 0.f;
    state->rot_angle_x_inc = 0.5f; state->rot_angle_y_inc = 0.5f; state->rot_angle_z_inc = 0.f;
-   state->distance = 40.f;
+   state->distance = 1.2f*1.5f;
 }
 
 /***********************************************************
@@ -324,10 +329,10 @@ static GLfloat inc_and_clip_distance(GLfloat distance, GLfloat distance_inc)
 {
    distance += distance_inc;
 
-   if (distance >= 120.0f)
-      distance = 120.f;
-   else if (distance <= 40.0f)
-      distance = 40.0f;
+   if (distance >= 10.0f)
+      distance = 10.f;
+   else if (distance <= 1.0f)
+      distance = 1.0f;
 
    return distance;
 }
@@ -349,27 +354,7 @@ static void redraw_scene(CUBE_STATE_T *state)
    // Start with a clear screen
    glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
-   // Need to rotate textures - do this by rotating each cube face
-   glRotatef(270.f, 0.f, 0.f, 1.f ); // front face normal along z axis
-
-   // draw first 4 vertices
-   glDrawArrays( GL_TRIANGLE_STRIP, 0, 4);
-
-   // same pattern for other 5 faces - rotation chosen to make image orientation 'nice'
-   glRotatef(90.f, 0.f, 0.f, 1.f ); // back face normal along z axis
-   glDrawArrays( GL_TRIANGLE_STRIP, 4, 4);
-
-   glRotatef(90.f, 1.f, 0.f, 0.f ); // left face normal along x axis
-   glDrawArrays( GL_TRIANGLE_STRIP, 8, 4);
-
-   glRotatef(90.f, 1.f, 0.f, 0.f ); // right face normal along x axis
-   glDrawArrays( GL_TRIANGLE_STRIP, 12, 4);
-
-   glRotatef(270.f, 0.f, 1.f, 0.f ); // top face normal along y axis
-   glDrawArrays( GL_TRIANGLE_STRIP, 16, 4);
-
-   glRotatef(90.f, 0.f, 1.f, 0.f ); // bottom face normal along y axis
-   glDrawArrays( GL_TRIANGLE_STRIP, 20, 4);
+   draw_wavefront(state->model, state->tex);
 
    eglSwapBuffers(state->display, state->surface);
 }
@@ -388,7 +373,7 @@ static void redraw_scene(CUBE_STATE_T *state)
  ***********************************************************/
 static void init_textures(CUBE_STATE_T *state)
 {
-   //// load three texture buffers but use them on six OGL|ES texture surfaces
+   // the texture containing the video
    glGenTextures(1, &state->tex);
 
    glBindTexture(GL_TEXTURE_2D, state->tex);
@@ -399,7 +384,6 @@ static void init_textures(CUBE_STATE_T *state)
    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
 
    /* Create EGL Image */
    eglImage = eglCreateImageKHR(
@@ -469,6 +453,9 @@ int main ()
 
    // initialise the OGLES texture(s)
    init_textures(state);
+
+   //state->model = cube_wavefront();
+   state->model = load_wavefront("teapot.obj.dat", NULL);
 
    while (!terminate)
    {
