@@ -133,11 +133,6 @@ void bcm_host_deinit(void)
 }
 
 // Fix linking problems. These are referenced by libs, but shouldn't be called
-int eglIntOpenMAXILDoneMarker (void* component_handle, void * egl_image)
-{
-   vcos_assert(0);
-   return 0;
-}
 void wfc_stream_await_buffer(void * stream)
 {
    vcos_assert(0);

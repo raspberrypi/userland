@@ -34,11 +34,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/vchi/vchi.h"
 #include "interface/vmcs_host/khronos/IL/OMX_Component.h"
 #include "interface/vmcs_host/khronos/IL/OMX_ILCS.h"
-#include "interface/khronos/ext/egl_openmaxil_client.h"
 #include "interface/vmcs_host/vc_ilcs_defs.h"
 #include "interface/vmcs_host/vcilcs.h"
 #include "interface/vmcs_host/vcilcs_common.h"
-
 
 static VC_PRIVATE_PORT_T *find_port(VC_PRIVATE_COMPONENT_T *comp, OMX_U32 nPortIndex)
 {
@@ -447,12 +445,39 @@ static OMX_ERRORTYPE vcil_out_addBuffer(OMX_IN OMX_HANDLETYPE hComponent,
    return resp.err;
 }
 
+static VCOS_ONCE_T loaded_eglIntOpenMAXILDoneMarker = VCOS_ONCE_INIT;
+static int (*local_eglIntOpenMAXILDoneMarker) (void* component_handle, void *egl_image) = NULL;
+
+static void load_eglIntOpenMAXILDoneMarker(void)
+{
+   void *handle;
+
+   /* First try to load from the current process, this will succeed
+    * if something that is linked to libEGL is already loaded or
+    * something explicitly loaded libEGL with RTLD_GLOBAL
+    */
+   handle = vcos_dlopen(NULL, VCOS_DL_GLOBAL);
+   local_eglIntOpenMAXILDoneMarker = vcos_dlsym(handle, "eglIntOpenMAXILDoneMarker");
+   if (local_eglIntOpenMAXILDoneMarker == NULL)
+   {
+      vcos_dlclose(handle);
+      /* If that failed try to load libEGL.so explicitely */
+      handle = vcos_dlopen("libEGL.so", VCOS_DL_LAZY | VCOS_DL_LOCAL);
+      vc_assert(handle != NULL);
+      local_eglIntOpenMAXILDoneMarker = vcos_dlsym(handle, "eglIntOpenMAXILDoneMarker");
+      vc_assert(local_eglIntOpenMAXILDoneMarker != NULL);
+   }
+}
+
 static OMX_ERRORTYPE vcil_out_UseEGLImage(OMX_IN OMX_HANDLETYPE hComponent,
       OMX_INOUT OMX_BUFFERHEADERTYPE** ppBufferHdr,
       OMX_IN OMX_U32 nPortIndex,
       OMX_IN OMX_PTR pAppPrivate,
       OMX_IN void* eglImage)
 {
+   /* Load eglIntOpenMAXILDoneMarker() and libEGL here, it will be needed later */
+   vcos_once(&loaded_eglIntOpenMAXILDoneMarker, load_eglIntOpenMAXILDoneMarker);
+
    return vcil_out_addBuffer(hComponent, ppBufferHdr, nPortIndex, pAppPrivate, 0, NULL, eglImage, IL_USE_EGL_IMAGE);
 }
 
@@ -582,7 +607,8 @@ static OMX_ERRORTYPE vcil_out_FillThisBuffer(OMX_IN  OMX_HANDLETYPE hComponent,
    {
       // If an output port is marked as an EGL port, we request EGL to notify the IL component 
       // when it's allowed to render into the buffer/EGLImage.
-      eglIntOpenMAXILDoneMarker(comp->reference, (EGLImageKHR)pBuffer->pBuffer);
+      vc_assert(local_eglIntOpenMAXILDoneMarker != NULL);
+      local_eglIntOpenMAXILDoneMarker(comp->reference, pBuffer->pBuffer);
    }      
 
    return err;
