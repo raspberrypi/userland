@@ -135,6 +135,13 @@ static void _task_timer_expiration_routine(void *cxt)
    thread->orig_task_timer_expiration_routine = NULL;
 }
 
+/* Return thread_current_key to libraries like libEGL
+ */
+VCOS_TLS_KEY_T vcos_get_thread_current_key()
+{
+    return _vcos_thread_current_key;
+}
+
 VCOS_STATUS_T vcos_thread_create(VCOS_THREAD_T *thread,
                                  const char *name,
                                  VCOS_THREAD_ATTR_T *attrs,
