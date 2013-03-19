@@ -558,7 +558,7 @@ static MMAL_STATUS_T mmal_vc_port_send(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *
    mmal_worker_buffer_from_host *msg;
    uint32_t length;
    uint32_t msgid = MMAL_WORKER_BUFFER_FROM_HOST;
-   uint32_t major, minor, minimum;
+   uint32_t major = 0, minor = 0, minimum = 0;
    static MMAL_ZEROLEN_CHECK_T is_vc_zerolength_compatible = ZEROLEN_NOT_INITIALIZED;
 
    vcos_assert(port);
