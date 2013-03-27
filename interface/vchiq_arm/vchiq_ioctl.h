@@ -28,7 +28,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef VCHIQ_IOCTLS_H
 #define VCHIQ_IOCTLS_H
 
+#ifndef __SYMBIAN32__
 #include <linux/ioctl.h>
+#endif
 #include "vchiq_if.h"
 
 #define VCHIQ_IOC_MAGIC 0xc4

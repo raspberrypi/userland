@@ -580,7 +580,11 @@ const char ** vcos_get_argv(void)
  */
 uint32_t _vcos_get_ticks_per_second(void)
 {
+#ifdef __SYMBIAN32__
+   return 1;
+#else
    return HZ;
+#endif
 }
 
 VCOS_STATUS_T vcos_once(VCOS_ONCE_T *once_control,
