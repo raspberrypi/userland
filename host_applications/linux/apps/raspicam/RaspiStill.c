@@ -49,7 +49,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiCLI.h"
 
 #include <semaphore.h>
-typedef sem_t VCOS_SEMAPHORE_T;
 
 /// Camera number to use - we only have one camera, indexed from 0.
 #define CAMERA_NUMBER 0
