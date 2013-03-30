@@ -1,4 +1,4 @@
-add_library (mmal_core
+add_library (mmal_core SHARED
    mmal_format.c
    mmal_port.c
    mmal_port_clock.c
@@ -13,3 +13,4 @@ add_library (mmal_core
 
 target_link_libraries (mmal_core vcos)
 
+install(TARGETS mmal_core DESTINATION lib)
