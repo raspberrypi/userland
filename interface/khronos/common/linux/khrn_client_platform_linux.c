@@ -115,7 +115,33 @@ void *platform_tls_get(PLATFORM_TLS_T tls)
 
 void *platform_tls_get_check(PLATFORM_TLS_T tls)
 {
-   return vcos_tls_get(tls);
+   void *ret;
+
+   if (!process_attached)
+      /* TODO: this isn't thread safe */
+   {
+      vcos_log_trace("Attaching process");
+      client_process_attach();
+      process_attached = true;
+      tls = client_tls;
+
+      vc_vchi_khronos_init();
+   }
+
+   ret = vcos_tls_get(tls);
+   if (!ret)
+   {
+     /* The problem here is that on VCFW, the first notification we get that a thread
+       * exists at all is when it calls an arbitrary EGL function. We need to detect this
+       * case and initiliase the per-thread state.
+       *
+       * On Windows this gets done in DllMain.
+       */
+      client_thread_attach();
+      vcos_thread_at_exit(client_thread_detach, NULL);
+      ret = vcos_tls_get(tls);
+   }
+   return ret;
 }
 
 /* ----------------------------------------------------------------------
