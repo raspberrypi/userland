@@ -78,6 +78,7 @@ typedef struct
    int framerate;                      /// Requested frame rate (fps)
    char *filename;                     /// filename of output file
    int verbose;                        /// !0 if want detailed run information
+   int quiet;                          /// Disables ALL printed output
    int demoMode;                       /// Run app in demo mode
    int demoInterval;                   /// Interval between camera settings changes
    int immutableInput;                /// Flag to specify whether encoder works in place or creates a new buffer. Result is preview can display either
@@ -115,6 +116,7 @@ static void display_valid_parameters();
 #define CommandDemoMode     7
 #define CommandFramerate    8
 #define CommandPreviewEnc   9
+#define CommandQuiet        10
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -122,8 +124,9 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandWidth,   "-width",      "w",  "Set image width <size>. Default 1920", 1 },
    { CommandHeight,  "-height",     "h",  "Set image height <size>. Default 1080", 1 },
    { CommandBitrate, "-bitrate",    "b",  "Set bitrate. Use bits per second (e.g. 10MBits/s would be -b 10000000)", 1 },
-   { CommandOutput,  "-output",     "o",  "Output filename <filename>", 1 },
+   { CommandOutput,  "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -')", 1 },
    { CommandVerbose, "-verbose",    "v",  "Output verbose information during run", 0 },
+   { CommandQuiet,   "-quiet",      "q",  "Disables ALL console output (except when requesting data output to stdout). Overrides verbose", 0},
    { CommandTimeout, "-timeout",    "t",  "Time before takes picture and shuts down. If not specified, set to 5s", 1 },
    { CommandDemoMode,"-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 1},
    { CommandFramerate,"-framerate", "fps","Specify the frames per second to record", 1},
@@ -330,6 +333,10 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          state->immutableInput = 0;
          break;
 
+      case CommandQuiet:
+         state->quiet = 1;
+         break;
+
       default:
       {
          // Try parsing for any image specific parameters
@@ -359,6 +366,10 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
       printf("Invalid command line option (%s)\n", argv[i]);
       return 1;
    }
+
+   // Always disable verbose if quiet requested
+   if (state->quiet)
+      state->verbose = 0;
 
    return 0;
 }
@@ -396,8 +407,6 @@ static void display_valid_parameters()
  */
 static void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
-   printf("Camera control callback  cmd=0x%08x", buffer->cmd);
-
    if (buffer->cmd == MMAL_EVENT_PARAMETER_CHANGED)
    {
    }
@@ -854,9 +863,6 @@ int main(int argc, const char **argv)
    // Register our application with the logging system
    vcos_log_register("RaspiVid", VCOS_LOG_CATEGORY);
 
-   printf("\nRaspiVid Camera App\n");
-   printf("===================\n\n");
-
    signal(SIGINT, signal_handler);
 
    default_status(&state);
@@ -873,6 +879,12 @@ int main(int argc, const char **argv)
    {
       status = -1;
       exit(0);
+   }
+
+   if (!state.quiet)
+   {
+      printf("\nRaspiVid Camera App\n");
+      printf("===================\n\n");
    }
 
    if (state.verbose)
@@ -941,8 +953,21 @@ int main(int argc, const char **argv)
          if (state.filename)
          {
             if (state.verbose)
-               printf("Opening output file %s\n", state.filename);
-            output_file = fopen(state.filename, "wb");
+               printf("Opening output file \"%s\"\n", state.filename);
+
+            if (state.filename[0] == '-')
+            {
+               output_file = stdout;
+
+               // Ensure we don't upset the output stream with diagnostics/info
+               state.quiet = 1;
+               state.verbose = 0;
+            }
+            else
+            {
+               output_file = fopen(state.filename, "wb");
+            }
+
             if (!output_file)
             {
                // Notify user, carry on but discarding encoded output buffers
@@ -978,7 +1003,9 @@ int main(int argc, const char **argv)
             int num_iterations = state.timeout / state.demoInterval;
             int i;
 
-            printf("Running in demo mode\n");
+            if (!state.quiet)
+               printf("Running in demo mode\n");
+
             for (i=0;i<num_iterations;i++)
             {
                raspicamcontrol_cycle_test(state.camera_component);
@@ -992,7 +1019,6 @@ int main(int argc, const char **argv)
             {
                if (state.verbose)
                   printf("Starting video capture\n");
-
 
                if (mmal_port_parameter_set_boolean(camera_video_port, MMAL_PARAMETER_CAPTURE, 1) != MMAL_SUCCESS)
                {
@@ -1019,7 +1045,8 @@ int main(int argc, const char **argv)
                // Now wait until we need to stop
                vcos_sleep(state.timeout);
 
-               printf("Finished capture\n");
+               if (!state.quiet)
+                  printf("Finished capture\n");
             }
             else
                vcos_sleep(state.timeout);
@@ -1048,7 +1075,7 @@ error:
 
       // Can now close our file. Note disabling ports may flush buffers which causes
       // problems if we have already closed the file!
-      if (output_file)
+      if (output_file && output_file != stdout)
          fclose(output_file);
 
       /* Disable components */
