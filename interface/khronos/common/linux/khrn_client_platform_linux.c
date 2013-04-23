@@ -115,7 +115,7 @@ void *platform_tls_get(PLATFORM_TLS_T tls)
 
 void *platform_tls_get_check(PLATFORM_TLS_T tls)
 {
-   return vcos_tls_get(tls);
+   return platform_tls_get(tls);
 }
 
 /* ----------------------------------------------------------------------
