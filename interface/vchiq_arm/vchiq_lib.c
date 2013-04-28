@@ -933,17 +933,16 @@ vchi_msg_dequeue( VCHI_SERVICE_HANDLE_T handle,
       args.buf = data;
       RETRY(ret, ioctl(service->fd, VCHIQ_IOC_DEQUEUE_MESSAGE, &args));
 #ifdef __NetBSD__
-      if (ret == -1) {
-         ret = -errno;
-      } else if (ret == 0) {
-	 ret = args.bufsize;
+      if (ret == 0) {
+         *actual_msg_size = args.bufsize;
       }
-#endif
+#else
       if (ret >= 0)
       {
          *actual_msg_size = ret;
          ret = 0;
       }
+#endif
    }
 
    if ((ret < 0) && (errno != EWOULDBLOCK))
@@ -1652,12 +1651,10 @@ fill_peek_buf(VCHI_SERVICE_T *service,
 
          RETRY(ret, ioctl(service->fd, VCHIQ_IOC_DEQUEUE_MESSAGE, &args));
 #ifdef __NetBSD__
-         if (ret == -1) {
-            ret = -errno;
-         } else if (ret == 0) {
-	    ret = args.bufsize;
+         if (ret == 0) {
+            service->peek_size = args.bufsize;
          }
-#endif
+#else
          if (ret >= 0)
          {
             service->peek_size = ret;
@@ -1667,6 +1664,7 @@ fill_peek_buf(VCHI_SERVICE_T *service,
          {
             ret = -1;
          }
+#endif
       }
       else
       {
