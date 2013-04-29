@@ -25,76 +25,28 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// Spatial coordinates for the cube
+/*
+ * RaspiCLI.h
+ *
+ *  Created on: 54th March 2013
+ *      Author: James Hughes
+ */
 
-static const GLbyte quadx[6*4*3] = {
-   /* FRONT */
-   -10, -10,  10,
-   10, -10,  10,
-   -10,  10,  10,
-   10,  10,  10,
+#ifndef RASPICLI_H_
+#define RASPICLI_H_
 
-   /* BACK */
-   -10, -10, -10,
-   -10,  10, -10,
-   10, -10, -10,
-   10,  10, -10,
+typedef struct
+{
+   int id;
+   char *command;
+   char *abbrev;
+   char *help;
+   int num_parameters;
+} COMMAND_LIST;
 
-   /* LEFT */
-   -10, -10,  10,
-   -10,  10,  10,
-   -10, -10, -10,
-   -10,  10, -10,
 
-   /* RIGHT */
-   10, -10, -10,
-   10,  10, -10,
-   10, -10,  10,
-   10,  10,  10,
+void raspicli_display_help(const COMMAND_LIST *commands, const int num_commands);
+int raspicli_get_command_id(const COMMAND_LIST *commands, const int num_commands, const char *arg, int *num_parameters);
 
-   /* TOP */
-   -10,  10,  10,
-   10,  10,  10,
-   -10,  10, -10,
-   10,  10, -10,
 
-   /* BOTTOM */
-   -10, -10,  10,
-   -10, -10, -10,
-   10, -10,  10,
-   10, -10, -10,
-};
-
-/** Texture coordinates for the quad. */
-static const GLfloat texCoords[6 * 4 * 2] = {
-   0.f,  0.f,
-   1.f,  0.f,
-   0.f,  1.f,
-   1.f,  1.f,
-
-   0.f,  0.f,
-   1.f,  0.f,
-   0.f,  1.f,
-   1.f,  1.f,
-
-   0.f,  0.f,
-   1.f,  0.f,
-   0.f,  1.f,
-   1.f,  1.f,
-
-   0.f,  0.f,
-   1.f,  0.f,
-   0.f,  1.f,
-   1.f,  1.f,
-
-   0.f,  0.f,
-   1.f,  0.f,
-   0.f,  1.f,
-   1.f,  1.f,
-
-   0.f,  0.f,
-   1.f,  0.f,
-   0.f,  1.f,
-   1.f,  1.f,
-};
-
+#endif

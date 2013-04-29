@@ -368,7 +368,7 @@ static int ilcs_callback(VCHIQ_REASON_T reason, VCHIQ_HEADER_T *header, void *se
       break;
 
    case VCHIQ_SERVICE_CLOSED:
-      if(st->kill_service < CLOSED_CALLBACK)
+      if(st && st->kill_service < CLOSED_CALLBACK)
       {
          st->kill_service = CLOSED_CALLBACK;
          ilcs_send_quit(st);

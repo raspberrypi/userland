@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2012, Broadcom Europe Ltd
+Copyright (c) 2012, OtherCrashOverride
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -34,17 +35,41 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "bcm_host.h"
 #include "ilclient.h"
 
-static int video_decode_test(char *filename)
+static OMX_BUFFERHEADERTYPE* eglBuffer = NULL;
+static COMPONENT_T* video_render = NULL;
+
+static void* eglImage = 0;
+
+void my_fill_buffer_done(void* data, COMPONENT_T* comp)
 {
+  if (OMX_FillThisBuffer(ilclient_get_handle(video_render), eglBuffer) != OMX_ErrorNone)
+   {
+      printf("OMX_FillThisBuffer failed in callback\n");
+      exit(1);
+   }
+}
+
+
+// Modified function prototype to work with pthreads
+void *video_decode_test(void* arg)
+{
+   const char* filename = "/opt/vc/src/hello_pi/hello_video/test.h264";
+   eglImage = arg;
+
+   if (eglImage == 0)
+   {
+      printf("eglImage is null.\n");
+      exit(1);
+   }
+
    OMX_VIDEO_PARAM_PORTFORMATTYPE format;
    OMX_TIME_CONFIG_CLOCKSTATETYPE cstate;
-   COMPONENT_T *video_decode = NULL, *video_scheduler = NULL, *video_render = NULL, *clock = NULL;
+   COMPONENT_T *video_decode = NULL, *video_scheduler = NULL, *clock = NULL;
    COMPONENT_T *list[5];
    TUNNEL_T tunnel[4];
    ILCLIENT_T *client;
    FILE *in;
    int status = 0;
-   unsigned char *data = NULL;
    unsigned int data_len = 0;
    int packet_size = 80<<10;
 
@@ -52,20 +77,23 @@ static int video_decode_test(char *filename)
    memset(tunnel, 0, sizeof(tunnel));
 
    if((in = fopen(filename, "rb")) == NULL)
-      return -2;
+      return (void *)-2;
 
    if((client = ilclient_init()) == NULL)
    {
       fclose(in);
-      return -3;
+      return (void *)-3;
    }
 
    if(OMX_Init() != OMX_ErrorNone)
    {
       ilclient_destroy(client);
       fclose(in);
-      return -4;
+      return (void *)-4;
    }
+
+   // callback
+   ilclient_set_fill_buffer_done_callback(client, my_fill_buffer_done, 0);
 
    // create video_decode
    if(ilclient_create_component(client, &video_decode, "video_decode", ILCLIENT_DISABLE_ALL_PORTS | ILCLIENT_ENABLE_INPUT_BUFFERS) != 0)
@@ -73,7 +101,8 @@ static int video_decode_test(char *filename)
    list[0] = video_decode;
 
    // create video_render
-   if(status == 0 && ilclient_create_component(client, &video_render, "video_render", ILCLIENT_DISABLE_ALL_PORTS) != 0)
+   //if(status == 0 && ilclient_create_component(client, &video_render, "video_render", ILCLIENT_DISABLE_ALL_PORTS) != 0)
+   if(status == 0 && ilclient_create_component(client, &video_render, "egl_render", ILCLIENT_DISABLE_ALL_PORTS | ILCLIENT_ENABLE_OUTPUT_BUFFERS) != 0)
       status = -14;
    list[1] = video_render;
 
@@ -96,7 +125,8 @@ static int video_decode_test(char *filename)
    list[3] = video_scheduler;
 
    set_tunnel(tunnel, video_decode, 131, video_scheduler, 10);
-   set_tunnel(tunnel+1, video_scheduler, 11, video_render, 90);
+   //set_tunnel(tunnel+1, video_scheduler, 11, video_render, 90);
+   set_tunnel(tunnel+1, video_scheduler, 11, video_render, 220);
    set_tunnel(tunnel+2, clock, 80, video_scheduler, 12);
 
    // setup clock tunnel first
@@ -129,6 +159,10 @@ static int video_decode_test(char *filename)
          // feed data and wait until we get port settings changed
          unsigned char *dest = buf->pBuffer;
 
+         // loop if at end
+         if (feof(in))
+            rewind(in);
+
          data_len += fread(dest, 1, packet_size-data_len, in);
 
          if(port_settings_changed == 0 &&
@@ -153,7 +187,33 @@ static int video_decode_test(char *filename)
                break;
             }
 
+            // Set egl_render to idle
+            ilclient_change_component_state(video_render, OMX_StateIdle);
+
+            // Enable the output port and tell egl_render to use the texture as a buffer
+            //ilclient_enable_port(video_render, 221); THIS BLOCKS SO CANT BE USED
+            if (OMX_SendCommand(ILC_GET_HANDLE(video_render), OMX_CommandPortEnable, 221, NULL) != OMX_ErrorNone)
+            {
+               printf("OMX_CommandPortEnable failed.\n");
+               exit(1);
+            }
+
+            if (OMX_UseEGLImage(ILC_GET_HANDLE(video_render), &eglBuffer, 221, NULL, eglImage) != OMX_ErrorNone)
+            {
+               printf("OMX_UseEGLImage failed.\n");
+               exit(1);
+            }
+
+            // Set egl_render to executing
             ilclient_change_component_state(video_render, OMX_StateExecuting);
+
+
+            // Request egl_render to write data to the texture buffer
+            if(OMX_FillThisBuffer(ILC_GET_HANDLE(video_render), eglBuffer) != OMX_ErrorNone)
+            {
+               printf("OMX_FillThisBuffer failed.\n");
+               exit(1);
+            }
          }
          if(!data_len)
             break;
@@ -208,17 +268,6 @@ static int video_decode_test(char *filename)
    OMX_Deinit();
 
    ilclient_destroy(client);
-   return status;
+   return (void *)status;
 }
-
-int main (int argc, char **argv)
-{
-   if (argc < 2) {
-      printf("Usage: %s <filename>\n", argv[0]);
-      exit(1);
-   }
-   bcm_host_init();
-   return video_decode_test(argv[1]);
-}
-
 

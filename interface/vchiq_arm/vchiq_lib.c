@@ -499,23 +499,7 @@ vchiq_bulk_receive(VCHIQ_SERVICE_HANDLE_T handle,
    void *userdata,
    VCHIQ_BULK_MODE_T mode)
 {
-   VCHIQ_SERVICE_T *service = find_service_by_handle(handle);
-   VCHIQ_QUEUE_BULK_TRANSFER_T args;
-   int ret;
-
-   vcos_log_trace( "%s called service handle = 0x%08x", __func__, (uint32_t)handle );
-
-   if (!service)
-      return VCHIQ_ERROR;
-
-   args.handle = service->handle;
-   args.data = data;
-   args.size = size;
-   args.userdata = userdata;
-   args.mode = mode;
-   RETRY(ret, ioctl(service->fd, VCHIQ_IOC_QUEUE_BULK_RECEIVE, &args));
-
-   return (ret >= 0) ? VCHIQ_SUCCESS : VCHIQ_ERROR;
+   return vchiq_bulk_receive_handle(handle, VCHI_MEM_HANDLE_INVALID, data, size, userdata, mode, NULL);
 }
 
 VCHIQ_STATUS_T
@@ -537,11 +521,28 @@ vchiq_bulk_receive_handle(VCHIQ_SERVICE_HANDLE_T handle,
    void *offset,
    int size,
    void *userdata,
-   VCHIQ_BULK_MODE_T mode)
+   VCHIQ_BULK_MODE_T mode,
+   int (*copy_pagelist)())
 {
+   VCHIQ_SERVICE_T *service = find_service_by_handle(handle);
+   VCHIQ_QUEUE_BULK_TRANSFER_T args;
+   int ret;
+
    vcos_assert(memhandle == VCHI_MEM_HANDLE_INVALID);
 
-   return vchiq_bulk_receive(handle, offset, size, userdata, mode);
+   vcos_log_trace( "%s called service handle = 0x%08x", __func__, (uint32_t)handle );
+
+   if (!service)
+      return VCHIQ_ERROR;
+
+   args.handle = service->handle;
+   args.data = offset;
+   args.size = size;
+   args.userdata = userdata;
+   args.mode = mode;
+   RETRY(ret, ioctl(service->fd, VCHIQ_IOC_QUEUE_BULK_RECEIVE, &args));
+
+   return (ret >= 0) ? VCHIQ_SUCCESS : VCHIQ_ERROR;
 }
 
 int

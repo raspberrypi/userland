@@ -375,7 +375,7 @@ VCHPRE_ int VCHPOST_ vc_dispmanx_resource_write_data( DISPMANX_RESOURCE_HANDLE_T
 
    //Now send the bulk transfer across
    //command parameters: resource handle, destination y, bulk length
-   uint32_t param[] = {VC_HTOV32(handle), VC_HTOV32(rect->y), VC_HTOV32(bulk_len)};
+   uint32_t param[] = {VC_HTOV32(handle), VC_HTOV32(rect->y), VC_HTOV32(bulk_len), VC_HTOV32(src_type) };
    success = dispmanx_send_command(  EDispmanBulkWrite | DISPMANX_NO_REPLY_MASK, param, sizeof(param));
    if(success == 0)
    {
@@ -420,7 +420,7 @@ vc_dispmanx_resource_read_data(
    }
 
    host_start = (uint8_t *)dst_address + (dst_pitch * p_rect->y);
-   bulk_len   = (int32_t)dst_pitch * (p_rect->height-p_rect->y);
+   bulk_len   = (int32_t)dst_pitch * p_rect->height;
 
    // Now send the bulk transfer across
    // command parameters: resource handle, destination y, bulk length

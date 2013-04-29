@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2012, Broadcom Europe Ltd
+Copyright (c) 2012, OtherCrashOverride
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -42,14 +43,19 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "cube_texture_and_coords.h"
 
+#include "triangle.h"
+#include <pthread.h>
+
+
 #define PATH "./"
 
-#define IMAGE_SIZE 128
+#define IMAGE_SIZE_WIDTH 1920
+#define IMAGE_SIZE_HEIGHT 1080
 
 #ifndef M_PI
    #define M_PI 3.141592654
 #endif
-	
+  
 
 typedef struct
 {
@@ -59,7 +65,7 @@ typedef struct
    EGLDisplay display;
    EGLSurface surface;
    EGLContext context;
-   GLuint tex[6];
+   GLuint tex;
 // model rotation vector and direction
    GLfloat rot_angle_x_inc;
    GLfloat rot_angle_y_inc;
@@ -71,10 +77,6 @@ typedef struct
 // current distance from camera
    GLfloat distance;
    GLfloat distance_inc;
-// pointers to texture buffers
-   char *tex_buf1;
-   char *tex_buf2;
-   char *tex_buf3;
 } CUBE_STATE_T;
 
 static void init_ogl(CUBE_STATE_T *state);
@@ -85,10 +87,12 @@ static GLfloat inc_and_clip_distance(GLfloat distance, GLfloat distance_inc);
 static void redraw_scene(CUBE_STATE_T *state);
 static void update_model(CUBE_STATE_T *state);
 static void init_textures(CUBE_STATE_T *state);
-static void load_tex_images(CUBE_STATE_T *state);
 static void exit_func(void);
 static volatile int terminate;
 static CUBE_STATE_T _state, *state=&_state;
+
+static void* eglImage = 0;
+static pthread_t thread1;
 
 
 /***********************************************************
@@ -122,6 +126,8 @@ static void init_ogl(CUBE_STATE_T *state)
       EGL_GREEN_SIZE, 8,
       EGL_BLUE_SIZE, 8,
       EGL_ALPHA_SIZE, 8,
+      EGL_DEPTH_SIZE, 16,
+      //EGL_SAMPLES, 4,
       EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
       EGL_NONE
    };
@@ -137,7 +143,8 @@ static void init_ogl(CUBE_STATE_T *state)
    assert(EGL_FALSE != result);
 
    // get an appropriate EGL frame buffer configuration
-   result = eglChooseConfig(state->display, attribute_list, &config, 1, &num_config);
+   // this uses a BRCM extension that gets the closest match, rather than standard which returns anything that matches
+   result = eglSaneChooseConfigBRCM(state->display, attribute_list, &config, 1, &num_config);
    assert(EGL_FALSE != result);
 
    // create an EGL rendering context
@@ -340,11 +347,7 @@ static GLfloat inc_and_clip_distance(GLfloat distance, GLfloat distance_inc)
 static void redraw_scene(CUBE_STATE_T *state)
 {
    // Start with a clear screen
-   glClear( GL_COLOR_BUFFER_BIT );
-
-   // Draw first (front) face:
-   // Bind texture surface to current vertices
-   glBindTexture(GL_TEXTURE_2D, state->tex[0]);
+   glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
    // Need to rotate textures - do this by rotating each cube face
    glRotatef(270.f, 0.f, 0.f, 1.f ); // front face normal along z axis
@@ -353,23 +356,18 @@ static void redraw_scene(CUBE_STATE_T *state)
    glDrawArrays( GL_TRIANGLE_STRIP, 0, 4);
 
    // same pattern for other 5 faces - rotation chosen to make image orientation 'nice'
-   glBindTexture(GL_TEXTURE_2D, state->tex[1]);
    glRotatef(90.f, 0.f, 0.f, 1.f ); // back face normal along z axis
    glDrawArrays( GL_TRIANGLE_STRIP, 4, 4);
 
-   glBindTexture(GL_TEXTURE_2D, state->tex[2]);
    glRotatef(90.f, 1.f, 0.f, 0.f ); // left face normal along x axis
    glDrawArrays( GL_TRIANGLE_STRIP, 8, 4);
 
-   glBindTexture(GL_TEXTURE_2D, state->tex[3]);
    glRotatef(90.f, 1.f, 0.f, 0.f ); // right face normal along x axis
    glDrawArrays( GL_TRIANGLE_STRIP, 12, 4);
 
-   glBindTexture(GL_TEXTURE_2D, state->tex[4]);
    glRotatef(270.f, 0.f, 1.f, 0.f ); // top face normal along y axis
    glDrawArrays( GL_TRIANGLE_STRIP, 16, 4);
 
-   glBindTexture(GL_TEXTURE_2D, state->tex[5]);
    glRotatef(90.f, 0.f, 1.f, 0.f ); // bottom face normal along y axis
    glDrawArrays( GL_TRIANGLE_STRIP, 20, 4);
 
@@ -390,109 +388,56 @@ static void redraw_scene(CUBE_STATE_T *state)
  ***********************************************************/
 static void init_textures(CUBE_STATE_T *state)
 {
-   // load three texture buffers but use them on six OGL|ES texture surfaces
-   load_tex_images(state);
-   glGenTextures(6, &state->tex[0]);
+   //// load three texture buffers but use them on six OGL|ES texture surfaces
+   glGenTextures(1, &state->tex);
 
-   // setup first texture
-   glBindTexture(GL_TEXTURE_2D, state->tex[0]);
-   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, IMAGE_SIZE, IMAGE_SIZE, 0,
-                GL_RGB, GL_UNSIGNED_BYTE, state->tex_buf1);
-   glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (GLfloat)GL_NEAREST);
-   glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, (GLfloat)GL_NEAREST);
+   glBindTexture(GL_TEXTURE_2D, state->tex);
+   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, IMAGE_SIZE_WIDTH, IMAGE_SIZE_HEIGHT, 0,
+                GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 
-   // setup second texture - reuse first image
-   glBindTexture(GL_TEXTURE_2D, state->tex[1]);
-   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, IMAGE_SIZE, IMAGE_SIZE, 0,
-                GL_RGB, GL_UNSIGNED_BYTE, state->tex_buf1);
-   glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (GLfloat)GL_NEAREST);
-   glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, (GLfloat)GL_NEAREST);
+   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-   // third texture
-   glBindTexture(GL_TEXTURE_2D, state->tex[2]);
-   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, IMAGE_SIZE, IMAGE_SIZE, 0,
-                GL_RGB, GL_UNSIGNED_BYTE, state->tex_buf2);
-   glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (GLfloat)GL_NEAREST);
-   glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, (GLfloat)GL_NEAREST);
 
-   // fourth texture  - reuse second image
-   glBindTexture(GL_TEXTURE_2D, state->tex[3]);
-   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, IMAGE_SIZE, IMAGE_SIZE, 0,
-                GL_RGB, GL_UNSIGNED_BYTE, state->tex_buf2);
-   glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (GLfloat)GL_NEAREST);
-   glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, (GLfloat)GL_NEAREST);
+   /* Create EGL Image */
+   eglImage = eglCreateImageKHR(
+                state->display,
+                state->context,
+                EGL_GL_TEXTURE_2D_KHR,
+                (EGLClientBuffer)state->tex,
+                0);
+    
+   if (eglImage == EGL_NO_IMAGE_KHR)
+   {
+      printf("eglCreateImageKHR failed.\n");
+      exit(1);
+   }
 
-   //fifth texture
-   glBindTexture(GL_TEXTURE_2D, state->tex[4]);
-   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, IMAGE_SIZE, IMAGE_SIZE, 0,
-                GL_RGB, GL_UNSIGNED_BYTE, state->tex_buf3);
-   glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (GLfloat)GL_NEAREST);
-   glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, (GLfloat)GL_NEAREST);
-
-   // sixth texture  - reuse third image
-   glBindTexture(GL_TEXTURE_2D, state->tex[5]);
-   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, IMAGE_SIZE, IMAGE_SIZE, 0,
-                GL_RGB, GL_UNSIGNED_BYTE, state->tex_buf3);
-   glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (GLfloat)GL_NEAREST);
-   glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, (GLfloat)GL_NEAREST);
+   // Start rendering
+   pthread_create(&thread1, NULL, video_decode_test, eglImage);
 
    // setup overall texture environment
    glTexCoordPointer(2, GL_FLOAT, 0, texCoords);
    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-   
+
    glEnable(GL_TEXTURE_2D);
+
+   // Bind texture surface to current vertices
+   glBindTexture(GL_TEXTURE_2D, state->tex);
 }
-
-/***********************************************************
- * Name: load_tex_images
- *
- * Arguments:
- *       void
- *
- * Description: Loads three raw images to use as textures on faces
- *
- * Returns: void
- *
- ***********************************************************/
-static void load_tex_images(CUBE_STATE_T *state)
-{
-   FILE *tex_file1 = NULL, *tex_file2=NULL, *tex_file3 = NULL;
-   int bytes_read, image_sz = IMAGE_SIZE*IMAGE_SIZE*3;
-
-   state->tex_buf1 = malloc(image_sz);
-   state->tex_buf2 = malloc(image_sz);
-   state->tex_buf3 = malloc(image_sz);
-
-   tex_file1 = fopen(PATH "Lucca_128_128.raw", "rb");
-   if (tex_file1 && state->tex_buf1)
-   {
-      bytes_read=fread(state->tex_buf1, 1, image_sz, tex_file1);
-      assert(bytes_read == image_sz);  // some problem with file?
-      fclose(tex_file1);
-   }
-
-   tex_file2 = fopen(PATH "Djenne_128_128.raw", "rb");
-   if (tex_file2 && state->tex_buf2)
-   {
-      bytes_read=fread(state->tex_buf2, 1, image_sz, tex_file2);
-      assert(bytes_read == image_sz);  // some problem with file?
-      fclose(tex_file2);      
-   }
-
-   tex_file3 = fopen(PATH "Gaudi_128_128.raw", "rb");
-   if (tex_file3 && state->tex_buf3)
-   {
-      bytes_read=fread(state->tex_buf3, 1, image_sz, tex_file3);
-      assert(bytes_read == image_sz);  // some problem with file?
-      fclose(tex_file3);
-   }   
-}
-
 //------------------------------------------------------------------------------
 
 static void exit_func(void)
 // Function to be passed to atexit().
 {
+   if (eglImage != 0)
+   {
+      if (!eglDestroyImageKHR(state->display, (EGLImageKHR) eglImage))
+         printf("eglDestroyImageKHR failed.");
+   }
+
    // clear screen
    glClear( GL_COLOR_BUFFER_BIT );
    eglSwapBuffers(state->display, state->surface);
@@ -503,11 +448,6 @@ static void exit_func(void)
    eglDestroyContext( state->display, state->context );
    eglTerminate( state->display );
 
-   // release texture buffers
-   free(state->tex_buf1);
-   free(state->tex_buf2);
-   free(state->tex_buf3);
-
    printf("\ncube closed\n");
 } // exit_func()
 
@@ -516,6 +456,7 @@ static void exit_func(void)
 int main ()
 {
    bcm_host_init();
+   printf("Note: ensure you have sufficient gpu_mem configured\n");
 
    // Clear application state
    memset( state, 0, sizeof( *state ) );

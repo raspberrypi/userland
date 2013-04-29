@@ -25,76 +25,28 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// Spatial coordinates for the cube
+#ifndef RASPIPREVIEW_H_
+#define RASPIPREVIEW_H_
 
-static const GLbyte quadx[6*4*3] = {
-   /* FRONT */
-   -10, -10,  10,
-   10, -10,  10,
-   -10,  10,  10,
-   10,  10,  10,
+/// Layer that preview window should be displayed on
+#define PREVIEW_LAYER      2
+#define PREVIEW_FRAME_RATE_NUM 30
+#define PREVIEW_FRAME_RATE_DEN 1
 
-   /* BACK */
-   -10, -10, -10,
-   -10,  10, -10,
-   10, -10, -10,
-   10,  10, -10,
 
-   /* LEFT */
-   -10, -10,  10,
-   -10,  10,  10,
-   -10, -10, -10,
-   -10,  10, -10,
+typedef struct
+{
+   int wantPreview;                       /// Display a preview
+   int wantFullScreenPreview;             /// 0 is use previewRect, non-zero to use full screen
+   MMAL_RECT_T previewWindow;             /// Destination rectangle for the preview window.
+   MMAL_COMPONENT_T *preview_component;   /// Pointer to the created preview display component
+} RASPIPREVIEW_PARAMETERS;
 
-   /* RIGHT */
-   10, -10, -10,
-   10,  10, -10,
-   10, -10,  10,
-   10,  10,  10,
+MMAL_COMPONENT_T *raspipreview_create(RASPIPREVIEW_PARAMETERS *state);
+void raspipreview_destroy(RASPIPREVIEW_PARAMETERS *state);
+void raspipreview_set_defaults(RASPIPREVIEW_PARAMETERS *state);
+void raspipreview_dump_parameters(RASPIPREVIEW_PARAMETERS *state);
+int raspipreview_parse_cmdline(RASPIPREVIEW_PARAMETERS *params, const char *arg1, const char *arg2);
+void raspipreview_display_help();
 
-   /* TOP */
-   -10,  10,  10,
-   10,  10,  10,
-   -10,  10, -10,
-   10,  10, -10,
-
-   /* BOTTOM */
-   -10, -10,  10,
-   -10, -10, -10,
-   10, -10,  10,
-   10, -10, -10,
-};
-
-/** Texture coordinates for the quad. */
-static const GLfloat texCoords[6 * 4 * 2] = {
-   0.f,  0.f,
-   1.f,  0.f,
-   0.f,  1.f,
-   1.f,  1.f,
-
-   0.f,  0.f,
-   1.f,  0.f,
-   0.f,  1.f,
-   1.f,  1.f,
-
-   0.f,  0.f,
-   1.f,  0.f,
-   0.f,  1.f,
-   1.f,  1.f,
-
-   0.f,  0.f,
-   1.f,  0.f,
-   0.f,  1.f,
-   1.f,  1.f,
-
-   0.f,  0.f,
-   1.f,  0.f,
-   0.f,  1.f,
-   1.f,  1.f,
-
-   0.f,  0.f,
-   1.f,  0.f,
-   0.f,  1.f,
-   1.f,  1.f,
-};
-
+#endif /* RASPIPREVIEW_H_ */

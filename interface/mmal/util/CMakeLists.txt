@@ -1,4 +1,4 @@
-add_library (mmal_util
+add_library (mmal_util SHARED
    mmal_il.c
    mmal_util.c
    mmal_connection.c
@@ -12,3 +12,4 @@ add_library (mmal_util
 
 target_link_libraries (mmal_util vcos)
 
+install(TARGETS mmal_util DESTINATION lib)

@@ -24,77 +24,7 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+#pragma once
 
-// Spatial coordinates for the cube
 
-static const GLbyte quadx[6*4*3] = {
-   /* FRONT */
-   -10, -10,  10,
-   10, -10,  10,
-   -10,  10,  10,
-   10,  10,  10,
-
-   /* BACK */
-   -10, -10, -10,
-   -10,  10, -10,
-   10, -10, -10,
-   10,  10, -10,
-
-   /* LEFT */
-   -10, -10,  10,
-   -10,  10,  10,
-   -10, -10, -10,
-   -10,  10, -10,
-
-   /* RIGHT */
-   10, -10, -10,
-   10,  10, -10,
-   10, -10,  10,
-   10,  10,  10,
-
-   /* TOP */
-   -10,  10,  10,
-   10,  10,  10,
-   -10,  10, -10,
-   10,  10, -10,
-
-   /* BOTTOM */
-   -10, -10,  10,
-   -10, -10, -10,
-   10, -10,  10,
-   10, -10, -10,
-};
-
-/** Texture coordinates for the quad. */
-static const GLfloat texCoords[6 * 4 * 2] = {
-   0.f,  0.f,
-   1.f,  0.f,
-   0.f,  1.f,
-   1.f,  1.f,
-
-   0.f,  0.f,
-   1.f,  0.f,
-   0.f,  1.f,
-   1.f,  1.f,
-
-   0.f,  0.f,
-   1.f,  0.f,
-   0.f,  1.f,
-   1.f,  1.f,
-
-   0.f,  0.f,
-   1.f,  0.f,
-   0.f,  1.f,
-   1.f,  1.f,
-
-   0.f,  0.f,
-   1.f,  0.f,
-   0.f,  1.f,
-   1.f,  1.f,
-
-   0.f,  0.f,
-   1.f,  0.f,
-   0.f,  1.f,
-   1.f,  1.f,
-};
-
+void* video_decode_test(void* arg);
