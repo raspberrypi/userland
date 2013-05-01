@@ -1126,7 +1126,7 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes_new(HDMI_RES_GROUP_T group,
             }
          } else {
             //The request also terminates if there are no supported modes reported
-            vcos_log_error("No supported modes returned for group %s in [%s]", HDMI_RES_GROUP_NAME(group), VCOS_FUNCTION);
+            vcos_log_trace("No supported modes returned for group %s in [%s]", HDMI_RES_GROUP_NAME(group), VCOS_FUNCTION);
          }
       } else {
          vcos_log_error("Failed to query supported modes for group %s in [%s]", HDMI_RES_GROUP_NAME(group), VCOS_FUNCTION);
