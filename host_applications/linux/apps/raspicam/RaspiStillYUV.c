@@ -30,6 +30,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <memory.h>
 
+#include "bcm_host.h"
 #include "interface/vcos/vcos.h"
 
 #include "interface/mmal/mmal.h"
@@ -625,12 +626,14 @@ int main(int argc, const char **argv)
    // Our main data storage vessel..
    RASPISTILLYUV_STATE state;
 
-   MMAL_STATUS_T status;
+   MMAL_STATUS_T status = -1;
    MMAL_PORT_T *camera_preview_port = NULL;
    MMAL_PORT_T *camera_video_port = NULL;
    MMAL_PORT_T *camera_still_port = NULL;
    MMAL_PORT_T *preview_input_port = NULL;
    FILE *output_file = NULL;
+
+   bcm_host_init();
 
    // Register our application with the logging system
    vcos_log_register("RaspiStill", VCOS_LOG_CATEGORY);
@@ -818,6 +821,8 @@ error:
       if (state.verbose)
          printf("Close down completed, all components disconnected, disabled and destroyed\n\n");
    }
+   if (status != 0)
+      raspicamcontrol_check_configuration(128);
 
    return 0;
 }

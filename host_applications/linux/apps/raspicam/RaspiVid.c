@@ -30,6 +30,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <memory.h>
 
+#include "bcm_host.h"
 #include "interface/vcos/vcos.h"
 
 #include "interface/mmal/mmal.h"
@@ -78,7 +79,6 @@ typedef struct
    int framerate;                      /// Requested frame rate (fps)
    char *filename;                     /// filename of output file
    int verbose;                        /// !0 if want detailed run information
-   int quiet;                          /// Disables ALL printed output
    int demoMode;                       /// Run app in demo mode
    int demoInterval;                   /// Interval between camera settings changes
    int immutableInput;                /// Flag to specify whether encoder works in place or creates a new buffer. Result is preview can display either
@@ -116,7 +116,6 @@ static void display_valid_parameters();
 #define CommandDemoMode     7
 #define CommandFramerate    8
 #define CommandPreviewEnc   9
-#define CommandQuiet        10
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -126,7 +125,6 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandBitrate, "-bitrate",    "b",  "Set bitrate. Use bits per second (e.g. 10MBits/s would be -b 10000000)", 1 },
    { CommandOutput,  "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -')", 1 },
    { CommandVerbose, "-verbose",    "v",  "Output verbose information during run", 0 },
-   { CommandQuiet,   "-quiet",      "q",  "Disables ALL console output (except when requesting data output to stdout). Overrides verbose", 0},
    { CommandTimeout, "-timeout",    "t",  "Time before takes picture and shuts down. If not specified, set to 5s", 1 },
    { CommandDemoMode,"-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 1},
    { CommandFramerate,"-framerate", "fps","Specify the frames per second to record", 1},
@@ -181,8 +179,8 @@ static void dump_status(RASPIVID_STATE *state)
       return;
    }
 
-   printf("Width %d, Height %d, filename %s\n", state->width, state->height, state->filename);
-   printf("bitrate %d, framerate %d, time delay %d\n", state->bitrate, state->framerate, state->timeout);
+   fprintf(stderr, "Width %d, Height %d, filename %s\n", state->width, state->height, state->filename);
+   fprintf(stderr, "bitrate %d, framerate %d, time delay %d\n", state->bitrate, state->framerate, state->timeout);
 
    raspipreview_dump_parameters(&state->preview_parameters);
    raspicamcontrol_dump_parameters(&state->camera_parameters);
@@ -252,7 +250,6 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          {
             if (state->bitrate > MAX_BITRATE)
             {
-               printf("Setting max bitrate = %d\n", MAX_BITRATE);
                state->bitrate = MAX_BITRATE;
             }
             i++;
@@ -303,6 +300,9 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
             if (sscanf(argv[i + 1], "%u", &state->demoInterval) == 1)
             {
                // TODO : What limits do we need for timeout?
+               if (state->demoInterval == 0)
+                  state->demoInterval = 250; // ms
+
                state->demoMode = 1;
                i++;
             }
@@ -333,10 +333,6 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          state->immutableInput = 0;
          break;
 
-      case CommandQuiet:
-         state->quiet = 1;
-         break;
-
       default:
       {
          // Try parsing for any image specific parameters
@@ -363,13 +359,15 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
 
    if (!valid)
    {
-      printf("Invalid command line option (%s)\n", argv[i]);
+      fprintf(stderr, "Invalid command line option (%s)\n", argv[i]);
       return 1;
    }
 
-   // Always disable verbose if quiet requested
-   if (state->quiet)
+   // Always disable verbose if output going to stdout
+   if (state->filename && state->filename[0] == '-')
+   {
       state->verbose = 0;
+   }
 
    return 0;
 }
@@ -379,10 +377,10 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
  */
 static void display_valid_parameters()
 {
-   printf("Display camera output to display, and optionally saves an H264 capture at requested bitrate\n\n");
-   printf("\nusage: RaspiVid [options]\n\n");
+   fprintf(stderr, "Display camera output to display, and optionally saves an H264 capture at requested bitrate\n\n");
+   fprintf(stderr, "\nusage: RaspiVid [options]\n\n");
 
-   printf("Image parameter commands\n\n");
+   fprintf(stderr, "Image parameter commands\n\n");
 
    raspicli_display_help(cmdline_commands, cmdline_commands_size);
 
@@ -392,7 +390,7 @@ static void display_valid_parameters()
    // Now display any help information from the camcontrol code
    raspicamcontrol_display_help();
 
-   printf("\n");
+   fprintf(stderr, "\n");
 
    return;
 }
@@ -631,7 +629,7 @@ static MMAL_COMPONENT_T *create_camera_component(RASPIVID_STATE *state)
    state->camera_component = camera;
 
    if (state->verbose)
-      printf("Camera component done\n");
+      fprintf(stderr, "Camera component done\n");
 
    return camera;
 
@@ -758,7 +756,7 @@ static MMAL_COMPONENT_T *create_encoder_component(RASPIVID_STATE *state)
    state->encoder_component = encoder;
 
    if (state->verbose)
-      printf("Encoder component done\n");
+      fprintf(stderr, "Encoder component done\n");
 
    return encoder;
 
@@ -851,7 +849,7 @@ int main(int argc, const char **argv)
    // Our main data storage vessel..
    RASPIVID_STATE state;
 
-   MMAL_STATUS_T status;
+   MMAL_STATUS_T status = -1;
    MMAL_PORT_T *camera_preview_port = NULL;
    MMAL_PORT_T *camera_video_port = NULL;
    MMAL_PORT_T *camera_still_port = NULL;
@@ -859,6 +857,8 @@ int main(int argc, const char **argv)
    MMAL_PORT_T *encoder_input_port = NULL;
    MMAL_PORT_T *encoder_output_port = NULL;
    FILE *output_file = NULL;
+
+   bcm_host_init();
 
    // Register our application with the logging system
    vcos_log_register("RaspiVid", VCOS_LOG_CATEGORY);
@@ -870,6 +870,9 @@ int main(int argc, const char **argv)
    // Do we have any parameters
    if (argc == 1)
    {
+      fprintf(stderr, "\nRaspiVid Camera App\n");
+      fprintf(stderr, "===================\n\n");
+
       display_valid_parameters();
       exit(0);
    }
@@ -881,14 +884,13 @@ int main(int argc, const char **argv)
       exit(0);
    }
 
-   if (!state.quiet)
-   {
-      printf("\nRaspiVid Camera App\n");
-      printf("===================\n\n");
-   }
-
    if (state.verbose)
+   {
+      fprintf(stderr, "\nRaspiVid Camera App\n");
+      fprintf(stderr, "===================\n\n");
+
       dump_status(&state);
+   }
 
    // OK, we have a nice set of parameters. Now set up our components
    // We have three components. Camera, Preview and encoder.
@@ -913,7 +915,7 @@ int main(int argc, const char **argv)
       PORT_USERDATA callback_data;
 
       if (state.verbose)
-         printf("Starting component connection stage\n");
+         fprintf(stderr, "Starting component connection stage\n");
 
       camera_preview_port = state.camera_component->output[MMAL_CAMERA_PREVIEW_PORT];
       camera_video_port   = state.camera_component->output[MMAL_CAMERA_VIDEO_PORT];
@@ -926,8 +928,8 @@ int main(int argc, const char **argv)
       {
          if (state.verbose)
          {
-            printf("Connecting camera preview port to preview input port\n");
-            printf("Starting video preview\n");
+            fprintf(stderr, "Connecting camera preview port to preview input port\n");
+            fprintf(stderr, "Starting video preview\n");
          }
 
          // Connect camera to preview
@@ -939,7 +941,7 @@ int main(int argc, const char **argv)
          VCOS_STATUS_T vcos_status;
 
          if (state.verbose)
-            printf("Connecting camera stills port to encoder input port\n");
+            fprintf(stderr, "Connecting camera stills port to encoder input port\n");
 
          // Now connect the camera to the encoder
          status = connect_ports(camera_video_port, encoder_input_port, &state.encoder_connection);
@@ -952,19 +954,18 @@ int main(int argc, const char **argv)
 
          if (state.filename)
          {
-            if (state.verbose)
-               printf("Opening output file \"%s\"\n", state.filename);
-
             if (state.filename[0] == '-')
             {
                output_file = stdout;
 
                // Ensure we don't upset the output stream with diagnostics/info
-               state.quiet = 1;
                state.verbose = 0;
             }
             else
             {
+               if (state.verbose)
+                  fprintf(stderr, "Opening output file \"%s\"\n", state.filename);
+
                output_file = fopen(state.filename, "wb");
             }
 
@@ -986,7 +987,7 @@ int main(int argc, const char **argv)
          encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&callback_data;
 
          if (state.verbose)
-            printf("Enabling encoder output port\n");
+            fprintf(stderr, "Enabling encoder output port\n");
 
          // Enable the encoder output port and tell it its callback function
          status = mmal_port_enable(encoder_output_port, encoder_buffer_callback);
@@ -1003,8 +1004,8 @@ int main(int argc, const char **argv)
             int num_iterations = state.timeout / state.demoInterval;
             int i;
 
-            if (!state.quiet)
-               printf("Running in demo mode\n");
+            if (state.verbose)
+               fprintf(stderr, "Running in demo mode\n");
 
             for (i=0;i<num_iterations;i++)
             {
@@ -1018,7 +1019,7 @@ int main(int argc, const char **argv)
             if (output_file)
             {
                if (state.verbose)
-                  printf("Starting video capture\n");
+                  fprintf(stderr, "Starting video capture\n");
 
                if (mmal_port_parameter_set_boolean(camera_video_port, MMAL_PARAMETER_CAPTURE, 1) != MMAL_SUCCESS)
                {
@@ -1045,8 +1046,8 @@ int main(int argc, const char **argv)
                // Now wait until we need to stop
                vcos_sleep(state.timeout);
 
-               if (!state.quiet)
-                  printf("Finished capture\n");
+               if (state.verbose)
+                  fprintf(stderr, "Finished capture\n");
             }
             else
                vcos_sleep(state.timeout);
@@ -1063,7 +1064,7 @@ error:
       mmal_status_to_int(status);
 
       if (state.verbose)
-         printf("Closing down\n");
+         fprintf(stderr, "Closing down\n");
 
       // Disable all our ports that are not handled by connections
       check_disable_port(camera_still_port);
@@ -1093,8 +1094,10 @@ error:
       destroy_camera_component(&state);
 
       if (state.verbose)
-         printf("Close down completed, all components disconnected, disabled and destroyed\n\n");
+         fprintf(stderr, "Close down completed, all components disconnected, disabled and destroyed\n\n");
    }
+   if (status != 0)
+      raspicamcontrol_check_configuration(128);
 
    return 0;
 }

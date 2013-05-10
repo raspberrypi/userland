@@ -30,6 +30,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "interface/vcos/vcos.h"
 
+#include "interface/vmcs_host/vc_vchi_gencmd.h"
 #include "interface/mmal/mmal.h"
 #include "interface/mmal/mmal_logging.h"
 #include "interface/mmal/util/mmal_util.h"
@@ -135,6 +136,9 @@ static const int metering_mode_map_size = sizeof(metering_mode_map)/sizeof(meter
 #define CommandImageFX     9
 #define CommandColourFX    10
 #define CommandMeterMode   11
+#define CommandRotation    12
+#define CommandHFlip       13
+#define CommandVFlip       14
 
 static COMMAND_LIST  cmdline_commands[] =
 {
@@ -149,7 +153,10 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandAWB,         "-awb",       "awb","Set AWB mode (see Notes)", 1},
    {CommandImageFX,     "-imxfx",     "ifx","Set image effect (see Notes)", 1},
    {CommandColourFX,    "-colfx",     "cfx","Set colour effect (U:V)",  1},
-   {CommandMeterMode,   "-metering",  "mm", "Set metering mode (see Notes)", 1}
+   {CommandMeterMode,   "-metering",  "mm", "Set metering mode (see Notes)", 1},
+   {CommandRotation,    "-rotation",  "rot","Set image rotation (0-359)", 1},
+   {CommandHFlip,       "-hflip",     "hf", "Set horizontal flip", 0},
+   {CommandVFlip,       "-vflip",     "vf", "Set vertical flip", 0}
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -324,7 +331,50 @@ int raspicamcontrol_cycle_test(MMAL_COMPONENT_T *camera)
       raspicamcontrol_set_colourFX(camera, &colfx);
    }
 
+   // Orientation
    if (parameter == 9)
+   {
+      switch (parameter_option)
+      {
+      case parameter_reset:
+         raspicamcontrol_set_rotation(camera, 90);
+         parameter_option = 1;
+         break;
+
+      case 1 :
+         raspicamcontrol_set_rotation(camera, 180);
+         parameter_option = 2;
+         break;
+
+      case 2 :
+         raspicamcontrol_set_rotation(camera, 270);
+         parameter_option = 3;
+         break;
+
+      case 3 :
+      {
+         raspicamcontrol_set_rotation(camera, 0);
+         raspicamcontrol_set_flips(camera, 1,0);
+         parameter_option = 4;
+         break;
+      }
+      case 4 :
+      {
+         raspicamcontrol_set_flips(camera, 0,1);
+         parameter_option = 5;
+         break;
+      }
+      case 5 :
+      {
+         raspicamcontrol_set_flips(camera, 1, 1);
+         parameter_option = parameter_reset;
+         parameter++;
+         break;
+      }
+      }
+   }
+
+   if (parameter == 10)
    {
       parameter = 1;
       return 0;
@@ -517,6 +567,21 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
       params->exposureMeterMode = metering_mode_from_string(arg2);
       used = 2;
       break;
+
+   case CommandRotation : // Rotation - degree
+      sscanf(arg2, "%d", &params->rotation);
+      used = 2;
+      break;
+
+   case CommandHFlip :
+      params->hflip  = 1;
+      used = 1;
+      break;
+
+   case CommandVFlip :
+      params->vflip = 1;
+      used = 1;
+      break;
    }
 
    return used;
@@ -529,39 +594,39 @@ void raspicamcontrol_display_help()
 {
    int i;
 
-   printf ("\nImage parameter commands\n\n");
+   fprintf(stderr, "\nImage parameter commands\n\n");
 
    raspicli_display_help(cmdline_commands, cmdline_commands_size);
 
-   printf("\n\nNotes\n\nExposure mode options :\n%s", exposure_map[0].mode );
+   fprintf(stderr, "\n\nNotes\n\nExposure mode options :\n%s", exposure_map[0].mode );
 
    for (i=1;i<exposure_map_size;i++)
    {
-      printf(",%s", exposure_map[i].mode);
+      fprintf(stderr, ",%s", exposure_map[i].mode);
    }
 
-   printf("\n\nAWB mode options :\n%s", awb_map[0].mode );
+   fprintf(stderr, "\n\nAWB mode options :\n%s", awb_map[0].mode );
 
    for (i=1;i<awb_map_size;i++)
    {
-      printf(",%s", awb_map[i].mode);
+      fprintf(stderr, ",%s", awb_map[i].mode);
    }
 
-   printf("\n\nImage Effect mode options :\n%s", imagefx_map[0].mode );
+   fprintf(stderr, "\n\nImage Effect mode options :\n%s", imagefx_map[0].mode );
 
    for (i=1;i<imagefx_map_size;i++)
    {
-      printf(",%s", imagefx_map[i].mode);
+      fprintf(stderr, ",%s", imagefx_map[i].mode);
    }
 
-   printf("\n\nMetering Mode options :\n%s", metering_mode_map[0].mode );
+   fprintf(stderr, "\n\nMetering Mode options :\n%s", metering_mode_map[0].mode );
 
    for (i=1;i<metering_mode_map_size;i++)
    {
-      printf(",%s", metering_mode_map[i].mode);
+      fprintf(stderr, ",%s", metering_mode_map[i].mode);
    }
 
-   printf("\n");
+   fprintf(stderr, "\n");
 }
 
 
@@ -577,10 +642,11 @@ void raspicamcontrol_dump_parameters(const RASPICAM_CAMERA_PARAMETERS *params)
    const char *image_effect = unmap_xref(params->imageEffect, imagefx_map, imagefx_map_size);
    const char *metering_mode = unmap_xref(params->exposureMeterMode, metering_mode_map, metering_mode_map_size);
 
-   printf("Sharpness %d, Contrast %d, Brightness %d\n", params->sharpness, params->contrast, params->brightness);
-   printf("Saturation %d, ISO %d, Video Stabilisation %s, Exposure compensation %d\n", params->saturation, params->ISO, params->videoStabilisation ? "Yes": "No", params->exposureCompensation);
-   printf("Exposure Mode '%s', AWB Mode '%s', Image Effect '%s'\n", exp_mode, awb_mode, image_effect);
-   printf("Metering Mode '%s', Colour Effect Enabled %s with U = %d, V = %d\n", metering_mode, params->colourEffects.enable ? "Yes":"No", params->colourEffects.u, params->colourEffects.v);
+   fprintf(stderr, "Sharpness %d, Contrast %d, Brightness %d\n", params->sharpness, params->contrast, params->brightness);
+   fprintf(stderr, "Saturation %d, ISO %d, Video Stabilisation %s, Exposure compensation %d\n", params->saturation, params->ISO, params->videoStabilisation ? "Yes": "No", params->exposureCompensation);
+   fprintf(stderr, "Exposure Mode '%s', AWB Mode '%s', Image Effect '%s'\n", exp_mode, awb_mode, image_effect);
+   fprintf(stderr, "Metering Mode '%s', Colour Effect Enabled %s with U = %d, V = %d\n", metering_mode, params->colourEffects.enable ? "Yes":"No", params->colourEffects.u, params->colourEffects.v);
+   fprintf(stderr, "Rotation %d, hflip %s, vflip %s\n", params->rotation, params->hflip ? "Yes":"No",params->vflip ? "Yes":"No");
 }
 
 /**
@@ -608,11 +674,11 @@ int mmal_status_to_int(MMAL_STATUS_T status)
       case MMAL_ESPIPE :   vcos_log_error("Illegal seek"); break;
       case MMAL_ECORRUPT : vcos_log_error("Data is corrupt \attention FIXME: not POSIX"); break;
       case MMAL_ENOTREADY :vcos_log_error("Component is not ready \attention FIXME: not POSIX"); break;
-      case MMAL_ECONFIG :  vcos_log_error(" Component is not configured \attention FIXME: not POSIX"); break;
+      case MMAL_ECONFIG :  vcos_log_error("Component is not configured \attention FIXME: not POSIX"); break;
       case MMAL_EISCONN :  vcos_log_error("Port is already connected "); break;
       case MMAL_ENOTCONN : vcos_log_error("Port is disconnected"); break;
       case MMAL_EAGAIN :   vcos_log_error("Resource temporarily unavailable. Try again later"); break;
-      case MMAL_EFAULT :   vcos_log_error(" Bad address"); break;
+      case MMAL_EFAULT :   vcos_log_error("Bad address"); break;
       default :            vcos_log_error("Unknown status error"); break;
       }
 
@@ -642,6 +708,8 @@ void raspicamcontrol_set_defaults(RASPICAM_CAMERA_PARAMETERS *params)
    params->colourEffects.enable = 0;
    params->colourEffects.u = 128;
    params->colourEffects.v = 128;
+   params->rotation = 0;
+   params->hflip = params->vflip = 0;
 }
 
 /**
@@ -689,7 +757,7 @@ int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_
    result += raspicamcontrol_set_sharpness(camera, params->sharpness);
    result += raspicamcontrol_set_contrast(camera, params->contrast);
    result += raspicamcontrol_set_brightness(camera, params->brightness);
-   //result += raspicamcontrol_set_ISO(camera, params->ISO);
+   //result += raspicamcontrol_set_ISO(camera, params->ISO); TODO Not working for some reason
    result += raspicamcontrol_set_video_stabilisation(camera, params->videoStabilisation);
    result += raspicamcontrol_set_exposure_compensation(camera, params->exposureCompensation);
    result += raspicamcontrol_set_exposure_mode(camera, params->exposureMode);
@@ -697,7 +765,9 @@ int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_
    result += raspicamcontrol_set_awb_mode(camera, params->awbMode);
    result += raspicamcontrol_set_imageFX(camera, params->imageEffect);
    result += raspicamcontrol_set_colourFX(camera, &params->colourEffects);
-//   result += raspicamcontrol_set_thumbnail_parameters(camera, &params->thumbnailConfig);
+   //result += raspicamcontrol_set_thumbnail_parameters(camera, &params->thumbnailConfig);  TODO Not working for some reason
+   result += raspicamcontrol_set_rotation(camera, params->rotation);
+   result += raspicamcontrol_set_flips(camera, params->hflip, params->vflip);
 
    return result;
 }
@@ -996,4 +1066,84 @@ int raspicamcontrol_set_colourFX(MMAL_COMPONENT_T *camera, const MMAL_PARAM_COLO
 
 }
 
+
+/**
+ * Set the rotation of the image
+ * @param camera Pointer to camera component
+ * @param rotation Degree of rotation (any number, but will be converted to 0,90,180 or 270 only)
+ * @return 0 if successful, non-zero if any parameters out of range
+ */
+int raspicamcontrol_set_rotation(MMAL_COMPONENT_T *camera, int rotation)
+{
+   int ret;
+   int my_rotation = ((rotation % 360 ) / 90) * 90;
+
+   ret = mmal_port_parameter_set_int32(camera->output[0], MMAL_PARAMETER_ROTATION, my_rotation);
+   mmal_port_parameter_set_int32(camera->output[1], MMAL_PARAMETER_ROTATION, my_rotation);
+   mmal_port_parameter_set_int32(camera->output[2], MMAL_PARAMETER_ROTATION, my_rotation);
+
+   return ret;
+}
+
+/**
+ * Set the flips state of the image
+ * @param camera Pointer to camera component
+ * @param hflip If true, horizontally flip the image
+ * @param vflip If true, vertically flip the image
+ *
+ * @return 0 if successful, non-zero if any parameters out of range
+ */
+int raspicamcontrol_set_flips(MMAL_COMPONENT_T *camera, int hflip, int vflip)
+{
+   MMAL_PARAMETER_MIRROR_T mirror = {{MMAL_PARAMETER_MIRROR, sizeof(MMAL_PARAMETER_MIRROR_T)}, MMAL_PARAM_MIRROR_NONE};
+
+   if (hflip && vflip)
+      mirror.value = MMAL_PARAM_MIRROR_BOTH;
+   else
+   if (hflip)
+      mirror.value = MMAL_PARAM_MIRROR_HORIZONTAL;
+   else
+   if (vflip)
+      mirror.value = MMAL_PARAM_MIRROR_VERTICAL;
+
+   mmal_port_parameter_set(camera->output[0], &mirror.hdr);
+   mmal_port_parameter_set(camera->output[1], &mirror.hdr);
+   return mmal_port_parameter_set(camera->output[2], &mirror.hdr);
+}
+
+static int raspicamcontrol_get_mem_gpu(void)
+{
+   char response[80] = "";
+   int gpu_mem = 0;
+   if (vc_gencmd(response, sizeof response, "get_mem gpu") == 0)
+      vc_gencmd_number_property(response, "gpu", &gpu_mem);
+   return gpu_mem;
+}
+
+static void raspicamcontrol_get_camera(int *supported, int *detected)
+{
+   char response[80] = "";
+   if (vc_gencmd(response, sizeof response, "get_camera") == 0)
+   {
+      if (supported)
+         vc_gencmd_number_property(response, "supported", supported);
+      if (detected)
+         vc_gencmd_number_property(response, "detected", detected);
+   }
+}
+
+void raspicamcontrol_check_configuration(int min_gpu_mem)
+{
+   int gpu_mem = raspicamcontrol_get_mem_gpu();
+   int supported = 0, detected = 0;
+   raspicamcontrol_get_camera(&supported, &detected);
+   if (!supported)
+      vcos_log_error("Camera is not enabled in this build. Try running \"sudo raspi-config\" and ensure that \"camera\" has been enabled\n");
+   else if (gpu_mem < min_gpu_mem)
+      vcos_log_error("Only %dM of gpu_mem is configured. Try running \"sudo raspi-config\" and ensure that \"memory_split\" has a value of %d or greater\n", gpu_mem, min_gpu_mem);
+   else if (!detected)
+      vcos_log_error("Camera is not detected. Please check carefully the camera module is installed correctly\n");
+   else
+      vcos_log_error("Failed to run camera app. Please check for firmware updates\n");
+}
 

@@ -116,6 +116,9 @@ typedef struct
    MMAL_PARAM_IMAGEFX_T imageEffect;
    MMAL_PARAMETER_IMAGEFX_PARAMETERS_T imageEffectsParameters;
    MMAL_PARAM_COLOURFX_T colourEffects;
+   int rotation;              /// 0-359
+   int hflip;                 /// 0 or 1
+   int vflip;                 /// 0 or 1
 } RASPICAM_CAMERA_PARAMETERS;
 
 int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char *arg1, const char *arg2);
@@ -127,6 +130,8 @@ int raspicamcontrol_get_all_parameters(MMAL_COMPONENT_T *camera, RASPICAM_CAMERA
 void raspicamcontrol_dump_parameters(const RASPICAM_CAMERA_PARAMETERS *params);
 
 void raspicamcontrol_set_defaults(RASPICAM_CAMERA_PARAMETERS *params);
+
+void raspicamcontrol_check_configuration(int min_gpu_mem);
 
 // Individual setting functions
 int raspicamcontrol_set_saturation(MMAL_COMPONENT_T *camera, int saturation);
@@ -141,6 +146,8 @@ int raspicamcontrol_set_exposure_mode(MMAL_COMPONENT_T *camera, MMAL_PARAM_EXPOS
 int raspicamcontrol_set_awb_mode(MMAL_COMPONENT_T *camera, MMAL_PARAM_AWBMODE_T awb_mode);
 int raspicamcontrol_set_imageFX(MMAL_COMPONENT_T *camera, MMAL_PARAM_IMAGEFX_T imageFX);
 int raspicamcontrol_set_colourFX(MMAL_COMPONENT_T *camera, const MMAL_PARAM_COLOURFX_T *colourFX);
+int raspicamcontrol_set_rotation(MMAL_COMPONENT_T *camera, int rotation);
+int raspicamcontrol_set_flips(MMAL_COMPONENT_T *camera, int hflip, int vflip);
 
 //Individual getting functions
 int raspicamcontrol_get_saturation(MMAL_COMPONENT_T *camera);
