@@ -111,7 +111,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandHeight,  "-height",     "h",  "Set image height <size>", 1 },
    { CommandOutput,  "-output",     "o",  "Output filename <filename>. If not specifed, no image is saved", 1 },
    { CommandVerbose, "-verbose",    "v",  "Output verbose information during run", 0 },
-   { CommandTimeout, "-timeout",    "t",  "Time before takes picture and shuts down. If not specified set to 5s", 1 },
+   { CommandTimeout, "-timeout",    "t",  "Time (in ms) before takes picture and shuts down. If not specified set to 5s", 1 },
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -584,7 +584,7 @@ static MMAL_STATUS_T connect_ports(MMAL_PORT_T *output_port, MMAL_PORT_T *input_
    {
       status =  mmal_connection_enable(*connection);
       if (status != MMAL_SUCCESS)
-         status = mmal_connection_destroy(*connection);
+         mmal_connection_destroy(*connection);
    }
 
    return status;

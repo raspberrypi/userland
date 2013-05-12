@@ -125,7 +125,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandBitrate, "-bitrate",    "b",  "Set bitrate. Use bits per second (e.g. 10MBits/s would be -b 10000000)", 1 },
    { CommandOutput,  "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -')", 1 },
    { CommandVerbose, "-verbose",    "v",  "Output verbose information during run", 0 },
-   { CommandTimeout, "-timeout",    "t",  "Time before takes picture and shuts down. If not specified, set to 5s", 1 },
+   { CommandTimeout, "-timeout",    "t",  "Time (in ms) before takes picture and shuts down. If not specified, set to 5s", 1 },
    { CommandDemoMode,"-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 1},
    { CommandFramerate,"-framerate", "fps","Specify the frames per second to record", 1},
    { CommandPreviewEnc,"-penc",     "e",  "Display preview image *after* encoding (shows compression artifacts)", 0},
@@ -807,7 +807,7 @@ static MMAL_STATUS_T connect_ports(MMAL_PORT_T *output_port, MMAL_PORT_T *input_
    {
       status =  mmal_connection_enable(*connection);
       if (status != MMAL_SUCCESS)
-         status = mmal_connection_destroy(*connection);
+         mmal_connection_destroy(*connection);
    }
 
    return status;

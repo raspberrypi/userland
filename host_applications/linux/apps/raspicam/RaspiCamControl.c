@@ -89,9 +89,6 @@ static XREF_T imagefx_map[] =
    {"none",          MMAL_PARAM_IMAGEFX_NONE},
    {"negative",      MMAL_PARAM_IMAGEFX_NEGATIVE},
    {"solarise",      MMAL_PARAM_IMAGEFX_SOLARIZE},
-   {"posterize",     MMAL_PARAM_IMAGEFX_POSTERIZE},
-   {"whiteboard",    MMAL_PARAM_IMAGEFX_WHITEBOARD},
-   {"blackboard",    MMAL_PARAM_IMAGEFX_BLACKBOARD},
    {"sketch",        MMAL_PARAM_IMAGEFX_SKETCH},
    {"denoise",       MMAL_PARAM_IMAGEFX_DENOISE},
    {"emboss",        MMAL_PARAM_IMAGEFX_EMBOSS},
@@ -276,8 +273,8 @@ int raspicamcontrol_cycle_test(MMAL_COMPONENT_T *camera)
    if (parameter == 5)
    {
       // MMAL_PARAM_EXPOSUREMODE_T
-      if (update_cycle_parameter(&parameter_option, (int)MMAL_PARAM_EXPOSUREMODE_AUTO, (int)MMAL_PARAM_EXPOSUREMODE_FIREWORKS, 1))
-         raspicamcontrol_set_exposure_mode(camera, parameter_option);
+      if (update_cycle_parameter(&parameter_option, 0, exposure_map_size, 1))
+         raspicamcontrol_set_exposure_mode(camera, exposure_map[parameter_option].mmal_mode);
       else
       {
          raspicamcontrol_set_exposure_mode(camera, MMAL_PARAM_EXPOSUREMODE_AUTO);
@@ -288,8 +285,8 @@ int raspicamcontrol_cycle_test(MMAL_COMPONENT_T *camera)
    if (parameter == 6)
    {
       // MMAL_PARAM_AWB_T
-      if (update_cycle_parameter(&parameter_option, (int)MMAL_PARAM_AWBMODE_AUTO, (int)MMAL_PARAM_AWBMODE_HORIZON, 1))
-         raspicamcontrol_set_awb_mode(camera, parameter_option);
+      if (update_cycle_parameter(&parameter_option, 0, awb_map_size, 1))
+         raspicamcontrol_set_awb_mode(camera, awb_map[parameter_option].mmal_mode);
       else
       {
          raspicamcontrol_set_awb_mode(camera, MMAL_PARAM_AWBMODE_AUTO);
@@ -299,8 +296,8 @@ int raspicamcontrol_cycle_test(MMAL_COMPONENT_T *camera)
    if (parameter == 7)
    {
       // MMAL_PARAM_IMAGEFX_T
-      if (update_cycle_parameter(&parameter_option, (int)MMAL_PARAM_IMAGEFX_NONE, (int)MMAL_PARAM_IMAGEFX_CARTOON, 1))
-         raspicamcontrol_set_imageFX(camera, parameter_option);
+      if (update_cycle_parameter(&parameter_option, 0, imagefx_map_size, 1))
+         raspicamcontrol_set_imageFX(camera, imagefx_map[parameter_option].mmal_mode);
       else
       {
          raspicamcontrol_set_imageFX(camera, MMAL_PARAM_IMAGEFX_NONE);
@@ -367,6 +364,12 @@ int raspicamcontrol_cycle_test(MMAL_COMPONENT_T *camera)
       case 5 :
       {
          raspicamcontrol_set_flips(camera, 1, 1);
+         parameter_option = 6;
+         break;
+      }
+      case 6 :
+      {
+         raspicamcontrol_set_flips(camera, 0, 0);
          parameter_option = parameter_reset;
          parameter++;
          break;
@@ -437,8 +440,9 @@ static MMAL_PARAM_EXPOSUREMODE_T exposure_mode_from_string(const char *str)
 
    if( i != -1)
       return (MMAL_PARAM_EXPOSUREMODE_T)i;
-   else
-      return MMAL_PARAM_EXPOSUREMODE_AUTO;
+
+   vcos_log_error("Unknown exposure mode: %s", str);
+   return MMAL_PARAM_EXPOSUREMODE_AUTO;
 }
 
 /**
@@ -452,8 +456,9 @@ static MMAL_PARAM_AWBMODE_T awb_mode_from_string(const char *str)
 
    if( i != -1)
       return (MMAL_PARAM_AWBMODE_T)i;
-   else
-      return MMAL_PARAM_AWBMODE_AUTO;
+
+   vcos_log_error("Unknown awb mode: %s", str);
+   return MMAL_PARAM_AWBMODE_AUTO;
 }
 
 /**
@@ -467,8 +472,9 @@ MMAL_PARAM_IMAGEFX_T imagefx_mode_from_string(const char *str)
 
    if( i != -1)
      return (MMAL_PARAM_IMAGEFX_T)i;
-   else
-     return MMAL_PARAM_IMAGEFX_NONE;
+
+   vcos_log_error("Unknown image fx: %s", str);
+   return MMAL_PARAM_IMAGEFX_NONE;
 }
 
 /**
@@ -482,8 +488,9 @@ static MMAL_PARAM_EXPOSUREMETERINGMODE_T metering_mode_from_string(const char *s
 
    if( i != -1)
       return (MMAL_PARAM_EXPOSUREMETERINGMODE_T)i;
-   else
-      return MMAL_PARAM_EXPOSUREMETERINGMODE_AVERAGE;
+
+   vcos_log_error("Unknown metering mode: %s", str);
+   return MMAL_PARAM_EXPOSUREMETERINGMODE_AVERAGE;
 }
 
 /**

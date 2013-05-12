@@ -139,7 +139,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandRaw,     "-raw",        "r",  "Add raw bayer data to jpeg metadata", 0 },
    { CommandOutput,  "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -'). If not specified, no file is saved", 1 },
    { CommandVerbose, "-verbose",    "v",  "Output verbose information during run", 0 },
-   { CommandTimeout, "-timeout",    "t",  "Time before takes picture and shuts down (if not specified, set to 5s)", 1 },
+   { CommandTimeout, "-timeout",    "t",  "Time (in ms) before takes picture and shuts down (if not specified, set to 5s)", 1 },
    { CommandThumbnail,"-thumb",     "th", "Set thumbnail parameters (x:y:quality)", 1},
    { CommandDemoMode,"-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 0},
    { CommandEncoding,"-encoding",   "e",  "Encoding to use for output file (jpg, bmp, gif, png)", 1},
@@ -989,7 +989,7 @@ static MMAL_STATUS_T connect_ports(MMAL_PORT_T *output_port, MMAL_PORT_T *input_
    {
       status =  mmal_connection_enable(*connection);
       if (status != MMAL_SUCCESS)
-         status = mmal_connection_destroy(*connection);
+         mmal_connection_destroy(*connection);
    }
 
    return status;
