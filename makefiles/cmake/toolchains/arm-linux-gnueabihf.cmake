@@ -19,4 +19,4 @@ ENDIF()
 
 # avoids annoying and pointless warnings from gcc
 SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -U_FORTIFY_SOURCE")
-
+SET(CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} -c")
