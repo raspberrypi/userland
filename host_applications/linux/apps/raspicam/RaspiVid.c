@@ -1,5 +1,6 @@
 /*
-Copyright (c) 2012, Broadcom Europe Ltd
+Copyright (c) 2013, Broadcom Europe Ltd
+Copyright (c) 2013, James Hughes
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -25,10 +26,36 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/**
+ * \file RaspiVid.c
+ * Command line program to capture a camera video stream and encode it to file.
+ * Also optionally display a preview/viewfinder of current camera input.
+ *
+ * \date 28th Feb 2013
+ * \Author: James Hughes
+ *
+ * Description
+ *
+ * 3 components are created; camera, preview and video encoder.
+ * Camera component has three ports, preview, video and stills.
+ * This program connects preview and stills to the preview and video
+ * encoder. Using mmal we don't need to worry about buffers between these
+ * components, but we do need to handle buffers from the encoder, which
+ * are simply written straight to the file in the requisite buffer callback.
+ *
+ * We use the RaspiCamControl code to handle the specific camera settings.
+ * We use the RaspiPreview code to handle the (generic) preview window
+ */
+
+// We use some GNU extensions (basename)
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <memory.h>
+
+#define VERSION_STRING "v1.1"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -65,6 +92,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Max bitrate we allow for recording
 const int MAX_BITRATE = 30000000; // 30Mbits/s
 
+/// Interval at which we check for an failure abort during capture
+const int ABORT_INTERVAL = 100; // ms
+
 
 int mmal_status_to_int(MMAL_STATUS_T status);
 
@@ -99,11 +129,11 @@ typedef struct
 typedef struct
 {
    FILE *file_handle;                   /// File handle to write buffer data to.
-   VCOS_SEMAPHORE_T complete_semaphore; /// semaphore which is posted when we reach end of frame (indicates end of capture or fault)
    RASPIVID_STATE *pstate;            /// pointer to our state in case required in callback
+   int abort;                           /// Set to 1 in callback if an error occurs to attempt to abort the capture
 } PORT_USERDATA;
 
-static void display_valid_parameters();
+static void display_valid_parameters(char *app_name);
 
 /// Command ID's and Structure defining our command line options
 #define CommandHelp         0
@@ -119,7 +149,7 @@ static void display_valid_parameters();
 
 static COMMAND_LIST cmdline_commands[] =
 {
-   { CommandHelp,    "-help",       "?",  "This help information", 1 },
+   { CommandHelp,    "-help",       "?",  "This help information", 0 },
    { CommandWidth,   "-width",      "w",  "Set image width <size>. Default 1920", 1 },
    { CommandHeight,  "-height",     "h",  "Set image height <size>. Default 1080", 1 },
    { CommandBitrate, "-bitrate",    "b",  "Set bitrate. Use bits per second (e.g. 10MBits/s would be -b 10000000)", 1 },
@@ -192,14 +222,14 @@ static void dump_status(RASPIVID_STATE *state)
  * @param argc Number of arguments in command line
  * @param argv Array of pointers to strings from command line
  * @param state Pointer to state structure to assign any discovered parameters to
- * @return 0 if failed for some reason, non-0 otherwise
+ * @return Non-0 if failed for some reason, 0 otherwise
  */
 static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
 {
    // Parse the command line arguments.
    // We are looking for --<something> or -<abreviation of something>
 
-   int valid = 1; // set 0 if we have a bad parameter
+   int valid = 1;
    int i;
 
    for (i = 1; i < argc && valid; i++)
@@ -228,8 +258,8 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
       switch (command_id)
       {
       case CommandHelp:
-         display_valid_parameters();
-         break;
+         display_valid_parameters(basename(argv[0]));
+         return -1;
 
       case CommandWidth: // Width > 0
          if (sscanf(argv[i + 1], "%u", &state->width) != 1)
@@ -374,11 +404,13 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
 
 /**
  * Display usage information for the application to stdout
+ *
+ * @param app_name String to display as the application name
  */
-static void display_valid_parameters()
+static void display_valid_parameters(char *app_name)
 {
    fprintf(stderr, "Display camera output to display, and optionally saves an H264 capture at requested bitrate\n\n");
-   fprintf(stderr, "\nusage: RaspiVid [options]\n\n");
+   fprintf(stderr, "\nusage: %s [options]\n\n", app_name);
 
    fprintf(stderr, "Image parameter commands\n\n");
 
@@ -434,15 +466,23 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 
    if (pData)
    {
+      int bytes_written = buffer->length;
+
       vcos_assert(pData->file_handle);
 
       if (buffer->length)
       {
          mmal_buffer_header_mem_lock(buffer);
 
-         fwrite(buffer->data, 1, buffer->length, pData->file_handle);
+         bytes_written = fwrite(buffer->data, 1, buffer->length, pData->file_handle);
 
          mmal_buffer_header_mem_unlock(buffer);
+      }
+
+      if (bytes_written != buffer->length)
+      {
+         vcos_log_error("Failed to write buffer data - aborting");
+         pData->abort = 1;
       }
    }
    else
@@ -849,7 +889,7 @@ int main(int argc, const char **argv)
    // Our main data storage vessel..
    RASPIVID_STATE state;
 
-   MMAL_STATUS_T status = -1;
+   MMAL_STATUS_T status = MMAL_SUCCESS;
    MMAL_PORT_T *camera_preview_port = NULL;
    MMAL_PORT_T *camera_video_port = NULL;
    MMAL_PORT_T *camera_still_port = NULL;
@@ -870,25 +910,21 @@ int main(int argc, const char **argv)
    // Do we have any parameters
    if (argc == 1)
    {
-      fprintf(stderr, "\nRaspiVid Camera App\n");
-      fprintf(stderr, "===================\n\n");
+      fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
 
-      display_valid_parameters();
+      display_valid_parameters(basename(argv[0]));
       exit(0);
    }
 
    // Parse the command line and put options in to our status structure
    if (parse_cmdline(argc, argv, &state))
    {
-      status = -1;
       exit(0);
    }
 
    if (state.verbose)
    {
-      fprintf(stderr, "\nRaspiVid Camera App\n");
-      fprintf(stderr, "===================\n\n");
-
+      fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
       dump_status(&state);
    }
 
@@ -935,11 +971,13 @@ int main(int argc, const char **argv)
          // Connect camera to preview
          status = connect_ports(camera_preview_port, preview_input_port, &state.preview_connection);
       }
+      else
+      {
+         status = MMAL_SUCCESS;
+      }
 
       if (status == MMAL_SUCCESS)
       {
-         VCOS_STATUS_T vcos_status;
-
          if (state.verbose)
             fprintf(stderr, "Connecting camera stills port to encoder input port\n");
 
@@ -979,10 +1017,7 @@ int main(int argc, const char **argv)
          // Set up our userdata - this is passed though to the callback where we need the information.
          callback_data.file_handle = output_file;
          callback_data.pstate = &state;
-
-         vcos_status = vcos_semaphore_create(&callback_data.complete_semaphore, "RaspiStill-sem", 0);
-         vcos_assert(vcos_status == VCOS_SUCCESS);
-
+         callback_data.abort = 0;
 
          encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&callback_data;
 
@@ -1018,6 +1053,8 @@ int main(int argc, const char **argv)
             // Only encode stuff if we have a filename and it opened
             if (output_file)
             {
+               int wait;
+
                if (state.verbose)
                   fprintf(stderr, "Starting video capture\n");
 
@@ -1043,8 +1080,16 @@ int main(int argc, const char **argv)
                   }
                }
 
-               // Now wait until we need to stop
-               vcos_sleep(state.timeout);
+               // Now wait until we need to stop. Whilst waiting we do need to check to see if we have aborted (for example
+               // out of storage space)
+               // Going to check every ABORT_INTERVAL milliseconds
+
+               for (wait = 0; wait < state.timeout; wait+= ABORT_INTERVAL)
+               {
+                  vcos_sleep(ABORT_INTERVAL);
+                  if (callback_data.abort)
+                     break;
+               }
 
                if (state.verbose)
                   fprintf(stderr, "Finished capture\n");

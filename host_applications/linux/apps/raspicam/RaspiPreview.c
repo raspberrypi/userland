@@ -1,5 +1,6 @@
 /*
-Copyright (c) 2012, Broadcom Europe Ltd
+Copyright (c) 2013, Broadcom Europe Ltd
+Copyright (c) 2013, James Hughes
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -45,12 +46,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define CommandPreview        1
 #define CommandFullScreen     2
-#define CommandDisablePreview 3
+#define CommandOpacity        3
+#define CommandDisablePreview 4
 
 static COMMAND_LIST cmdline_commands[] =
 {
    { CommandPreview,       "-preview",    "p",  "Preview window settings <'x,y,w,h'>", 1 },
    { CommandFullScreen,    "-fullscreen", "f",  "Fullscreen preview mode", 0 },
+   { CommandOpacity,       "-opacity",    "op", "Preview window opacity (0-255)", 1},
    { CommandDisablePreview,"-nopreview",  "n",  "Do not display a preview window", 0},
 };
 
@@ -94,6 +97,9 @@ MMAL_COMPONENT_T *raspipreview_create(RASPIPREVIEW_PARAMETERS *state)
 
    param.set = MMAL_DISPLAY_SET_LAYER;
    param.layer = PREVIEW_LAYER;
+
+   param.set |= MMAL_DISPLAY_SET_ALPHA;
+   param.alpha = state->opacity;
 
    if (state->wantFullScreenPreview)
    {
@@ -162,6 +168,7 @@ void raspipreview_set_defaults(RASPIPREVIEW_PARAMETERS *state)
 {
    state->wantPreview = 1;
    state->wantFullScreenPreview = 1;
+   state->opacity = 255;
    state->previewWindow.x = 0;
    state->previewWindow.y = 0;
    state->previewWindow.width = 1024;
@@ -177,12 +184,12 @@ void raspipreview_set_defaults(RASPIPREVIEW_PARAMETERS *state)
  */
 void raspipreview_dump_parameters(RASPIPREVIEW_PARAMETERS *state)
 {
-   printf("Preview %s, Full screen %s\n", state->wantPreview ? "Yes" : "No",
+   fprintf(stderr, "Preview %s, Full screen %s\n", state->wantPreview ? "Yes" : "No",
       state->wantFullScreenPreview ? "Yes" : "No");
 
-   printf("Preview window %d,%d,%d,%d\n\n", state->previewWindow.x,
+   fprintf(stderr, "Preview window %d,%d,%d,%d\nOpacity %d\n", state->previewWindow.x,
       state->previewWindow.y, state->previewWindow.width,
-      state->previewWindow.height);
+      state->previewWindow.height, state->opacity);
 };
 
 /**
@@ -234,6 +241,13 @@ int raspipreview_parse_cmdline(RASPIPREVIEW_PARAMETERS *params, const char *arg1
          used = 1;
          break;
 
+      case CommandOpacity: // Define preview window opacity
+         if (sscanf(arg2, "%u", &params->opacity) != 1)
+            params->opacity = 255;
+         else
+            used = 2;
+         break;
+
       case CommandDisablePreview: // Turn off preview output
          params->wantPreview = 0;
          used = 1;
@@ -248,6 +262,6 @@ int raspipreview_parse_cmdline(RASPIPREVIEW_PARAMETERS *params, const char *arg1
  */
 void raspipreview_display_help()
 {
-   printf ("\nPreview parameter commands\n\n");
+   fprintf(stderr, "\nPreview parameter commands\n\n");
    raspicli_display_help(cmdline_commands, cmdline_commands_size);
 }

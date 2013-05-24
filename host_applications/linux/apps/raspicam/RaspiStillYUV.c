@@ -1,5 +1,6 @@
 /*
-Copyright (c) 2012, Broadcom Europe Ltd
+Copyright (c) 2013, Broadcom Europe Ltd
+Copyright (c) 2013, James Hughes
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -25,10 +26,35 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * \file RaspiStill.c
+ * Command line program to capture a still frame and encode it to file.
+ * Also optionally display a preview/viewfinder of current camera input.
+ *
+ * \date 4th March 2013
+ * \Author: James Hughes
+ *
+ * Description
+ *
+ * 2 components are created; camera and preview.
+ * Camera component has three ports, preview, video and stills.
+ * Preview is connected using standard mmal connections, the stills output
+ * is written straight to the file in YUV 420 format via the requisite buffer
+ * callback. video port is not used
+ *
+ * We use the RaspiCamControl code to handle the specific camera settings.
+ * We use the RaspiPreview code to handle the generic preview
+ */
+
+// We use some GNU extensions (basename)
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <memory.h>
+
+#define VERSION_STRING "v1.1"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -94,7 +120,7 @@ typedef struct
    RASPISTILLYUV_STATE *pstate;            /// pointer to our state in case required in callback
 } PORT_USERDATA;
 
-static void display_valid_parameters();
+static void display_valid_parameters(char *app_name);
 
 /// Comamnd ID's and Structure defining our command line options
 #define CommandHelp         0
@@ -106,7 +132,7 @@ static void display_valid_parameters();
 
 static COMMAND_LIST cmdline_commands[] =
 {
-   { CommandHelp,    "-help",       "?",  "This help information", 1 },
+   { CommandHelp,    "-help",       "?",  "This help information", 0 },
    { CommandWidth,   "-width",      "w",  "Set image width <size>", 1 },
    { CommandHeight,  "-height",     "h",  "Set image height <size>", 1 },
    { CommandOutput,  "-output",     "o",  "Output filename <filename>. If not specifed, no image is saved", 1 },
@@ -156,8 +182,8 @@ static void dump_status(RASPISTILLYUV_STATE *state)
       return;
    }
 
-   printf("Width %d, Height %d, filename %s\n", state->width, state->height, state->filename);
-   printf("Time delay %d", state->timeout);
+   fprintf(stderr, "Width %d, Height %d, filename %s\n", state->width, state->height, state->filename);
+   fprintf(stderr, "Time delay %d\n", state->timeout);
 
    raspipreview_dump_parameters(&state->preview_parameters);
    raspicamcontrol_dump_parameters(&state->camera_parameters);
@@ -169,7 +195,7 @@ static void dump_status(RASPISTILLYUV_STATE *state)
  * @param argc Number of arguments in command line
  * @param argv Array of pointers to strings from command line
  * @param state Pointer to state structure to assign any discovered parameters to
- * @return 0 if failed for some reason, non-0 otherwise
+ * @return non-0 if failed for some reason, 0 otherwise
  */
 static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state)
 {
@@ -205,8 +231,8 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
       switch (command_id)
       {
       case CommandHelp:
-         display_valid_parameters();
-         break;
+         display_valid_parameters(basename(argv[0]));
+         return -1;
 
       case CommandWidth: // Width > 0
          if (sscanf(argv[i + 1], "%u", &state->width) != 1)
@@ -281,7 +307,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
 
    if (!valid)
    {
-      printf("Invalid command line option (%s)\n", argv[i]);
+      fprintf(stderr, "Invalid command line option (%s)\n", argv[i]);
       return 1;
    }
 
@@ -290,13 +316,16 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
 
 /**
  * Display usage information for the application to stdout
+ *
+ * @param app_name String to display as the application name
+ *
  */
-static void display_valid_parameters()
+static void display_valid_parameters(char *app_name)
 {
-   printf("Runs camera for specific time, and take uncompressed YUV capture at end if requested\n\n");
-   printf("usage: RaspiStillYUV [options]\n\n");
+   fprintf(stderr, "Runs camera for specific time, and take uncompressed YUV capture at end if requested\n\n");
+   fprintf(stderr, "usage: %s [options]\n\n", app_name);
 
-   printf("Image parameter commands\n\n");
+   fprintf(stderr, "Image parameter commands\n\n");
 
    raspicli_display_help(cmdline_commands, cmdline_commands_size);
 
@@ -306,7 +335,7 @@ static void display_valid_parameters()
    // Now display any help information from the camcontrol code
    raspicamcontrol_display_help();
 
-   printf("\n");
+   fprintf(stderr, "\n");
 
    return;
 }
@@ -319,7 +348,7 @@ static void display_valid_parameters()
  */
 static void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
-   printf("Camera control callback  cmd=0x%08x", buffer->cmd);
+   fprintf(stderr, "Camera control callback  cmd=0x%08x", buffer->cmd);
 
    if (buffer->cmd == MMAL_EVENT_PARAMETER_CHANGED)
    {
@@ -343,27 +372,34 @@ static void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
    MMAL_STATUS_T status;
-
+   int complete = 0;
    // We pass our file handle and other stuff in via the userdata field.
 
    PORT_USERDATA *pData = (PORT_USERDATA *)port->userdata;
 
    if (pData)
    {
+      int bytes_written = buffer->length;
+
       if (buffer->length)
       {
          mmal_buffer_header_mem_lock(buffer);
 
-         fwrite(buffer->data, 1, buffer->length, pData->file_handle);
+         bytes_written = fwrite(buffer->data, 1, buffer->length, pData->file_handle);
 
          mmal_buffer_header_mem_unlock(buffer);
       }
 
-      // What about error conditions?
-      if (buffer->flags & (MMAL_BUFFER_HEADER_FLAG_FRAME_END | MMAL_BUFFER_HEADER_FLAG_EOS | MMAL_BUFFER_HEADER_FLAG_TRANSMISSION_FAILED))
+      // We need to check we wrote what we wanted - it's possible we have run out of storage.
+      if (bytes_written != buffer->length)
       {
-         vcos_semaphore_post(&(pData->complete_semaphore));
+         vcos_log_error("Unable to write buffer to file - aborting");
+         complete = 1;
       }
+
+      // Check end of frame or error
+      if (buffer->flags & (MMAL_BUFFER_HEADER_FLAG_FRAME_END | MMAL_BUFFER_HEADER_FLAG_EOS | MMAL_BUFFER_HEADER_FLAG_TRANSMISSION_FAILED))
+         complete = 1;
    }
    else
    {
@@ -379,10 +415,16 @@ static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buff
       MMAL_BUFFER_HEADER_T *new_buffer = mmal_queue_get(pData->pstate->camera_pool->queue);
 
       // and back to the port from there.
+      if (new_buffer)
       status = mmal_port_send_buffer(port, new_buffer);
 
-      if (status != MMAL_SUCCESS)
+      if (!new_buffer || status != MMAL_SUCCESS)
          vcos_log_error("Unable to return the buffer to the camera still port");
+   }
+
+   if (complete)
+   {
+      vcos_semaphore_post(&(pData->complete_semaphore));
    }
 }
 
@@ -538,7 +580,7 @@ static MMAL_COMPONENT_T *create_camera_component(RASPISTILLYUV_STATE *state)
    state->camera_component = camera;
 
    if (state->verbose)
-      printf("Camera component done\n");
+      fprintf(stderr, "Camera component done\n");
 
    return camera;
 
@@ -626,7 +668,7 @@ int main(int argc, const char **argv)
    // Our main data storage vessel..
    RASPISTILLYUV_STATE state;
 
-   MMAL_STATUS_T status = -1;
+   MMAL_STATUS_T status = MMAL_SUCCESS;
    MMAL_PORT_T *camera_preview_port = NULL;
    MMAL_PORT_T *camera_video_port = NULL;
    MMAL_PORT_T *camera_still_port = NULL;
@@ -638,15 +680,14 @@ int main(int argc, const char **argv)
    // Register our application with the logging system
    vcos_log_register("RaspiStill", VCOS_LOG_CATEGORY);
 
-   printf("\nRaspiStillYUV Camera App\n");
-   printf(  "========================\n\n");
-
    signal(SIGINT, signal_handler);
 
    // Do we have any parameters
    if (argc == 1)
    {
-      display_valid_parameters();
+      fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
+
+      display_valid_parameters(basename(argv[0]));
       exit(0);
    }
 
@@ -655,12 +696,14 @@ int main(int argc, const char **argv)
    // Parse the command line and put options in to our status structure
    if (parse_cmdline(argc, argv, &state))
    {
-      status = -1;
       exit(0);
    }
 
    if (state.verbose)
+   {
+      fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
       dump_status(&state);
+   }
 
    // OK, we have a nice set of parameters. Now set up our components
    // We have two components. Camera and Preview
@@ -681,7 +724,7 @@ int main(int argc, const char **argv)
       PORT_USERDATA callback_data;
 
       if (state.verbose)
-         printf("Starting component connection stage\n");
+         fprintf(stderr, "Starting component connection stage\n");
 
       camera_preview_port = state.camera_component->output[MMAL_CAMERA_PREVIEW_PORT];
       camera_video_port   = state.camera_component->output[MMAL_CAMERA_VIDEO_PORT];
@@ -692,12 +735,16 @@ int main(int argc, const char **argv)
       {
          if (state.verbose)
          {
-            printf("Connecting camera preview port to preview input port\n");
-            printf("Starting video preview\n");
+            fprintf(stderr, "Connecting camera preview port to preview input port\n");
+            fprintf(stderr, "Starting video preview\n");
          }
 
          // Connect camera to preview
          status = connect_ports(camera_preview_port, preview_input_port, &state.preview_connection);
+      }
+      else
+      {
+         status = MMAL_SUCCESS;
       }
 
       if (status == MMAL_SUCCESS)
@@ -707,7 +754,7 @@ int main(int argc, const char **argv)
          if (state.filename)
          {
             if (state.verbose)
-               printf("Opening output file %s\n", state.filename);
+               fprintf(stderr, "Opening output file %s\n", state.filename);
 
             output_file = fopen(state.filename, "wb");
             if (!output_file)
@@ -727,7 +774,7 @@ int main(int argc, const char **argv)
          camera_still_port->userdata = (struct MMAL_PORT_USERDATA_T *)&callback_data;
 
          if (state.verbose)
-            printf("Enabling camera still output port\n");
+            fprintf(stderr, "Enabling camera still output port\n");
 
          // Enable the camera still output port and tell it its callback function
          status = mmal_port_enable(camera_still_port, camera_buffer_callback);
@@ -739,7 +786,7 @@ int main(int argc, const char **argv)
          }
 
          if (state.verbose)
-            printf("Starting video preview\n");
+            fprintf(stderr, "Starting video preview\n");
 
          // Send all the buffers to the encoder output port
          {
@@ -765,7 +812,7 @@ int main(int argc, const char **argv)
          if (output_file)
          {
             if (state.verbose)
-               printf("Starting capture\n");
+               fprintf(stderr, "Starting capture\n");
 
             // Fire the capture
             if (mmal_port_parameter_set_boolean(camera_still_port, MMAL_PARAMETER_CAPTURE, 1) != MMAL_SUCCESS)
@@ -780,7 +827,7 @@ int main(int argc, const char **argv)
                vcos_semaphore_wait(&callback_data.complete_semaphore);
 
                if (state.verbose)
-                  printf("Finished capture\n");
+                  fprintf(stderr, "Finished capture\n");
             }
          }
 
@@ -797,7 +844,7 @@ error:
       mmal_status_to_int(status);
 
       if (state.verbose)
-         printf("Closing down\n");
+         fprintf(stderr, "Closing down\n");
 
       if (output_file)
          fclose(output_file);
@@ -819,7 +866,7 @@ error:
       destroy_camera_component(&state);
 
       if (state.verbose)
-         printf("Close down completed, all components disconnected, disabled and destroyed\n\n");
+         fprintf(stderr, "Close down completed, all components disconnected, disabled and destroyed\n\n");
    }
    if (status != 0)
       raspicamcontrol_check_configuration(128);

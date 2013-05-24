@@ -1,5 +1,6 @@
 /*
-Copyright (c) 2012, Broadcom Europe Ltd
+Copyright (c) 2013, Broadcom Europe Ltd
+Copyright (c) 2013, James Hughes
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -24,6 +25,19 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+/**
+ * \file RaspiCLI.c
+ * Code for handling command line parameters
+ *
+ * \date 4th March 2013
+ * \Author: James Hughes
+ *
+ * Description
+ *
+ * Some functions/structures for command line parameter parsing
+ *
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -92,7 +106,7 @@ void raspicli_display_help(const COMMAND_LIST *commands, const int num_commands)
 
    for (i = 0; i < num_commands; i++)
    {
-      printf("-%s, -%s\t: %s\n", commands[i].abbrev,
+      fprintf(stderr, "-%s, -%s\t: %s\n", commands[i].abbrev,
          commands[i].command, commands[i].help);
    }
 }
