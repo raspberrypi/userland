@@ -157,7 +157,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandBitrate, "-bitrate",    "b",  "Set bitrate. Use bits per second (e.g. 10MBits/s would be -b 10000000)", 1 },
    { CommandOutput,  "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -')", 1 },
    { CommandVerbose, "-verbose",    "v",  "Output verbose information during run", 0 },
-   { CommandTimeout, "-timeout",    "t",  "Time (in ms) before takes picture and shuts down. If not specified, set to 5s", 1 },
+   { CommandTimeout, "-timeout",    "t",  "Time (in ms) to capture for. If not specified, set to 5s. Zero to disable", 1 },
    { CommandDemoMode,"-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 1},
    { CommandFramerate,"-framerate", "fps","Specify the frames per second to record", 1},
    { CommandPreviewEnc,"-penc",     "e",  "Display preview image *after* encoding (shows compression artifacts)", 0},
@@ -1067,7 +1067,7 @@ int main(int argc, const char **argv)
             if (state.verbose)
                fprintf(stderr, "Running in demo mode\n");
 
-            for (i=0;i<num_iterations;i++)
+            for (i=0;state.timeout == 0 || i<num_iterations;i++)
             {
                raspicamcontrol_cycle_test(state.camera_component);
                vcos_sleep(state.demoInterval);
@@ -1109,7 +1109,7 @@ int main(int argc, const char **argv)
                // out of storage space)
                // Going to check every ABORT_INTERVAL milliseconds
 
-               for (wait = 0; wait < state.timeout; wait+= ABORT_INTERVAL)
+               for (wait = 0; state.timeout == 0 || wait < state.timeout; wait+= ABORT_INTERVAL)
                {
                   vcos_sleep(ABORT_INTERVAL);
                   if (callback_data.abort)
@@ -1119,8 +1119,13 @@ int main(int argc, const char **argv)
                if (state.verbose)
                   fprintf(stderr, "Finished capture\n");
             }
-            else
-               vcos_sleep(state.timeout);
+            else 
+            {
+               if (state.timeout) 
+                  vcos_sleep(state.timeout);
+               else
+                  for (;;) vcos_sleep(ABORT_INTERVAL);
+            }
          }
       }
       else
