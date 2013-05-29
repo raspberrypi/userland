@@ -107,6 +107,7 @@ typedef struct
    int height;                         /// requested height of image
    int bitrate;                        /// Requested bitrate
    int framerate;                      /// Requested frame rate (fps)
+   int intraperiod;                    /// Intra-refresh period (key frame rate)
    char *filename;                     /// filename of output file
    int verbose;                        /// !0 if want detailed run information
    int demoMode;                       /// Run app in demo mode
@@ -146,6 +147,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandDemoMode     7
 #define CommandFramerate    8
 #define CommandPreviewEnc   9
+#define CommandIntraPeriod  10
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -159,6 +161,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandDemoMode,"-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 1},
    { CommandFramerate,"-framerate", "fps","Specify the frames per second to record", 1},
    { CommandPreviewEnc,"-penc",     "e",  "Display preview image *after* encoding (shows compression artifacts)", 0},
+   { CommandIntraPeriod,"-intra",   "g",  "Specify the intra refresh period (key frame rate/GoP size)", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -185,6 +188,7 @@ static void default_status(RASPIVID_STATE *state)
    state->height = 1080;
    state->bitrate = 17000000; // This is a decent default bitrate for 1080p
    state->framerate = VIDEO_FRAME_RATE_NUM;
+   state->intraperiod = 0;    // Not set
    state->demoMode = 0;
    state->demoInterval = 250; // ms
    state->immutableInput = 1;
@@ -362,6 +366,15 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
       case CommandPreviewEnc:
          state->immutableInput = 0;
          break;
+
+      case CommandIntraPeriod: // key frame rate
+      {
+         if (sscanf(argv[i + 1], "%u", &state->intraperiod) == 1)
+            i++;
+         else
+            valid = 0;
+         break;
+      }
 
       default:
       {
@@ -764,6 +777,18 @@ static MMAL_COMPONENT_T *create_encoder_component(RASPIVID_STATE *state)
       if (status != MMAL_SUCCESS)
       {
          vcos_log_error("Unable to set ratecontrol");
+         goto error;
+      }
+
+   }
+
+   if (state->intraperiod)
+   {
+      MMAL_PARAMETER_UINT32_T param = {{ MMAL_PARAMETER_INTRAPERIOD, sizeof(param)}, state->intraperiod};
+      status = mmal_port_parameter_set(encoder_output, &param.hdr);
+      if (status != MMAL_SUCCESS)
+      {
+         vcos_log_error("Unable to set intraperiod");
          goto error;
       }
 
