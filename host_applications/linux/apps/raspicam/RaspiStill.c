@@ -1231,7 +1231,7 @@ int main(int argc, const char **argv)
             FILE *output_file = NULL;
             char *saved_filename = NULL;
 
-            for (frame = 1;frame<=num_iterations; frame++)
+            for (frame = 1; (state.timelapse && state.timeout == 0) || frame<=num_iterations; frame++)
             {
                if (state.timelapse)
                   vcos_sleep(state.timelapse);
