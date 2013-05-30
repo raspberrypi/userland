@@ -105,6 +105,7 @@ typedef struct
    int quality;                        /// JPEG quality setting (1-100)
    int wantRAW;                        /// Flag for whether the JPEG metadata also contains the RAW bayer image
    char *filename;                     /// filename of output file
+   char *execcomand;                   /// Command that will be executed after successful image save
    MMAL_PARAM_THUMBNAIL_CONFIG_T thumbnailConfig;
    int verbose;                        /// !0 if want detailed run information
    int demoMode;                       /// Run app in demo mode
@@ -152,6 +153,7 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandEncoding     10
 #define CommandExifTag      11
 #define CommandTimelapse    12
+#define CommandExec         13
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -167,7 +169,8 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandDemoMode,"-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 0},
    { CommandEncoding,"-encoding",   "e",  "Encoding to use for output file (jpg, bmp, gif, png)", 1},
    { CommandExifTag, "-exif",       "x",  "EXIF tag to apply to captures (format as 'key=value')", 1},
-   { CommandTimelapse,"-timelapse", "tl", "Timelapse mode. Takes a picture every <t>ms", 1}
+   { CommandTimelapse,"-timelapse", "tl", "Timelapse mode. Takes a picture every <t>ms", 1},
+   { CommandExec,     "-exec",      "ec", "Command to be executed after image save", 1}
 
 };
 
@@ -222,6 +225,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->encoding = MMAL_ENCODING_JPEG;
    state->numExifTags = 0;
    state->timelapse = 0;
+   state->execcomand = NULL;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -442,6 +446,22 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          else
             i++;
          break;
+ 
+      case CommandExec:  // exec command after save
+      {
+         int len = strlen(argv[i + 1]);
+         if (len)
+         {
+            state->execcomand = malloc(len);
+            vcos_assert(state->execcomand);
+            if (state->execcomand)
+               strncpy(state->execcomand, argv[i + 1], len);
+            i++;
+         }
+         else
+            valid = 0;
+         break;
+      }
 
       default:
       {
@@ -1209,6 +1229,7 @@ int main(int argc, const char **argv)
             int num_iterations =  state.timelapse ? state.timeout / state.timelapse : 1;
             int frame;
             FILE *output_file = NULL;
+            char *saved_filename = NULL;
 
             for (frame = 1;frame<=num_iterations; frame++)
             {
@@ -1238,7 +1259,9 @@ int main(int argc, const char **argv)
 	                     fprintf(stderr, "Opening output file %s\n", use_filename);
 	
 	                  output_file = fopen(use_filename, "wb");
-	
+
+			  asprintf(&saved_filename,"%s",use_filename);
+
 	                  if (!output_file)
 	                  {
 	                     // Notify user, carry on but discarding encoded output buffers
@@ -1249,7 +1272,7 @@ int main(int argc, const char **argv)
 	                  if (state.timelapse)
 	                     free(use_filename);
                   }
-									
+                                                                        
                   add_exif_tags(&state);
 
                   callback_data.file_handle = output_file;
@@ -1294,7 +1317,19 @@ int main(int argc, const char **argv)
                   callback_data.file_handle = NULL;
 
                   if (output_file != stdout)
+                  {
                      fclose(output_file);
+                     if (state.execcomand != NULL && saved_filename != NULL)
+                     {
+                      char exec_string[256];
+                      sprintf(exec_string, "%s %s",state.execcomand,saved_filename);
+                      if (state.verbose)
+                        fprintf(stderr, "Executing command %s\n", exec_string);
+                      system(exec_string);
+                     }
+                    if(saved_filename != NULL)
+		      free(saved_filename);
+                  }
                }
 
             } // end for (frame)
