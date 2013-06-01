@@ -106,6 +106,7 @@ typedef struct
    int wantRAW;                        /// Flag for whether the JPEG metadata also contains the RAW bayer image
    char *filename;                     /// filename of output file
    MMAL_PARAM_THUMBNAIL_CONFIG_T thumbnailConfig;
+   int keypress;			/// only take photo when (enter) key presed 
    int verbose;                        /// !0 if want detailed run information
    int demoMode;                       /// Run app in demo mode
    int demoInterval;                   /// Interval between camera settings changes
@@ -152,6 +153,7 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandEncoding     10
 #define CommandExifTag      11
 #define CommandTimelapse    12
+#define CommandKeypress     13
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -167,7 +169,8 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandDemoMode,"-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 0},
    { CommandEncoding,"-encoding",   "e",  "Encoding to use for output file (jpg, bmp, gif, png)", 1},
    { CommandExifTag, "-exif",       "x",  "EXIF tag to apply to captures (format as 'key=value')", 1},
-   { CommandTimelapse,"-timelapse", "tl", "Timelapse mode. Takes a picture every <t>ms", 1}
+   { CommandTimelapse,"-timelapse", "tl", "Timelapse mode. Takes a picture every <t>ms", 1},
+   { CommandKeypress, "-keypress",    "k",  "wait until (enter) key is pressed before taking picture)", 0 }
 
 };
 
@@ -202,6 +205,7 @@ static void default_status(RASPISTILL_STATE *state)
    }
 
    state->timeout = 5000; // 5s delay before take image
+   state->keypress = 0; // 5s delay before take image
    state->width = 2592;
    state->height = 1944;
    state->quality = 85;
@@ -369,6 +373,9 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          state->verbose = 1;
          break;
 
+      case CommandKeypress: // Wait for (enter) key before taking picture
+         state->keypress = 1;
+         break;
       case CommandTimeout: // Time to run viewfinder for before taking picture, in seconds
       {
          if (sscanf(argv[i + 1], "%u", &state->timeout) == 1)
@@ -1216,6 +1223,9 @@ int main(int argc, const char **argv)
                   vcos_sleep(state.timelapse);
                else
                   vcos_sleep(state.timeout);
+
+	        if (state.keypress)
+			getchar();
 
                // Open the file
                if (state.filename)
