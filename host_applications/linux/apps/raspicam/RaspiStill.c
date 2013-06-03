@@ -106,7 +106,7 @@ typedef struct
    int wantRAW;                        /// Flag for whether the JPEG metadata also contains the RAW bayer image
    char *filename;                     /// filename of output file
    MMAL_PARAM_THUMBNAIL_CONFIG_T thumbnailConfig;
-   int keypress;			/// only take photo when (enter) key presed 
+   int keypress;                       /// only take photo when (enter) key presed 
    int verbose;                        /// !0 if want detailed run information
    int demoMode;                       /// Run app in demo mode
    int demoInterval;                   /// Interval between camera settings changes
@@ -170,7 +170,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandEncoding,"-encoding",   "e",  "Encoding to use for output file (jpg, bmp, gif, png)", 1},
    { CommandExifTag, "-exif",       "x",  "EXIF tag to apply to captures (format as 'key=value')", 1},
    { CommandTimelapse,"-timelapse", "tl", "Timelapse mode. Takes a picture every <t>ms", 1},
-   { CommandKeypress, "-keypress",    "k",  "wait until (enter) key is pressed before taking picture)", 0 }
+   { CommandKeypress, "-keypress",  "k",  "wait until (enter) key is pressed before taking picture)", 0 }
 
 };
 
@@ -1224,8 +1224,8 @@ int main(int argc, const char **argv)
                else
                   vcos_sleep(state.timeout);
 
-	        if (state.keypress)
-			getchar();
+               if (state.keypress)
+                  getchar();
 
                // Open the file
                if (state.filename)
