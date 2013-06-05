@@ -668,7 +668,7 @@ int main(int argc, const char **argv)
    // Our main data storage vessel..
    RASPISTILLYUV_STATE state;
 
-   MMAL_STATUS_T status = MMAL_SUCCESS;
+   MMAL_STATUS_T status = -1;
    MMAL_PORT_T *camera_preview_port = NULL;
    MMAL_PORT_T *camera_video_port = NULL;
    MMAL_PORT_T *camera_still_port = NULL;
