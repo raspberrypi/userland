@@ -131,6 +131,8 @@ Possible options are:
         colourbalance  Not fully implemented
         cartoon        Not fully implemented
 
+Colour control
+
     --colfx,  -cfx          | Set colour effect <U:V>
 
 The supplied U and V parameters (range 0 to 255) are applied to the U and Y channels of the image. For example, --colfx 128:128 should result in a monochrome image.
