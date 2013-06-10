@@ -86,7 +86,9 @@ Possible options are:
 
 Note that not all of these settings may be implemented, depending on camera tuning.
 
-  --awb,  -awb              | Set Automatic White Balance (AWB) mode
+    --awb,  -awb              | Set Automatic White Balance (AWB) mode
+    
+Possible options are: 
 
         off           Turn off white balance calculation
         auto          Automatic mode (default)
@@ -99,9 +101,11 @@ Note that not all of these settings may be implemented, depending on camera tuni
         flash         Flash mode
         horizon       Horizon mode
 
-  --imxfx,     -ifx         | Set image effect
-
 Set an effect to be applied to the image
+
+    --imxfx,     -ifx         | Set image effect
+
+Possible options are: 
 
         none           NO effect (default)
         negative       Negate the image
