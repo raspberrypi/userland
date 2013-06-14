@@ -292,8 +292,9 @@ static int get_modes( HDMI_RES_GROUP_T group, int json_output)
       }
       else
       {
+         int preferred = supported_modes[i].group == preferred_group && supported_modes[i].code == preferred_mode;
          LOG_STD( "%s mode %u: %ux%u @ %uHz %s, clock:%uMHz %s%s %s",
-                  supported_modes[i].native ? "  (native)" : "          ",
+                  preferred ? "  (prefer)" : supported_modes[i].native ? "  (native)" : "          ",
                   supported_modes[i].code, supported_modes[i].width,
                   supported_modes[i].height, supported_modes[i].frame_rate,
                   aspect_ratio_str(supported_modes[i].aspect_ratio),
