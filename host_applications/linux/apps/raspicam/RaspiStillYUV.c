@@ -54,7 +54,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <memory.h>
 
-#define VERSION_STRING "v1.1"
+#define VERSION_STRING "v1.2"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -416,7 +416,7 @@ static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buff
 
       // and back to the port from there.
       if (new_buffer)
-      status = mmal_port_send_buffer(port, new_buffer);
+         status = mmal_port_send_buffer(port, new_buffer);
 
       if (!new_buffer || status != MMAL_SUCCESS)
          vcos_log_error("Unable to return the buffer to the camera still port");
@@ -437,7 +437,7 @@ static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buff
  * @return 0 if failed, pointer to component if successful
  *
  */
-static MMAL_COMPONENT_T *create_camera_component(RASPISTILLYUV_STATE *state)
+static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
 {
    MMAL_COMPONENT_T *camera = 0;
    MMAL_ES_FORMAT_T *format;
@@ -582,14 +582,14 @@ static MMAL_COMPONENT_T *create_camera_component(RASPISTILLYUV_STATE *state)
    if (state->verbose)
       fprintf(stderr, "Camera component done\n");
 
-   return camera;
+   return status;
 
 error:
 
    if (camera)
       mmal_component_destroy(camera);
 
-   return 0;
+   return status;
 }
 
 /**
@@ -668,7 +668,7 @@ int main(int argc, const char **argv)
    // Our main data storage vessel..
    RASPISTILLYUV_STATE state;
 
-   MMAL_STATUS_T status = -1;
+   MMAL_STATUS_T status = MMAL_SUCCESS;
    MMAL_PORT_T *camera_preview_port = NULL;
    MMAL_PORT_T *camera_video_port = NULL;
    MMAL_PORT_T *camera_still_port = NULL;
@@ -696,6 +696,7 @@ int main(int argc, const char **argv)
    // Parse the command line and put options in to our status structure
    if (parse_cmdline(argc, argv, &state))
    {
+      status = -1;
       exit(0);
    }
 
@@ -710,11 +711,11 @@ int main(int argc, const char **argv)
    // Camera is different in stills/video, but preview
    // is the same so handed off to a separate module
 
-   if (!create_camera_component(&state))
+   if ((status = create_camera_component(&state)) != MMAL_SUCCESS)
    {
       vcos_log_error("%s: Failed to create camera component", __func__);
    }
-   else if ( !raspipreview_create(&state.preview_parameters))
+   else if ((status = raspipreview_create(&state.preview_parameters)) != MMAL_SUCCESS)
    {
       vcos_log_error("%s: Failed to create preview component", __func__);
       destroy_camera_component(&state);
@@ -868,7 +869,8 @@ error:
       if (state.verbose)
          fprintf(stderr, "Close down completed, all components disconnected, disabled and destroyed\n\n");
    }
-   if (status != 0)
+
+   if (status != MMAL_SUCCESS)
       raspicamcontrol_check_configuration(128);
 
    return 0;

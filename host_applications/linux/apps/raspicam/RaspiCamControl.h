@@ -122,6 +122,9 @@ typedef struct
    int vflip;                 /// 0 or 1
 } RASPICAM_CAMERA_PARAMETERS;
 
+
+void raspicamcontrol_check_configuration(int min_gpu_mem);
+
 int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char *arg1, const char *arg2);
 void raspicamcontrol_display_help();
 int raspicamcontrol_cycle_test(MMAL_COMPONENT_T *camera);

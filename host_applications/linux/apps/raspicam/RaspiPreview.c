@@ -64,10 +64,10 @@ static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_com
  *
  * @param state Pointer to state control struct
  *
- * @return 0 if failed, pointer to component if successful
+ * @return MMAL_SUCCESS if all OK, something else otherwise
  *
  */
-MMAL_COMPONENT_T *raspipreview_create(RASPIPREVIEW_PARAMETERS *state)
+MMAL_STATUS_T raspipreview_create(RASPIPREVIEW_PARAMETERS *state)
 {
    MMAL_COMPONENT_T *preview = 0;
    MMAL_PORT_T *preview_port = NULL;
@@ -84,8 +84,8 @@ MMAL_COMPONENT_T *raspipreview_create(RASPIPREVIEW_PARAMETERS *state)
 
    if (!preview->input_num)
    {
+      status = MMAL_ENOSYS;
       vcos_log_error("No input ports found on component");
-      status = MMAL_EINVAL;
       goto error;
    }
 
@@ -124,7 +124,7 @@ MMAL_COMPONENT_T *raspipreview_create(RASPIPREVIEW_PARAMETERS *state)
    /* Enable component */
    status = mmal_component_enable(preview);
 
-   if (status)
+   if (status != MMAL_SUCCESS)
    {
       vcos_log_error("Unable to enable preview component (%u)", status);
       goto error;
@@ -132,14 +132,14 @@ MMAL_COMPONENT_T *raspipreview_create(RASPIPREVIEW_PARAMETERS *state)
 
    state->preview_component = preview;
 
-   return preview;
+   return status;
 
    error:
 
    if (preview)
       mmal_component_destroy(preview);
 
-   return 0;
+   return status;
 }
 
 

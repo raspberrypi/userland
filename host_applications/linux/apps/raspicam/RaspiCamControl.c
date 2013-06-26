@@ -1119,6 +1119,11 @@ int raspicamcontrol_set_flips(MMAL_COMPONENT_T *camera, int hflip, int vflip)
    return mmal_port_parameter_set(camera->output[2], &mirror.hdr);
 }
 
+/**
+ * Asked GPU how much memory it has allocated
+ *
+ * @return amount of memory in MB
+ */
 static int raspicamcontrol_get_mem_gpu(void)
 {
    char response[80] = "";
@@ -1128,6 +1133,11 @@ static int raspicamcontrol_get_mem_gpu(void)
    return gpu_mem;
 }
 
+/**
+ * Ask GPU about its camera abilities
+ * @param supported None-zero if software supports the camera 
+ * @param detected  None-zero if a camera has been detected
+ */
 static void raspicamcontrol_get_camera(int *supported, int *detected)
 {
    char response[80] = "";
@@ -1140,6 +1150,11 @@ static void raspicamcontrol_get_camera(int *supported, int *detected)
    }
 }
 
+/**
+ * Check to see if camera is supported, and we have allocated enough meooryAsk GPU about its camera abilities
+ * @param supported None-zero if software supports the camera 
+ * @param detected  None-zero if a camera has been detected
+ */
 void raspicamcontrol_check_configuration(int min_gpu_mem)
 {
    int gpu_mem = raspicamcontrol_get_mem_gpu();
