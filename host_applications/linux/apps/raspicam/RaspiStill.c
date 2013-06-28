@@ -1181,14 +1181,6 @@ int main(int argc, const char **argv)
 
          vcos_assert(vcos_status == VCOS_SUCCESS);
 
-         encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&callback_data;
-
-         if (state.verbose)
-            fprintf(stderr, "Enabling encoder output port\n");
-
-         // Enable the encoder output port and tell it its callback function
-         status = mmal_port_enable(encoder_output_port, encoder_buffer_callback);
-
          if (status != MMAL_SUCCESS)
          {
             vcos_log_error("Failed to setup encoder output");
@@ -1252,17 +1244,29 @@ int main(int argc, const char **argv)
 	                     free(use_filename);
                   }
 									
-                  add_exif_tags(&state);
-
                   callback_data.file_handle = output_file;
                }
 
                // We only capture if a filename was specified and it opened
                if (output_file)
                {
+                  int num, q;
+
+                  // Must do this before the encoder output port is enabled since
+                  // once enabled no further exif data is accepted
+                  add_exif_tags(&state);
+
+                  // Enable the encoder output port
+                  encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&callback_data;
+
+                  if (state.verbose)
+                     fprintf(stderr, "Enabling encoder output port\n");
+
+                  // Enable the encoder output port and tell it its callback function
+                  status = mmal_port_enable(encoder_output_port, encoder_buffer_callback);
+
                   // Send all the buffers to the encoder output port
-                  int num = mmal_queue_length(state.encoder_pool->queue);
-                  int q;
+                  num = mmal_queue_length(state.encoder_pool->queue);
 
                   for (q=0;q<num;q++)
                   {
@@ -1297,6 +1301,9 @@ int main(int argc, const char **argv)
 
                   if (output_file != stdout)
                      fclose(output_file);
+
+                  // Disable encoder output port
+                  status = mmal_port_disable(encoder_output_port);
                }
 
             } // end for (frame)
