@@ -44,7 +44,7 @@ typedef struct
    MMAL_COMPONENT_T *preview_component;   /// Pointer to the created preview display component
 } RASPIPREVIEW_PARAMETERS;
 
-MMAL_COMPONENT_T *raspipreview_create(RASPIPREVIEW_PARAMETERS *state);
+MMAL_STATUS_T raspipreview_create(RASPIPREVIEW_PARAMETERS *state);
 void raspipreview_destroy(RASPIPREVIEW_PARAMETERS *state);
 void raspipreview_set_defaults(RASPIPREVIEW_PARAMETERS *state);
 void raspipreview_dump_parameters(RASPIPREVIEW_PARAMETERS *state);

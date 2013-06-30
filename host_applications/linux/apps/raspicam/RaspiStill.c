@@ -54,7 +54,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <memory.h>
 
-#define VERSION_STRING "v1.1"
+#define VERSION_STRING "v1.2"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -594,12 +594,12 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 /**
  * Create the camera component, set up its ports
  *
- * @param state Pointer to state control struct
+ * @param state Pointer to state control struct. camera_component member set to the created camera_component if successfull.
  *
- * @return 0 if failed, pointer to component if successful
+ * @return MMAL_SUCCESS if all OK, something else otherwise
  *
  */
-static MMAL_COMPONENT_T *create_camera_component(RASPISTILL_STATE *state)
+static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
 {
    MMAL_COMPONENT_T *camera = 0;
    MMAL_ES_FORMAT_T *format;
@@ -617,6 +617,7 @@ static MMAL_COMPONENT_T *create_camera_component(RASPISTILL_STATE *state)
 
    if (!camera->output_num)
    {
+      status = MMAL_ENOSYS;
       vcos_log_error("Camera doesn't have output ports");
       goto error;
    }
@@ -628,7 +629,7 @@ static MMAL_COMPONENT_T *create_camera_component(RASPISTILL_STATE *state)
    // Enable the camera, and tell it its control callback function
    status = mmal_port_enable(camera->control, camera_control_callback);
 
-   if (status)
+   if (status != MMAL_SUCCESS)
    {
       vcos_log_error("Unable to enable control port : error %d", status);
       goto error;
@@ -673,7 +674,7 @@ static MMAL_COMPONENT_T *create_camera_component(RASPISTILL_STATE *state)
 
    status = mmal_port_format_commit(preview_port);
 
-   if (status)
+   if (status != MMAL_SUCCESS)
    {
       vcos_log_error("camera viewfinder format couldn't be set");
       goto error;
@@ -683,7 +684,7 @@ static MMAL_COMPONENT_T *create_camera_component(RASPISTILL_STATE *state)
    mmal_format_full_copy(video_port->format, format);
    status = mmal_port_format_commit(video_port);
 
-   if (status)
+   if (status  != MMAL_SUCCESS)
    {
       vcos_log_error("camera video format couldn't be set");
       goto error;
@@ -708,7 +709,7 @@ static MMAL_COMPONENT_T *create_camera_component(RASPISTILL_STATE *state)
 
    status = mmal_port_format_commit(still_port);
 
-   if (status)
+   if (status != MMAL_SUCCESS)
    {
       vcos_log_error("camera still format couldn't be set");
       goto error;
@@ -721,7 +722,7 @@ static MMAL_COMPONENT_T *create_camera_component(RASPISTILL_STATE *state)
    /* Enable component */
    status = mmal_component_enable(camera);
 
-   if (status)
+   if (status != MMAL_SUCCESS)
    {
       vcos_log_error("camera component couldn't be enabled");
       goto error;
@@ -742,14 +743,14 @@ static MMAL_COMPONENT_T *create_camera_component(RASPISTILL_STATE *state)
    if (state->verbose)
       fprintf(stderr, "Camera component done\n");
 
-   return camera;
+   return status;
 
 error:
 
    if (camera)
       mmal_component_destroy(camera);
 
-   return 0;
+   return status;
 }
 
 /**
@@ -772,12 +773,11 @@ static void destroy_camera_component(RASPISTILL_STATE *state)
 /**
  * Create the encoder component, set up its ports
  *
- * @param state Pointer to state control struct
+ * @param state Pointer to state control struct. encoder_component member set to the created camera_component if successfull.
  *
- * @return 0 if failed, pointer to component if successful
- *
+ * @return a MMAL_STATUS, MMAL_SUCCESS if all OK, something else otherwise
  */
-static MMAL_COMPONENT_T *create_encoder_component(RASPISTILL_STATE *state)
+static MMAL_STATUS_T create_encoder_component(RASPISTILL_STATE *state)
 {
    MMAL_COMPONENT_T *encoder = 0;
    MMAL_PORT_T *encoder_input = NULL, *encoder_output = NULL;
@@ -794,6 +794,7 @@ static MMAL_COMPONENT_T *create_encoder_component(RASPISTILL_STATE *state)
 
    if (!encoder->input_num || !encoder->output_num)
    {
+      status = MMAL_ENOSYS;
       vcos_log_error("JPEG encoder doesn't have input/output ports");
       goto error;
    }
@@ -853,7 +854,7 @@ static MMAL_COMPONENT_T *create_encoder_component(RASPISTILL_STATE *state)
    //  Enable component
    status = mmal_component_enable(encoder);
 
-   if (status)
+   if (status  != MMAL_SUCCESS)
    {
       vcos_log_error("Unable to enable video encoder component");
       goto error;
@@ -873,13 +874,14 @@ static MMAL_COMPONENT_T *create_encoder_component(RASPISTILL_STATE *state)
    if (state->verbose)
       fprintf(stderr, "Encoder component done\n");
 
-   return encoder;
+   return status;
 
    error:
+
    if (encoder)
       mmal_component_destroy(encoder);
 
-   return 0;
+   return status;
 }
 
 /**
@@ -1066,7 +1068,7 @@ int main(int argc, const char **argv)
    // Our main data storage vessel..
    RASPISTILL_STATE state;
 
-   MMAL_STATUS_T status = -1;
+   MMAL_STATUS_T status = MMAL_SUCCESS;
    MMAL_PORT_T *camera_preview_port = NULL;
    MMAL_PORT_T *camera_video_port = NULL;
    MMAL_PORT_T *camera_still_port = NULL;
@@ -1110,16 +1112,16 @@ int main(int argc, const char **argv)
    // Camera and encoder are different in stills/video, but preview
    // is the same so handed off to a separate module
 
-   if (!create_camera_component(&state))
+   if ((status = create_camera_component(&state)) != MMAL_SUCCESS)
    {
       vcos_log_error("%s: Failed to create camera component", __func__);
    }
-   else if (!raspipreview_create(&state.preview_parameters))
+   else if ((status = raspipreview_create(&state.preview_parameters)) != MMAL_SUCCESS)
    {
       vcos_log_error("%s: Failed to create preview component", __func__);
       destroy_camera_component(&state);
    }
-   else if (!create_encoder_component(&state))
+   else if ((status = create_encoder_component(&state)) != MMAL_SUCCESS)
    {
       vcos_log_error("%s: Failed to create encode component", __func__);
       raspipreview_destroy(&state.preview_parameters);
@@ -1178,14 +1180,6 @@ int main(int argc, const char **argv)
          vcos_status = vcos_semaphore_create(&callback_data.complete_semaphore, "RaspiStill-sem", 0);
 
          vcos_assert(vcos_status == VCOS_SUCCESS);
-
-         encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&callback_data;
-
-         if (state.verbose)
-            fprintf(stderr, "Enabling encoder output port\n");
-
-         // Enable the encoder output port and tell it its callback function
-         status = mmal_port_enable(encoder_output_port, encoder_buffer_callback);
 
          if (status != MMAL_SUCCESS)
          {
@@ -1250,17 +1244,29 @@ int main(int argc, const char **argv)
 	                     free(use_filename);
                   }
 									
-                  add_exif_tags(&state);
-
                   callback_data.file_handle = output_file;
                }
 
                // We only capture if a filename was specified and it opened
                if (output_file)
                {
+                  int num, q;
+
+                  // Must do this before the encoder output port is enabled since
+                  // once enabled no further exif data is accepted
+                  add_exif_tags(&state);
+
+                  // Enable the encoder output port
+                  encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&callback_data;
+
+                  if (state.verbose)
+                     fprintf(stderr, "Enabling encoder output port\n");
+
+                  // Enable the encoder output port and tell it its callback function
+                  status = mmal_port_enable(encoder_output_port, encoder_buffer_callback);
+
                   // Send all the buffers to the encoder output port
-                  int num = mmal_queue_length(state.encoder_pool->queue);
-                  int q;
+                  num = mmal_queue_length(state.encoder_pool->queue);
 
                   for (q=0;q<num;q++)
                   {
@@ -1295,6 +1301,9 @@ int main(int argc, const char **argv)
 
                   if (output_file != stdout)
                      fclose(output_file);
+
+                  // Disable encoder output port
+                  status = mmal_port_disable(encoder_output_port);
                }
 
             } // end for (frame)
@@ -1341,9 +1350,10 @@ error:
       if (state.verbose)
          fprintf(stderr, "Close down completed, all components disconnected, disabled and destroyed\n\n");
    }
-   if (status != 0)
-      raspicamcontrol_check_configuration(128);
 
+   if (status != MMAL_SUCCESS)
+      raspicamcontrol_check_configuration(128);
+      
    return 0;
 }
 
