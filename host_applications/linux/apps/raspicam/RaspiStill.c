@@ -728,16 +728,6 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
       goto error;
    }
 
-   if (state->wantRAW)
-   {
-      if (mmal_port_parameter_set_boolean(still_port, MMAL_PARAMETER_ENABLE_RAW_CAPTURE, 1) != MMAL_SUCCESS)
-      {
-         vcos_log_error("RAW was requested, but failed to enable");
-
-         // Continue on and take picture without.
-      }
-   }
-
    state->camera_component = camera;
 
    if (state->verbose)
@@ -1255,6 +1245,16 @@ int main(int argc, const char **argv)
                   // Must do this before the encoder output port is enabled since
                   // once enabled no further exif data is accepted
                   add_exif_tags(&state);
+
+                  // Same with raw, apparently need to set it for each capture, whilst port
+                  // is not enabled
+                  if (state.wantRAW)
+                  {
+                     if (mmal_port_parameter_set_boolean(camera_still_port, MMAL_PARAMETER_ENABLE_RAW_CAPTURE, 1) != MMAL_SUCCESS)
+                     {
+                        vcos_log_error("RAW was requested, but failed to enable");
+                     }
+                  }
 
                   // Enable the encoder output port
                   encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&callback_data;
