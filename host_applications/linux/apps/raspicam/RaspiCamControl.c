@@ -765,7 +765,7 @@ int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_
    result += raspicamcontrol_set_sharpness(camera, params->sharpness);
    result += raspicamcontrol_set_contrast(camera, params->contrast);
    result += raspicamcontrol_set_brightness(camera, params->brightness);
-   //result += raspicamcontrol_set_ISO(camera, params->ISO); TODO Not working for some reason
+   result += raspicamcontrol_set_ISO(camera, params->ISO);
    result += raspicamcontrol_set_video_stabilisation(camera, params->videoStabilisation);
    result += raspicamcontrol_set_exposure_compensation(camera, params->exposureCompensation);
    result += raspicamcontrol_set_exposure_mode(camera, params->exposureMode);
