@@ -322,7 +322,8 @@ extern EGL_SURFACE_T *egl_surface_create(
    EGLenum texture_format,
    EGLenum texture_target,
    EGLNativePixmapType pixmap,
-   const uint32_t *pixmap_server_handle);
+   const uint32_t *pixmap_server_handle,
+   DISPMANX_RESOURCE_HANDLE_T next_resource_handle);
 extern EGL_SURFACE_T *egl_surface_from_vg_image(
    VGImage vg_handle,
    EGLSurface name,
