@@ -314,7 +314,8 @@ EGL_SURFACE_T *egl_surface_create(
    EGLenum texture_format,
    EGLenum texture_target,
    EGLNativePixmapType pixmap,
-   const uint32_t *pixmap_server_handle)
+   const uint32_t *pixmap_server_handle,
+   DISPMANX_RESOURCE_HANDLE_T next_resource_handle)
 {
    KHRN_IMAGE_FORMAT_T color;
    KHRN_IMAGE_FORMAT_T depth;
@@ -473,6 +474,27 @@ EGL_SURFACE_T *egl_surface_create(
 #endif
          uint32_t results[3];
 
+         if (next_resource_handle)
+         RPC_CALL16_OUT_CTRL(eglIntCreateSurface_impl,
+                             thread,
+                             EGLINTCREATESURFACE_ID_V2,
+                             RPC_UINT(serverwin),
+                             RPC_UINT(buffers),
+                             RPC_UINT(width),
+                             RPC_UINT(height),
+                             RPC_UINT(color),
+                             RPC_UINT(depth),
+                             RPC_UINT(mask),
+                             RPC_UINT(multi),
+                             RPC_UINT(largest_pbuffer),
+                             RPC_UINT(mipmap_texture),
+                             RPC_UINT(config_depth_bits),
+                             RPC_UINT(config_stencil_bits),
+                             RPC_UINT(sem_name),
+                             RPC_UINT(type),
+                             RPC_INT(next_resource_handle),
+                             results);
+         else
          RPC_CALL15_OUT_CTRL(eglIntCreateSurface_impl,
                              thread,
                              EGLINTCREATESURFACE_ID,

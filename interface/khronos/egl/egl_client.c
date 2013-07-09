@@ -162,6 +162,17 @@ static void egl_current_release(CLIENT_PROCESS_STATE_T *process, EGL_CURRENT_T *
 void egl_gl_flush_callback(bool wait);
 void egl_vg_flush_callback(bool wait);
 
+#include "interface/vmcs_host/vc_dispmanx_types.h"
+/**HACKHACK - give us the ability to inject a DispmanX 
+ * resource handle into the CreateWindowSurface and 
+ * SwapBuffers calls */ 
+static DISPMANX_RESOURCE_HANDLE_T next_resource_handle;
+
+EGLAPI EGLBoolean EGLAPIENTRY eglSetNextResourceHandle(DISPMANX_RESOURCE_HANDLE_T handle)
+{
+   next_resource_handle = handle;
+}
+
 /*
 TODO: do an RPC call to make sure the Khronos vll is loaded (and that it stays loaded until eglTerminate)
 Also affects global image (and possibly others?)
@@ -644,7 +655,8 @@ EGLAPI EGLSurface EGLAPIENTRY eglCreateWindowSurface(EGLDisplay dpy, EGLConfig c
                                 false,
                                 EGL_NO_TEXTURE,
                                 EGL_NO_TEXTURE,
-                                0, 0);
+                                0, 0,
+                                next_resource_handle);
 
                if (surface) {
                   if (khrn_pointer_map_insert(&process->surfaces, process->next_surface, surface)) {
@@ -889,7 +901,7 @@ EGLAPI EGLSurface EGLAPIENTRY eglCreatePbufferSurface(EGLDisplay dpy, EGLConfig 
                              mipmap_texture,
                              texture_format,
                              texture_target,
-                             0, 0);
+                             0, 0, 0);
 
             if (surface) {
                if (khrn_pointer_map_insert(&process->surfaces, process->next_surface, surface)) {
@@ -1031,7 +1043,7 @@ EGLAPI EGLSurface EGLAPIENTRY eglCreatePixmapSurface(EGLDisplay dpy, EGLConfig c
                                    false,
                                    EGL_NO_TEXTURE,
                                    EGL_NO_TEXTURE,
-                                   pixmap, ((server_handle[0] == 0) && (server_handle[1] == (uint32_t)(-1))) ? NULL : server_handle);
+                                   pixmap, ((server_handle[0] == 0) && (server_handle[1] == (uint32_t)(-1))) ? NULL : server_handle, 0);
 
                      if (surface) {
                         if (khrn_pointer_map_insert(&process->surfaces, process->next_surface, surface)) {
@@ -2303,6 +2315,18 @@ EGLAPI EGLBoolean EGLAPIENTRY eglSwapBuffers(EGLDisplay dpy, EGLSurface surf)
 
                vcos_log_trace("eglSwapBuffers server call");
 
+               if (next_resource_handle)
+               RPC_CALL7(eglIntSwapBuffers_impl,
+                     thread,
+                     EGLINTSWAPBUFFERS_ID_V2,
+                     RPC_UINT(surface->serverbuffer),
+                     RPC_UINT(surface->width),
+                     RPC_UINT(surface->height),
+                     RPC_UINT(surface->internal_handle),
+                     RPC_UINT(surface->swap_behavior == EGL_BUFFER_PRESERVED ? 1 : 0),
+                     RPC_UINT(khrn_platform_get_window_position(surface->win)),
+                     RPC_INT(next_resource_handle));
+               else
                RPC_CALL6(eglIntSwapBuffers_impl,
                      thread,
                      EGLINTSWAPBUFFERS_ID,
