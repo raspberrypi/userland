@@ -27,8 +27,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 /*
- * \file RaspiStill.c
- * Command line program to capture a still frame and encode it to file.
+ * \file RaspiStillYUV.c
+ * Command line program to capture a still frame and dump uncompressed it to file.
  * Also optionally display a preview/viewfinder of current camera input.
  *
  * \date 4th March 2013
@@ -102,11 +102,13 @@ typedef struct
    char *filename;                     /// filename of output file
    int verbose;                        /// !0 if want detailed run information
    int timelapse;                      /// Delay between each picture in timelapse mode. If 0, disable timelapse
+   int useRGB;                         /// Output RGB data rather than YUV
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
 
    MMAL_COMPONENT_T *camera_component;    /// Pointer to the camera component
+   MMAL_COMPONENT_T *null_sink_component;    /// Pointer to the camera component
    MMAL_CONNECTION_T *preview_connection; /// Pointer to the connection from camera to preview
    MMAL_POOL_T *camera_pool;              /// Pointer to the pool of buffers used by camera stills port
 } RASPISTILLYUV_STATE;
@@ -131,6 +133,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandVerbose      4
 #define CommandTimeout      5
 #define CommandTimelapse    6
+#define CommandUseRGB       7
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -141,6 +144,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandVerbose, "-verbose",    "v",  "Output verbose information during run", 0 },
    { CommandTimeout, "-timeout",    "t",  "Time (in ms) before takes picture and shuts down. If not specified set to 5s", 1 },
    { CommandTimelapse,"-timelapse", "tl", "Timelapse mode. Takes a picture every <t>ms", 1},
+   { CommandUseRGB,  "-rgb",        "rgb","Save as RGB data rather than YUV", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -292,6 +296,9 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
             i++;
          break;
 
+      case CommandUseRGB: // display lots of data during run
+         state->useRGB = 1;
+         break;
 
       default:
       {
@@ -551,8 +558,16 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
    format = still_port->format;
 
    // Set our stills format on the stills  port
-   format->encoding = MMAL_ENCODING_I420;
-   format->encoding_variant = MMAL_ENCODING_I420;
+   if (state->useRGB)
+   {
+      format->encoding = MMAL_ENCODING_BGR24;
+      format->encoding_variant = MMAL_ENCODING_BGR24;
+   }
+   else
+   {
+      format->encoding = MMAL_ENCODING_I420;
+      format->encoding_variant = MMAL_ENCODING_I420;
+   }
    format->es->video.width = state->width;
    format->es->video.height = state->height;
    format->es->video.crop.x = 0;
@@ -746,23 +761,13 @@ int main(int argc, const char **argv)
       camera_preview_port = state.camera_component->output[MMAL_CAMERA_PREVIEW_PORT];
       camera_video_port   = state.camera_component->output[MMAL_CAMERA_VIDEO_PORT];
       camera_still_port   = state.camera_component->output[MMAL_CAMERA_CAPTURE_PORT];
+
+      // Note we are lucky that the preview and null sink components use the same input port
+      // so we can simple do this without conditionals
       preview_input_port  = state.preview_parameters.preview_component->input[0];
 
-      if (state.preview_parameters.wantPreview )
-      {
-         if (state.verbose)
-         {
-            fprintf(stderr, "Connecting camera preview port to preview input port\n");
-            fprintf(stderr, "Starting video preview\n");
-         }
-
-         // Connect camera to preview
-         status = connect_ports(camera_preview_port, preview_input_port, &state.preview_connection);
-      }
-      else
-      {
-         status = MMAL_SUCCESS;
-      }
+      // Connect camera to preview (which might be a null_sink if no preview required)
+      status = connect_ports(camera_preview_port, preview_input_port, &state.preview_connection);
 
       if (status == MMAL_SUCCESS)
       {
@@ -919,8 +924,7 @@ error:
       // Disable all our ports that are not handled by connections
       check_disable_port(camera_video_port);
 
-      if (state.preview_parameters.wantPreview )
-         mmal_connection_destroy(state.preview_connection);
+      mmal_connection_destroy(state.preview_connection);
 
       /* Disable components */
       if (state.preview_parameters.preview_component)
