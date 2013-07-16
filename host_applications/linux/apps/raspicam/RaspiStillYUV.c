@@ -108,6 +108,7 @@ typedef struct
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
 
    MMAL_COMPONENT_T *camera_component;    /// Pointer to the camera component
+   MMAL_COMPONENT_T *null_sink_component;    /// Pointer to the camera component
    MMAL_CONNECTION_T *preview_connection; /// Pointer to the connection from camera to preview
    MMAL_POOL_T *camera_pool;              /// Pointer to the pool of buffers used by camera stills port
 } RASPISTILLYUV_STATE;
@@ -760,23 +761,13 @@ int main(int argc, const char **argv)
       camera_preview_port = state.camera_component->output[MMAL_CAMERA_PREVIEW_PORT];
       camera_video_port   = state.camera_component->output[MMAL_CAMERA_VIDEO_PORT];
       camera_still_port   = state.camera_component->output[MMAL_CAMERA_CAPTURE_PORT];
+
+      // Note we are lucky that the preview and null sink components use the same input port
+      // so we can simple do this without conditionals
       preview_input_port  = state.preview_parameters.preview_component->input[0];
 
-      if (state.preview_parameters.wantPreview )
-      {
-         if (state.verbose)
-         {
-            fprintf(stderr, "Connecting camera preview port to preview input port\n");
-            fprintf(stderr, "Starting video preview\n");
-         }
-
-         // Connect camera to preview
-         status = connect_ports(camera_preview_port, preview_input_port, &state.preview_connection);
-      }
-      else
-      {
-         status = MMAL_SUCCESS;
-      }
+      // Connect camera to preview (which might be a null_sink if no preview required)
+      status = connect_ports(camera_preview_port, preview_input_port, &state.preview_connection);
 
       if (status == MMAL_SUCCESS)
       {
@@ -933,8 +924,7 @@ error:
       // Disable all our ports that are not handled by connections
       check_disable_port(camera_video_port);
 
-      if (state.preview_parameters.wantPreview )
-         mmal_connection_destroy(state.preview_connection);
+      mmal_connection_destroy(state.preview_connection);
 
       /* Disable components */
       if (state.preview_parameters.preview_component)
