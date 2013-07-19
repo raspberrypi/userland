@@ -84,7 +84,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 // Stills format information
-#define STILLS_FRAME_RATE_NUM 3
+#define STILLS_FRAME_RATE_NUM 15
 #define STILLS_FRAME_RATE_DEN 1
 
 /// Video render needs at least 2 buffers.
@@ -113,12 +113,14 @@ typedef struct
    const char *exifTags[MAX_USER_EXIF_TAGS]; /// Array of pointers to tags supplied from the command line
    int numExifTags;                    /// Number of supplied tags
    int timelapse;                      /// Delay between each picture in timelapse mode. If 0, disable timelapse
+   int fullResPreview;                 /// If set, the camera preview port runs at capture resolution. Reduces fps.
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
 
    MMAL_COMPONENT_T *camera_component;    /// Pointer to the camera component
    MMAL_COMPONENT_T *encoder_component;   /// Pointer to the encoder component
+   MMAL_COMPONENT_T *null_sink_component; /// Pointer to the null sink component
    MMAL_CONNECTION_T *preview_connection; /// Pointer to the connection from camera to preview
    MMAL_CONNECTION_T *encoder_connection; /// Pointer to the connection from camera to encoder
 
@@ -152,6 +154,7 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandEncoding     10
 #define CommandExifTag      11
 #define CommandTimelapse    12
+#define CommandFullResPreview 13
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -167,8 +170,8 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandDemoMode,"-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 0},
    { CommandEncoding,"-encoding",   "e",  "Encoding to use for output file (jpg, bmp, gif, png)", 1},
    { CommandExifTag, "-exif",       "x",  "EXIF tag to apply to captures (format as 'key=value')", 1},
-   { CommandTimelapse,"-timelapse", "tl", "Timelapse mode. Takes a picture every <t>ms", 1}
-
+   { CommandTimelapse,"-timelapse", "tl", "Timelapse mode. Takes a picture every <t>ms", 1},
+   { CommandFullResPreview,"-fullpreview", "fp", "Run the preview using the still capture resolution (may reduce preview fps)", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -222,6 +225,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->encoding = MMAL_ENCODING_JPEG;
    state->numExifTags = 0;
    state->timelapse = 0;
+   state->fullResPreview = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -249,9 +253,10 @@ static void dump_status(RASPISTILL_STATE *state)
          state->height, state->quality, state->filename);
    fprintf(stderr, "Time delay %d, Raw %s\n", state->timeout,
          state->wantRAW ? "yes" : "no");
-   fprintf(stderr, "Thumbnail enabled %s, width %d, height %d, quality %d\n\n",
+   fprintf(stderr, "Thumbnail enabled %s, width %d, height %d, quality %d\n",
          state->thumbnailConfig.enable ? "Yes":"No", state->thumbnailConfig.width,
          state->thumbnailConfig.height, state->thumbnailConfig.quality);
+   fprintf(stderr, "Full resolution preview %s\n\n", state->fullResPreview ? "Yes": "No");
 
    if (state->numExifTags)
    {
@@ -441,6 +446,10 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
             valid = 0;
          else
             i++;
+         break;
+
+      case CommandFullResPreview:
+         state->fullResPreview = 1;
          break;
 
       default:
@@ -651,6 +660,13 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
          .fast_preview_resume = 0,
          .use_stc_timestamp = MMAL_PARAM_TIMESTAMP_MODE_RESET_STC
       };
+
+      if (state->fullResPreview)
+      {
+         cam_config.max_preview_video_w = state->width;
+         cam_config.max_preview_video_h = state->height;
+      }
+
       mmal_port_parameter_set(camera->control, &cam_config.hdr);
    }
 
@@ -663,14 +679,31 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
    format->encoding = MMAL_ENCODING_OPAQUE;
    format->encoding_variant = MMAL_ENCODING_I420;
 
-   format->es->video.width = state->preview_parameters.previewWindow.width;
-   format->es->video.height = state->preview_parameters.previewWindow.height;
-   format->es->video.crop.x = 0;
-   format->es->video.crop.y = 0;
-   format->es->video.crop.width = state->preview_parameters.previewWindow.width;
-   format->es->video.crop.height = state->preview_parameters.previewWindow.height;
-   format->es->video.frame_rate.num = PREVIEW_FRAME_RATE_NUM;
-   format->es->video.frame_rate.den = PREVIEW_FRAME_RATE_DEN;
+   if (state->fullResPreview)
+   {
+      // In this mode we are forcing the preview to be generated from the full capture resolution.
+      // This runs at a max of 15fps with the OV5647 sensor.
+      format->es->video.width = state->width;
+      format->es->video.height = state->height;
+      format->es->video.crop.x = 0;
+      format->es->video.crop.y = 0;
+      format->es->video.crop.width = state->width;
+      format->es->video.crop.height = state->height;
+      format->es->video.frame_rate.num = FULL_RES_PREVIEW_FRAME_RATE_NUM;
+      format->es->video.frame_rate.den = FULL_RES_PREVIEW_FRAME_RATE_DEN;
+   }
+   else
+   {
+      // use our normal preview mode - probably 1080p30
+      format->es->video.width = state->preview_parameters.previewWindow.width;
+      format->es->video.height = state->preview_parameters.previewWindow.height;
+      format->es->video.crop.x = 0;
+      format->es->video.crop.y = 0;
+      format->es->video.crop.width = state->preview_parameters.previewWindow.width;
+      format->es->video.crop.height = state->preview_parameters.previewWindow.height;
+      format->es->video.frame_rate.num = PREVIEW_FRAME_RATE_NUM;
+      format->es->video.frame_rate.den = PREVIEW_FRAME_RATE_DEN;
+   }
 
    status = mmal_port_format_commit(preview_port);
 
@@ -706,6 +739,7 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
    format->es->video.crop.height = state->height;
    format->es->video.frame_rate.num = STILLS_FRAME_RATE_NUM;
    format->es->video.frame_rate.den = STILLS_FRAME_RATE_DEN;
+
 
    status = mmal_port_format_commit(still_port);
 
@@ -894,6 +928,7 @@ static void destroy_encoder_component(RASPISTILL_STATE *state)
       state->encoder_component = NULL;
    }
 }
+
 
 /**
  * Add an exif tag to the capture
@@ -1127,25 +1162,15 @@ int main(int argc, const char **argv)
       camera_preview_port = state.camera_component->output[MMAL_CAMERA_PREVIEW_PORT];
       camera_video_port   = state.camera_component->output[MMAL_CAMERA_VIDEO_PORT];
       camera_still_port   = state.camera_component->output[MMAL_CAMERA_CAPTURE_PORT];
-      preview_input_port  = state.preview_parameters.preview_component->input[0];
       encoder_input_port  = state.encoder_component->input[0];
       encoder_output_port = state.encoder_component->output[0];
 
-      if (state.preview_parameters.wantPreview )
-      {
-         if (state.verbose)
-         {
-            fprintf(stderr, "Connecting camera preview port to preview input port\n");
-            fprintf(stderr, "Starting video preview\n");
-         }
+      // Note we are lucky that the preview and null sink components use the same input port
+      // so we can simple do this without conditionals
+      preview_input_port  = state.preview_parameters.preview_component->input[0];
 
-         // Connect camera to preview
-         status = connect_ports(camera_preview_port, preview_input_port, &state.preview_connection);
-      }
-      else
-      {
-         status = MMAL_SUCCESS;
-      }
+      // Connect camera to preview (which might be a null_sink if no preview required)
+      status = connect_ports(camera_preview_port, preview_input_port, &state.preview_connection);
 
       if (status == MMAL_SUCCESS)
       {
@@ -1328,8 +1353,7 @@ error:
       check_disable_port(camera_video_port);
       check_disable_port(encoder_output_port);
 
-      if (state.preview_parameters.wantPreview )
-         mmal_connection_destroy(state.preview_connection);
+      mmal_connection_destroy(state.preview_connection);
 
       mmal_connection_destroy(state.encoder_connection);
 
