@@ -137,6 +137,7 @@ static const int metering_mode_map_size = sizeof(metering_mode_map)/sizeof(meter
 #define CommandRotation    12
 #define CommandHFlip       13
 #define CommandVFlip       14
+#define CommandROI         15
 
 static COMMAND_LIST  cmdline_commands[] =
 {
@@ -154,7 +155,8 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandMeterMode,   "-metering",  "mm", "Set metering mode (see Notes)", 1},
    {CommandRotation,    "-rotation",  "rot","Set image rotation (0-359)", 1},
    {CommandHFlip,       "-hflip",     "hf", "Set horizontal flip", 0},
-   {CommandVFlip,       "-vflip",     "vf", "Set vertical flip", 0}
+   {CommandVFlip,       "-vflip",     "vf", "Set vertical flip", 0},
+   {CommandROI,         "-roi",       "roi","Set region of interest (x,y,w,d as normalised coordinates [0.0-1.0])", 1}
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -590,6 +592,35 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
       params->vflip = 1;
       used = 1;
       break;
+
+   case CommandROI :
+   {
+      double x,y,w,h;
+      int args;
+
+      args = sscanf(arg2, "%lf,%lf,%lf,%lf", &x,&y,&w,&h);
+
+      if (args != 4 || x > 1.0 || y > 1.0 || w > 1.0 || h > 1.0)
+      {
+         return 0;
+      }
+
+      // Make sure we stay within bounds
+      if (x + w > 1.0)
+         w = 1 - x;
+
+      if (y + h > 1.0)
+         h = 1 - y;
+
+      params->roi.x = x;
+      params->roi.y = y;
+      params->roi.w = w;
+      params->roi.h = h;
+
+      used = 2;
+      break;
+   }
+
    }
 
    return used;
@@ -655,6 +686,7 @@ void raspicamcontrol_dump_parameters(const RASPICAM_CAMERA_PARAMETERS *params)
    fprintf(stderr, "Exposure Mode '%s', AWB Mode '%s', Image Effect '%s'\n", exp_mode, awb_mode, image_effect);
    fprintf(stderr, "Metering Mode '%s', Colour Effect Enabled %s with U = %d, V = %d\n", metering_mode, params->colourEffects.enable ? "Yes":"No", params->colourEffects.u, params->colourEffects.v);
    fprintf(stderr, "Rotation %d, hflip %s, vflip %s\n", params->rotation, params->hflip ? "Yes":"No",params->vflip ? "Yes":"No");
+   fprintf(stderr, "ROI x %lf, y %f, w %f h %f\n", params->roi.x, params->roi.y, params->roi.w, params->roi.h);
 }
 
 /**
@@ -718,6 +750,8 @@ void raspicamcontrol_set_defaults(RASPICAM_CAMERA_PARAMETERS *params)
    params->colourEffects.v = 128;
    params->rotation = 0;
    params->hflip = params->vflip = 0;
+   params->roi.x = params->roi.y = 0.0;
+   params->roi.w = params->roi.h = 1.0;
 }
 
 /**
@@ -776,6 +810,7 @@ int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_
    //result += raspicamcontrol_set_thumbnail_parameters(camera, &params->thumbnailConfig);  TODO Not working for some reason
    result += raspicamcontrol_set_rotation(camera, params->rotation);
    result += raspicamcontrol_set_flips(camera, params->hflip, params->vflip);
+   result += raspicamcontrol_set_ROI(camera, params->roi);
 
    return result;
 }
@@ -1118,6 +1153,26 @@ int raspicamcontrol_set_flips(MMAL_COMPONENT_T *camera, int hflip, int vflip)
    mmal_port_parameter_set(camera->output[1], &mirror.hdr);
    return mmal_port_parameter_set(camera->output[2], &mirror.hdr);
 }
+
+/**
+ * Set the ROI of the sensor to use for captures/preview
+ * @param camera Pointer to camera component
+ * @param rect   Normalised coordinates of ROI rectangle
+ *
+ * @return 0 if successful, non-zero if any parameters out of range
+ */
+int raspicamcontrol_set_ROI(MMAL_COMPONENT_T *camera, PARAM_FLOAT_RECT_T rect)
+{
+   MMAL_PARAMETER_INPUT_CROP_T crop = {{MMAL_PARAMETER_INPUT_CROP, sizeof(MMAL_PARAMETER_INPUT_CROP_T)}};
+
+   crop.rect.x = (65536 * rect.x);
+   crop.rect.y = (65536 * rect.y);
+   crop.rect.width = (65536 * rect.w);
+   crop.rect.height = (65536 * rect.h);
+
+   return mmal_port_parameter_set(camera->control, &crop.hdr);
+}
+
 
 /**
  * Asked GPU how much memory it has allocated
