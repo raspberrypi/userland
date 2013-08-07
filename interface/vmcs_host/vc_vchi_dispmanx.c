@@ -532,14 +532,14 @@ VCHPRE_ DISPMANX_DISPLAY_HANDLE_T VCHPOST_ vc_dispmanx_display_open_mode( uint32
  *
  * Arguments:
  *       DISPMANX_RESOURCE_HANDLE_T dest
- *       VC_IMAGE_TRANSFORM_T orientation
+ *       DISPMANX_TRANSFORM_T orientation
  *
  * Description:
  *
  * Returns:
  *
  ***********************************************************/
-VCHPRE_ DISPMANX_DISPLAY_HANDLE_T VCHPOST_ vc_dispmanx_display_open_offscreen( DISPMANX_RESOURCE_HANDLE_T dest, VC_IMAGE_TRANSFORM_T orientation ) {
+VCHPRE_ DISPMANX_DISPLAY_HANDLE_T VCHPOST_ vc_dispmanx_display_open_offscreen( DISPMANX_RESOURCE_HANDLE_T dest, DISPMANX_TRANSFORM_T orientation ) {
    uint32_t display_open_param[] = {(uint32_t)VC_HTOV32(dest), (uint32_t)VC_HTOV32(orientation)};
    uint32_t display_handle = dispmanx_get_handle(EDispmanDisplayOpenOffscreen,
                                                  &display_open_param, sizeof(display_open_param));
@@ -633,7 +633,7 @@ vc_dispmanx_display_get_info (DISPMANX_DISPLAY_HANDLE_T display,
    if(success == 0) {
       pinfo->width = VC_VTOH32(info.width);
       pinfo->height = VC_VTOH32(info.height);
-      pinfo->transform = (VC_IMAGE_TRANSFORM_T)VC_VTOH32(info.transform);
+      pinfo->transform = (DISPMANX_TRANSFORM_T)VC_VTOH32(info.transform);
       pinfo->input_format = (DISPLAY_INPUT_FORMAT_T)VC_VTOH32(info.input_format);
    }
 
@@ -738,7 +738,7 @@ VCHPRE_ int VCHPOST_ vc_dispmanx_update_submit_sync( DISPMANX_UPDATE_HANDLE_T up
  *       DISPMANX_FLAGS_T flags
  *       uint8_t opacity
  *       DISPMANX_RESOURCE_HANDLE_T mask
- *       VC_IMAGE_TRANSFORM_T transform
+ *       DISPMANX_TRANSFORM_T transform
  *
  * Description:
  *
@@ -905,7 +905,7 @@ VCHPRE_ int VCHPOST_ vc_dispmanx_element_remove( DISPMANX_UPDATE_HANDLE_T update
  *       const VC_RECT_T *dest rect
  *       const VC_RECT_T *src rect
  *       DISPMANX_RESOURCE_HANDLE_T mask
- *       VC_IMAGE_TRANSFORM_T transform
+ *       VC_DISPMAN_TRANSFORM_T transform
  *
  * Description:
  *
@@ -920,7 +920,7 @@ VCHPRE_ int VCHPOST_ vc_dispmanx_element_change_attributes( DISPMANX_UPDATE_HAND
                                                             const VC_RECT_T *dest_rect,
                                                             const VC_RECT_T *src_rect,
                                                             DISPMANX_RESOURCE_HANDLE_T mask,
-                                                            VC_IMAGE_TRANSFORM_T transform ) {
+                                                            DISPMANX_TRANSFORM_T transform ) {
 
    uint32_t element_param[15] = { (uint32_t) VC_HTOV32(update),
                                   (uint32_t) VC_HTOV32(element),
@@ -962,7 +962,7 @@ VCHPRE_ int VCHPOST_ vc_dispmanx_element_change_attributes( DISPMANX_UPDATE_HAND
  * Arguments:
  *       DISPMANX_DISPLAY_HANDLE_T display
  *       DISPMANX_RESOURCE_HANDLE_T snapshot_resource
- *       VC_IMAGE_TRANSFORM_T transform
+ *       DISPMANX_TRANSFORM_T transform
  *
  * Description: Take a snapshot of a display in its current state
  *
@@ -971,7 +971,7 @@ VCHPRE_ int VCHPOST_ vc_dispmanx_element_change_attributes( DISPMANX_UPDATE_HAND
  ***********************************************************/
 VCHPRE_ int VCHPOST_ vc_dispmanx_snapshot( DISPMANX_DISPLAY_HANDLE_T display,
                                            DISPMANX_RESOURCE_HANDLE_T snapshot_resource,
-                                           VC_IMAGE_TRANSFORM_T transform )
+                                           DISPMANX_TRANSFORM_T transform )
 {
    uint32_t display_snapshot_param[] = {
       VC_HTOV32(display),
