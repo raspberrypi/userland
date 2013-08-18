@@ -53,6 +53,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <string.h>
 #include <memory.h>
+#include <unistd.h>
+#include <errno.h>
 
 #define VERSION_STRING "v1.2"
 
@@ -105,6 +107,7 @@ typedef struct
    int quality;                        /// JPEG quality setting (1-100)
    int wantRAW;                        /// Flag for whether the JPEG metadata also contains the RAW bayer image
    char *filename;                     /// filename of output file
+   char *linkname;                     /// filename of output file
    MMAL_PARAM_THUMBNAIL_CONFIG_T thumbnailConfig;
    int verbose;                        /// !0 if want detailed run information
    int demoMode;                       /// Run app in demo mode
@@ -155,6 +158,7 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandExifTag      11
 #define CommandTimelapse    12
 #define CommandFullResPreview 13
+#define CommandLink         14
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -164,6 +168,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandQuality, "-quality",    "q",  "Set jpeg quality <0 to 100>", 1 },
    { CommandRaw,     "-raw",        "r",  "Add raw bayer data to jpeg metadata", 0 },
    { CommandOutput,  "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -'). If not specified, no file is saved", 1 },
+   { CommandLink,    "-latest",     "l",  "Link latest complete image to filename <filename>", 1},
    { CommandVerbose, "-verbose",    "v",  "Output verbose information during run", 0 },
    { CommandTimeout, "-timeout",    "t",  "Time (in ms) before takes picture and shuts down (if not specified, set to 5s)", 1 },
    { CommandThumbnail,"-thumb",     "th", "Set thumbnail parameters (x:y:quality)", 1},
@@ -210,6 +215,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->quality = 85;
    state->wantRAW = 0;
    state->filename = NULL;
+   state->linkname = NULL;
    state->verbose = 0;
    state->thumbnailConfig.enable = 1;
    state->thumbnailConfig.width = 64;
@@ -256,6 +262,15 @@ static void dump_status(RASPISTILL_STATE *state)
    fprintf(stderr, "Thumbnail enabled %s, width %d, height %d, quality %d\n",
          state->thumbnailConfig.enable ? "Yes":"No", state->thumbnailConfig.width,
          state->thumbnailConfig.height, state->thumbnailConfig.quality);
+   fprintf(stderr, "Link to latest frame enabled ");
+   if (state->linkname)
+   {
+      fprintf(stderr, " yes, -> %s\n", state->linkname);
+   }
+   else
+   {
+      fprintf(stderr, " no\n");
+   }
    fprintf(stderr, "Full resolution preview %s\n\n", state->fullResPreview ? "Yes": "No");
 
    if (state->numExifTags)
@@ -370,6 +385,22 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          break;
       }
 
+      case CommandLink :
+      {
+         int len = strlen(argv[i+1]);
+         if (len)
+         {
+            state->linkname = malloc(len + 10);
+            vcos_assert(state->linkname);
+            if (state->linkname)
+               strncpy(state->linkname, argv[i + 1], len);
+            i++;
+         }
+         else
+            valid = 0;
+         break;
+         
+      }
       case CommandVerbose: // display lots of data during run
          state->verbose = 1;
          break;
@@ -581,7 +612,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
    // and send one back to the port (if still open)
    if (port->is_enabled)
    {
-      MMAL_STATUS_T status;
+      MMAL_STATUS_T status = MMAL_SUCCESS;
       MMAL_BUFFER_HEADER_T *new_buffer;
 
       new_buffer = mmal_queue_get(pData->pstate->encoder_pool->queue);
@@ -1057,6 +1088,36 @@ static MMAL_STATUS_T connect_ports(MMAL_PORT_T *output_port, MMAL_PORT_T *input_
    return status;
 }
 
+
+/**
+ * Allocates and generates a filename based on the
+ * user-supplied pattern and the frame number.
+ * On successful return, finalName and tempName point to malloc()ed strings 
+ * which must be freed externally.  (On failure, returns nulls that
+ * don't need free()ing.)
+ *
+ * @param finalName pointer receives an 
+ * @param pattern sprintf pattern with %d to be replaced by frame
+ * @param frame for timelapse, the frame number
+ * @return Returns a MMAL_STATUS_T giving result of operation
+*/
+
+MMAL_STATUS_T create_filenames(char** finalName, char** tempName, char * pattern, int frame)
+{
+   *finalName = NULL;
+   *tempName = NULL;
+   if (0 > asprintf(finalName, pattern, frame) ||
+       0 > asprintf(tempName, "%s~", *finalName))
+   {
+      if (*finalName != NULL) 
+      {
+         free(*finalName);
+      }
+      return MMAL_ENOMEM;    // It may be some other error, but it is not worth getting it right
+   }    
+   return MMAL_SUCCESS;
+}
+
 /**
  * Checks if specified port is valid and enabled, then disables it
  *
@@ -1218,6 +1279,8 @@ int main(int argc, const char **argv)
             int num_iterations =  state.timelapse ? state.timeout / state.timelapse : 1;
             int frame;
             FILE *output_file = NULL;
+            char *use_filename = NULL;      // Temporary filename while image being written
+            char *final_filename = NULL;    // Name that gets file once complete
 
             for (frame = 1;frame<=num_iterations; frame++)
             {
@@ -1229,36 +1292,38 @@ int main(int argc, const char **argv)
                // Open the file
                if (state.filename)
                {
-		            if (state.filename[0] == '-')
-    		         {
-		               output_file = stdout;
+                  if (state.filename[0] == '-')
+                  {
+                     output_file = stdout;
 
-		               // Ensure we don't upset the output stream with diagnostics/info
-		               state.verbose = 0;
-    		         }
+                     // Ensure we don't upset the output stream with diagnostics/info
+                     state.verbose = 0;
+                  }
                   else
                   {
-                     char *use_filename = state.filename;
-	
-	                  if (state.timelapse)
-	                     asprintf(&use_filename, state.filename, frame);
-	
-	                  if (state.verbose)
-	                     fprintf(stderr, "Opening output file %s\n", use_filename);
-	
-	                  output_file = fopen(use_filename, "wb");
-	
-	                  if (!output_file)
-	                  {
-	                     // Notify user, carry on but discarding encoded output buffers
-	                     vcos_log_error("%s: Error opening output file: %s\nNo output file will be generated\n", __func__, use_filename);
-	                  }
+                     vcos_assert(use_filename == NULL && final_filename == NULL);
+                     status = create_filenames(&final_filename, &use_filename, state.filename, frame);
+                     if (status  != MMAL_SUCCESS)
+                     {
+                        vcos_log_error("Unable to create filenames");
+                        goto error;
+                     }
 
-	                  // asprintf used in timelapse mode allocates its own memory which we need to free
-	                  if (state.timelapse)
-	                     free(use_filename);
+                     if (state.verbose)
+                        fprintf(stderr, "Opening output file %s\n", final_filename);
+                        // Technically it is opening the temp~ filename which will be ranamed to the final filename
+   
+                     output_file = fopen(use_filename, "wb");
+   
+                     if (!output_file)
+                     {
+                        // Notify user, carry on but discarding encoded output buffers
+                        vcos_log_error("%s: Error opening output file: %s\nNo output file will be generated\n", __func__, use_filename);
+                     }
+
+                     // asprintf used in timelapse mode allocates its own memory which we need to free
                   }
-									
+                           
                   callback_data.file_handle = output_file;
                }
 
@@ -1325,13 +1390,50 @@ int main(int argc, const char **argv)
                   callback_data.file_handle = NULL;
 
                   if (output_file != stdout)
+                  {
                      fclose(output_file);
-
+                     vcos_assert(use_filename != NULL && final_filename != NULL);
+                     if (0 != rename(use_filename, final_filename))
+                     {
+                        vcos_log_error("Could not rename temp file to: %s; %s", 
+                                          final_filename,strerror(errno));
+                     }
+                     if (state.linkname)
+                     {
+                        char *use_link;
+                        char *final_link;
+                        status = create_filenames(&final_link, &use_link, state.linkname, frame);
+                        
+                        // Create hard link if possible, symlink otherwise
+                        if (status != MMAL_SUCCESS
+                            || (0 != link(final_filename, use_link)
+                                &&  0 != symlink(final_filename, use_link))
+                            || 0 != rename(use_link, final_link))
+                        {
+                           vcos_log_error("Could not link as filename: %s; %s", 
+                                          state.linkname,strerror(errno));
+                        }
+                        if (use_link) free(use_link);
+                        if (final_link) free(final_link);
+                     }
+                   }
                   // Disable encoder output port
                   status = mmal_port_disable(encoder_output_port);
                }
 
             } // end for (frame)
+
+            if (use_filename)
+            {
+               free(use_filename);
+               use_filename = NULL;
+            }
+            if (final_filename)
+            {
+               free(final_filename);
+               final_filename = NULL;
+            }
+            
 
             vcos_semaphore_delete(&callback_data.complete_semaphore);
          }
