@@ -697,6 +697,24 @@ static void signal_handler(int signal_number)
  */
 int main(int argc, const char **argv)
 {
+	char *home_dir = getenv("HOME");
+    char *lock_file_path = malloc(strlen(home_dir) + strlen("/.raspicam"));
+    strcpy(lock_file_path, home_dir);
+    strcat(lock_file_path, "/.raspicam");
+
+    lock_file = creat(lock_file_path, S_IRUSR | S_IWUSR);
+    if(lock_file == -1)
+    {
+        printf("Open/create lock file failed!\n");
+        exit(255);
+    }
+    int lock_state = flock(lock_file, LOCK_EX | LOCK_NB);
+    if(lock_state == -1)
+    {
+        printf("Only one instance of RaspiCam may run at once.\n");
+        exit(255);
+    }
+
    // Our main data storage vessel..
    RASPISTILLYUV_STATE state;
    int exit_code = EX_OK;
