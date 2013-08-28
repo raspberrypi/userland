@@ -56,8 +56,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <unistd.h>
 #include <errno.h>
 #include <sysexits.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/file.h>
 
-#define VERSION_STRING "v1.3.4"
+#define VERSION_STRING "v1.2"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -1415,23 +1419,23 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
  */
 int main(int argc, const char **argv)
 {
-    char *home_dir = getenv("HOME");
-    char *lock_file_path = malloc(strlen(home_dir) + strlen("/.raspicam"));
-    strcpy(lock_file_path, home_dir);
-    strcat(lock_file_path, "/.raspicam");
+   char *home_dir = getenv("HOME");
+   char *lock_file_path = malloc(strlen(home_dir) + strlen("/.raspicam"));
+   strcpy(lock_file_path, home_dir);
+   strcat(lock_file_path, "/.raspicam");
 
-    lock_file = creat(lock_file_path, S_IRUSR | S_IWUSR);
-    if(lock_file == -1)
-    {
-        printf("Open/create lock file failed!\n");
-        exit(255);
-    }
-    int lock_state = flock(lock_file, LOCK_EX | LOCK_NB);
-    if(lock_state == -1)
-    {
-        printf("Only one instance of RaspiCam may run at once.\n");
-        exit(255);
-    }
+   int lock_file = creat(lock_file_path, S_IRUSR | S_IWUSR);
+   if(lock_file == -1)
+   {
+      printf("Open/create lock file failed!\n");
+      exit(255);
+   }
+   int lock_state = flock(lock_file, LOCK_EX | LOCK_NB);
+   if(lock_state == -1)
+   {
+      printf("Only one instance of RaspiCam may run at once.\n");
+      exit(255);
+   }
 
    // Our main data storage vessel..
    RASPISTILL_STATE state;
@@ -1588,7 +1592,6 @@ int main(int argc, const char **argv)
                   }
                   else
                   {
-<<<<<<< HEAD
                      vcos_assert(use_filename == NULL && final_filename == NULL);
                      status = create_filenames(&final_filename, &use_filename, state.filename, frame);
                      if (status  != MMAL_SUCCESS)
@@ -1608,27 +1611,6 @@ int main(int argc, const char **argv)
                         // Notify user, carry on but discarding encoded output buffers
                         vcos_log_error("%s: Error opening output file: %s\nNo output file will be generated\n", __func__, use_filename);
                      }
-=======
-                     char *use_filename = state.filename;
-
-	                  if (state.timelapse)
-	                     asprintf(&use_filename, state.filename, frame);
-
-	                  if (state.verbose)
-	                     fprintf(stderr, "Opening output file %s\n", use_filename);
-
-	                  output_file = fopen(use_filename, "wb");
-
-	                  if (!output_file)
-	                  {
-	                     // Notify user, carry on but discarding encoded output buffers
-	                     vcos_log_error("%s: Error opening output file: %s\nNo output file will be generated\n", __func__, use_filename);
-	                  }
-
-	                  // asprintf used in timelapse mode allocates its own memory which we need to free
-	                  if (state.timelapse)
-	                     free(use_filename);
->>>>>>> Fixed multiple access bug, need test
                   }
 
                   callback_data.file_handle = output_file;
