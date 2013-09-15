@@ -1015,7 +1015,7 @@ static void add_exif_tags(RASPISTILL_STATE *state)
    timeinfo = localtime(&rawtime);
 
    snprintf(time_buf, sizeof(time_buf),
-            "%04d:%02d:%02d:%02d:%02d:%02d",
+            "%04d:%02d:%02d %02d:%02d:%02d",
             timeinfo->tm_year+1900,
             timeinfo->tm_mon+1,
             timeinfo->tm_mday,
