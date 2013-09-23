@@ -923,6 +923,9 @@ void *vc_image_pixel_addr_gl(VC_IMAGE_BUF_T *image, int x, int y, int miplevel);
    /* Unpack bytes as above, but also copy them to another memory block in the process. */
    void vc_image_copy_unpack(VC_IMAGE_BUF_T *img, int dest_x_off, int dest_y_off, unsigned char *src, int w, int h);
 
+   /* swap red/blue */
+   void vc_image_swap_red_blue(VC_IMAGE_BUF_T *img);
+
 #if defined(va_start) /* can't publish this without including <stdarg.h> */
    VC_IMAGE_BUF_T *vc_image_vparmalloc_unwrapped(VC_IMAGE_TYPE_T type, char const *description, long width, long height, va_list proplist);
 #endif
