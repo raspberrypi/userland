@@ -1,6 +1,6 @@
 # setup environment for cross compile to arm-linux
 
-if (DEFINED CMAKE_TOOLCHAIN_FILE)
+if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
 else()
    message(WARNING
 	"  *********************************************************\n"
