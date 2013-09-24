@@ -263,6 +263,7 @@ static void dump_status(RASPISTILL_STATE *state)
          state->thumbnailConfig.enable ? "Yes":"No", state->thumbnailConfig.width,
          state->thumbnailConfig.height, state->thumbnailConfig.quality);
    fprintf(stderr, "Link to latest frame enabled ");
+
    if (state->linkname)
    {
       fprintf(stderr, " yes, -> %s\n", state->linkname);
@@ -271,6 +272,7 @@ static void dump_status(RASPISTILL_STATE *state)
    {
       fprintf(stderr, " no\n");
    }
+
    fprintf(stderr, "Full resolution preview %s\n\n", state->fullResPreview ? "Yes": "No");
 
    if (state->numExifTags)
