@@ -1,16 +1,11 @@
-
-# raspistill/raspivid/raspiyuv
-
+cmake_minimum_required(VERSION 2.8)
+project( firepicam )
 SET(COMPILE_DEFINITIONS -Werror)
+include_directories(/opt/vc/userland/host_applications/linux/libs/bcm_host/include)
+include_directories(/opt/vc/userland/interface/vcos)
+include_directories(/opt/vc/userland)
+include_directories(/opt/vc/userland/interface/vcos/pthreads)
+include_directories(/opt/vc/userland/interface/vmcs_host/linux)
+add_executable(firepicam RaspiCamControl.c RaspiCLI.c RaspiPreview.c FirePiCam.c)
+target_link_libraries(firepicam /opt/vc/lib/libmmal_core.so /opt/vc/lib/libmmal_util.so /opt/vc/lib/libmmal_vc_client.so /opt/vc/lib/libvcos.so /opt/vc/lib/libbcm_host.so )
 
-include_directories(${CMAKE_SOURCE_DIR}/host_applications/linux/libs/bcm_host/include)
-
-add_executable(raspistill RaspiCamControl.c  RaspiCLI.c  RaspiPreview.c  RaspiStill.c)
-add_executable(raspiyuv   RaspiCamControl.c  RaspiCLI.c  RaspiPreview.c  RaspiStillYUV.c)
-add_executable(raspivid   RaspiCamControl.c  RaspiCLI.c  RaspiPreview.c  RaspiVid.c)
-
-target_link_libraries(raspistill mmal_core mmal_util mmal_vc_client vcos bcm_host)
-target_link_libraries(raspiyuv   mmal_core mmal_util mmal_vc_client vcos bcm_host)
-target_link_libraries(raspivid   mmal_core mmal_util mmal_vc_client vcos bcm_host)
-
-install(TARGETS raspistill raspiyuv raspivid RUNTIME DESTINATION bin)
