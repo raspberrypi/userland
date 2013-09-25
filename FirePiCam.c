@@ -1153,6 +1153,10 @@ int main(int argc, const char **argv)
 {
    // Our main data storage vessel..
    RASPISTILL_STATE state;
+	 
+	 clock_t msStart = clock();
+   int f;
+	 
 
    MMAL_STATUS_T status = MMAL_SUCCESS;
    MMAL_PORT_T *camera_preview_port = NULL;
@@ -1216,9 +1220,12 @@ int main(int argc, const char **argv)
    else
    {
       PORT_USERDATA callback_data;
+			clock_t msElapsed;
 
-      if (state.verbose)
-         fprintf(stderr, "Starting component connection stage\n");
+      if (state.verbose) {
+				 msElapsed = clock() - msStart;
+         fprintf(stderr, "%d Starting component connection stage\n", msElapsed);
+			}
 
       camera_preview_port = state.camera_component->output[MMAL_CAMERA_PREVIEW_PORT];
       camera_video_port   = state.camera_component->output[MMAL_CAMERA_VIDEO_PORT];
