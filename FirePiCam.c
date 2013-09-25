@@ -1146,7 +1146,8 @@ static void signal_handler(int signal_number)
    exit(255);
 }
 
-#define PRINT_ELAPSED fprintf(stderr, "%dms ", 1000.0 * ((float)(clock() - msStart))/(float)CLOCKS_PER_SEC);
+//#define PRINT_ELAPSED fprintf(stderr, "%dms ", 1000.0 * ((float)(clock() - msStart))/(float)CLOCKS_PER_SEC);
+#define PRINT_ELAPSED fprintf(stderr, "%dms ", (clock() - msStart))
 
 /**
  * main
