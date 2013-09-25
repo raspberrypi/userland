@@ -1146,6 +1146,8 @@ static void signal_handler(int signal_number)
    exit(255);
 }
 
+#define PRINT_ELAPSED fprintf(stderr, "%dms ", 1000.0 * ((float)(clock() - msStart))/(float)CLOCKS_PER_SEC);
+
 /**
  * main
  */
@@ -1192,6 +1194,7 @@ int main(int argc, const char **argv)
 
    if (state.verbose)
    {
+		 PRINT_ELAPSED;
       fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
 
       dump_status(&state);
@@ -1223,7 +1226,7 @@ int main(int argc, const char **argv)
 			clock_t msElapsed;
 
       if (state.verbose) {
-				 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart))/CLOCKS_PER_SEC);
+			   PRINT_ELAPSED;
          fprintf(stderr, "Starting component connection stage\n");
 			}
 
@@ -1245,7 +1248,7 @@ int main(int argc, const char **argv)
          VCOS_STATUS_T vcos_status;
 
          if (state.verbose) {
-					  fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart))/CLOCKS_PER_SEC);
+					  PRINT_ELAPSED;
             fprintf(stderr, "Connecting camera stills port to encoder input port\n");
 				 }
 
@@ -1344,9 +1347,11 @@ int main(int argc, const char **argv)
                         goto error;
                      }
 
-                     if (state.verbose)
+                     if (state.verbose) {
+												PRINT_ELAPSED;
                         fprintf(stderr, "Opening output file %s\n", final_filename);
                         // Technically it is opening the temp~ filename which will be ranamed to the final filename
+										}
    
                      output_file = fopen(use_filename, "wb");
    
@@ -1385,7 +1390,7 @@ int main(int argc, const char **argv)
                   encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&callback_data;
 
                   if (state.verbose) {
-										 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart))/CLOCKS_PER_SEC);
+										 PRINT_ELAPSED;
                      fprintf(stderr, "Enabling encoder output port\n");
 									}
 
@@ -1407,7 +1412,7 @@ int main(int argc, const char **argv)
                   }
 
                   if (state.verbose) {
-										 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart))/CLOCKS_PER_SEC);
+										 PRINT_ELAPSED;
                      fprintf(stderr, "Starting capture %d\n", frame);
 									}
 
@@ -1422,7 +1427,7 @@ int main(int argc, const char **argv)
                      // even though it appears to be all correct, so reverting to untimed one until figure out why its erratic
                      vcos_semaphore_wait(&callback_data.complete_semaphore);
                      if (state.verbose) {
-											  fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart))/CLOCKS_PER_SEC);
+												PRINT_ELAPSED;
                         fprintf(stderr, "Finished capture %d\n", frame);
 										}
                   }
@@ -1490,7 +1495,7 @@ error:
       mmal_status_to_int(status);
 
       if (state.verbose)	{
-				 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart))/CLOCKS_PER_SEC);
+				 PRINT_ELAPSED;
          fprintf(stderr, "Closing down\n");
 			}
 
@@ -1517,7 +1522,7 @@ error:
       destroy_camera_component(&state);
 
       if (state.verbose) {
-				 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart))/CLOCKS_PER_SEC);
+				 PRINT_ELAPSED;
          fprintf(stderr, "Close down completed, all components disconnected, disabled and destroyed\n\n");
 			}
    }
