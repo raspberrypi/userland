@@ -1385,7 +1385,7 @@ int main(int argc, const char **argv)
                   encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&callback_data;
 
                   if (state.verbose) {
-										 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart)/CLOCKS_PER_SEC);
+										 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart))/CLOCKS_PER_SEC);
                      fprintf(stderr, "Enabling encoder output port\n");
 									}
 
