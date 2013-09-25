@@ -1223,7 +1223,7 @@ int main(int argc, const char **argv)
 			clock_t msElapsed;
 
       if (state.verbose) {
-				 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart)/CLOCKS_PER_SEC);
+				 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart))/CLOCKS_PER_SEC);
          fprintf(stderr, "Starting component connection stage\n");
 			}
 
@@ -1245,7 +1245,7 @@ int main(int argc, const char **argv)
          VCOS_STATUS_T vcos_status;
 
          if (state.verbose) {
-					  fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart)/CLOCKS_PER_SEC);
+					  fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart))/CLOCKS_PER_SEC);
             fprintf(stderr, "Connecting camera stills port to encoder input port\n");
 				 }
 
@@ -1407,7 +1407,7 @@ int main(int argc, const char **argv)
                   }
 
                   if (state.verbose) {
-										 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart)/CLOCKS_PER_SEC);
+										 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart))/CLOCKS_PER_SEC);
                      fprintf(stderr, "Starting capture %d\n", frame);
 									}
 
@@ -1422,7 +1422,7 @@ int main(int argc, const char **argv)
                      // even though it appears to be all correct, so reverting to untimed one until figure out why its erratic
                      vcos_semaphore_wait(&callback_data.complete_semaphore);
                      if (state.verbose) {
-											  fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart)/CLOCKS_PER_SEC);
+											  fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart))/CLOCKS_PER_SEC);
                         fprintf(stderr, "Finished capture %d\n", frame);
 										}
                   }
@@ -1490,7 +1490,7 @@ error:
       mmal_status_to_int(status);
 
       if (state.verbose)	{
-				 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart)/CLOCKS_PER_SEC);
+				 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart))/CLOCKS_PER_SEC);
          fprintf(stderr, "Closing down\n");
 			}
 
@@ -1517,7 +1517,7 @@ error:
       destroy_camera_component(&state);
 
       if (state.verbose) {
-				 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart)/CLOCKS_PER_SEC);
+				 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart))/CLOCKS_PER_SEC);
          fprintf(stderr, "Close down completed, all components disconnected, disabled and destroyed\n\n");
 			}
    }
