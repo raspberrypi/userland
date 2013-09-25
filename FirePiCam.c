@@ -1223,8 +1223,8 @@ int main(int argc, const char **argv)
 			clock_t msElapsed;
 
       if (state.verbose) {
-				 msElapsed = clock() - msStart;
-         fprintf(stderr, "%d Starting component connection stage\n", msElapsed);
+				 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart)/CLOCKS_PER_SEC);
+         fprintf(stderr, "Starting component connection stage\n");
 			}
 
       camera_preview_port = state.camera_component->output[MMAL_CAMERA_PREVIEW_PORT];
@@ -1244,8 +1244,10 @@ int main(int argc, const char **argv)
       {
          VCOS_STATUS_T vcos_status;
 
-         if (state.verbose)
+         if (state.verbose) {
+					  fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart)/CLOCKS_PER_SEC);
             fprintf(stderr, "Connecting camera stills port to encoder input port\n");
+				 }
 
          // Now connect the camera to the encoder
          status = connect_ports(camera_still_port, encoder_input_port, &state.encoder_connection);
@@ -1382,8 +1384,10 @@ int main(int argc, const char **argv)
                   // Enable the encoder output port
                   encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&callback_data;
 
-                  if (state.verbose)
+                  if (state.verbose) {
+										 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart)/CLOCKS_PER_SEC);
                      fprintf(stderr, "Enabling encoder output port\n");
+									}
 
                   // Enable the encoder output port and tell it its callback function
                   status = mmal_port_enable(encoder_output_port, encoder_buffer_callback);
@@ -1402,8 +1406,10 @@ int main(int argc, const char **argv)
                         vcos_log_error("Unable to send a buffer to encoder output port (%d)", q);
                   }
 
-                  if (state.verbose)
+                  if (state.verbose) {
+										 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart)/CLOCKS_PER_SEC);
                      fprintf(stderr, "Starting capture %d\n", frame);
+									}
 
                   if (mmal_port_parameter_set_boolean(camera_still_port, MMAL_PARAMETER_CAPTURE, 1) != MMAL_SUCCESS)
                   {
@@ -1415,8 +1421,10 @@ int main(int argc, const char **argv)
                      // For some reason using vcos_semaphore_wait_timeout sometimes returns immediately with bad parameter error
                      // even though it appears to be all correct, so reverting to untimed one until figure out why its erratic
                      vcos_semaphore_wait(&callback_data.complete_semaphore);
-                     if (state.verbose)
+                     if (state.verbose) {
+											  fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart)/CLOCKS_PER_SEC);
                         fprintf(stderr, "Finished capture %d\n", frame);
+										}
                   }
 
                   // Ensure we don't die if get callback with no open file
@@ -1481,8 +1489,10 @@ error:
 
       mmal_status_to_int(status);
 
-      if (state.verbose)
+      if (state.verbose)	{
+				 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart)/CLOCKS_PER_SEC);
          fprintf(stderr, "Closing down\n");
+			}
 
       // Disable all our ports that are not handled by connections
       check_disable_port(camera_video_port);
@@ -1506,8 +1516,10 @@ error:
       raspipreview_destroy(&state.preview_parameters);
       destroy_camera_component(&state);
 
-      if (state.verbose)
+      if (state.verbose) {
+				 fprintf(stderr, "%dms ", (1000.0 * (clock() - msStart)/CLOCKS_PER_SEC);
          fprintf(stderr, "Close down completed, all components disconnected, disabled and destroyed\n\n");
+			}
    }
 
    if (status != MMAL_SUCCESS)
