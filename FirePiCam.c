@@ -209,9 +209,9 @@ static void default_status(RASPISTILL_STATE *state)
       return;
    }
 
-   state->timeout = 5000; // 5s delay before take image
-   state->width = 2592;
-   state->height = 1944;
+   state->timeout = 0; //5000; // 5s delay before take image
+   state->width = 864; //2592;
+   state->height = 216; // 1944;
    state->quality = 85;
    state->wantRAW = 0;
    state->filename = NULL;
