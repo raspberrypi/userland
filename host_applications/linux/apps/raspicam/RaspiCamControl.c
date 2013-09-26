@@ -40,13 +40,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiCamControl.h"
 #include "RaspiCLI.h"
 
-/// Cross reference structure, mode string against mode id
-typedef struct xref_t
-{
-   char *mode;
-   int mmal_mode;
-} XREF_T;
-
 /// Structure to cross reference exposure strings against the MMAL parameter equivalent
 static XREF_T  exposure_map[] =
 {
@@ -390,47 +383,6 @@ int raspicamcontrol_cycle_test(MMAL_COMPONENT_T *camera)
 }
 
 
-/**
- * Function to take a string, a mapping, and return the int equivalent
- * @param str Incoming string to match
- * @param map Mapping data
- * @param num_refs The number of items in the mapping data
- * @return The integer match for the string, or -1 if no match
- */
-static int map_xref(const char *str, const XREF_T *map, int num_refs)
-{
-	int i;
-
-   for (i=0;i<num_refs;i++)
-   {
-      if (!strcasecmp(str, map[i].mode))
-      {
-         return map[i].mmal_mode;
-      }
-   }
-   return -1;
-}
-
-/**
- * Function to take a mmal enum (as int) and return the string equivalent
- * @param en Incoming int to match
- * @param map Mapping data
- * @param num_refs The number of items in the mapping data
- * @return const pointer to string, or NULL if no match
- */
-static const char *unmap_xref(const int en, XREF_T *map, int num_refs)
-{
-   int i;
-
-   for (i=0;i<num_refs;i++)
-   {
-      if (en == map[i].mmal_mode)
-      {
-         return map[i].mode;
-      }
-   }
-   return NULL;
-}
 
 /**
  * Convert string to the MMAL parameter for exposure mode
@@ -439,7 +391,7 @@ static const char *unmap_xref(const int en, XREF_T *map, int num_refs)
  */
 static MMAL_PARAM_EXPOSUREMODE_T exposure_mode_from_string(const char *str)
 {
-   int i = map_xref(str, exposure_map, exposure_map_size);
+   int i = raspicli_map_xref(str, exposure_map, exposure_map_size);
 
    if( i != -1)
       return (MMAL_PARAM_EXPOSUREMODE_T)i;
@@ -455,7 +407,7 @@ static MMAL_PARAM_EXPOSUREMODE_T exposure_mode_from_string(const char *str)
  */
 static MMAL_PARAM_AWBMODE_T awb_mode_from_string(const char *str)
 {
-   int i = map_xref(str, awb_map, awb_map_size);
+   int i = raspicli_map_xref(str, awb_map, awb_map_size);
 
    if( i != -1)
       return (MMAL_PARAM_AWBMODE_T)i;
@@ -471,7 +423,7 @@ static MMAL_PARAM_AWBMODE_T awb_mode_from_string(const char *str)
  */
 MMAL_PARAM_IMAGEFX_T imagefx_mode_from_string(const char *str)
 {
-   int i = map_xref(str, imagefx_map, imagefx_map_size);
+   int i = raspicli_map_xref(str, imagefx_map, imagefx_map_size);
 
    if( i != -1)
      return (MMAL_PARAM_IMAGEFX_T)i;
@@ -487,7 +439,7 @@ MMAL_PARAM_IMAGEFX_T imagefx_mode_from_string(const char *str)
  */
 static MMAL_PARAM_EXPOSUREMETERINGMODE_T metering_mode_from_string(const char *str)
 {
-   int i = map_xref(str, metering_mode_map, metering_mode_map_size);
+   int i = raspicli_map_xref(str, metering_mode_map, metering_mode_map_size);
 
    if( i != -1)
       return (MMAL_PARAM_EXPOSUREMETERINGMODE_T)i;
@@ -676,10 +628,10 @@ void raspicamcontrol_display_help()
  */
 void raspicamcontrol_dump_parameters(const RASPICAM_CAMERA_PARAMETERS *params)
 {
-   const char *exp_mode = unmap_xref(params->exposureMode, exposure_map, exposure_map_size);
-   const char *awb_mode = unmap_xref(params->awbMode, awb_map, awb_map_size);
-   const char *image_effect = unmap_xref(params->imageEffect, imagefx_map, imagefx_map_size);
-   const char *metering_mode = unmap_xref(params->exposureMeterMode, metering_mode_map, metering_mode_map_size);
+   const char *exp_mode = raspicli_unmap_xref(params->exposureMode, exposure_map, exposure_map_size);
+   const char *awb_mode = raspicli_unmap_xref(params->awbMode, awb_map, awb_map_size);
+   const char *image_effect = raspicli_unmap_xref(params->imageEffect, imagefx_map, imagefx_map_size);
+   const char *metering_mode = raspicli_unmap_xref(params->exposureMeterMode, metering_mode_map, metering_mode_map_size);
 
    fprintf(stderr, "Sharpness %d, Contrast %d, Brightness %d\n", params->sharpness, params->contrast, params->brightness);
    fprintf(stderr, "Saturation %d, ISO %d, Video Stabilisation %s, Exposure compensation %d\n", params->saturation, params->ISO, params->videoStabilisation ? "Yes": "No", params->exposureCompensation);

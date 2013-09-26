@@ -55,7 +55,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <memory.h>
 
-#define VERSION_STRING "v1.2"
+#define VERSION_STRING "v1.3"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -112,8 +112,9 @@ typedef struct
    int verbose;                        /// !0 if want detailed run information
    int demoMode;                       /// Run app in demo mode
    int demoInterval;                   /// Interval between camera settings changes
-   int immutableInput;                /// Flag to specify whether encoder works in place or creates a new buffer. Result is preview can display either
+   int immutableInput;                 /// Flag to specify whether encoder works in place or creates a new buffer. Result is preview can display either
                                        /// the camera output or the encoder output (with compression artifacts)
+   int profile;                        /// H264 profile to use for encoding
    RASPIPREVIEW_PARAMETERS preview_parameters;   /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
 
@@ -134,6 +135,18 @@ typedef struct
    int abort;                           /// Set to 1 in callback if an error occurs to attempt to abort the capture
 } PORT_USERDATA;
 
+/// Structure to cross reference H264 profile strings against the MMAL parameter equivalent
+static XREF_T  profile_map[] =
+{
+   {"baseline",     MMAL_VIDEO_PROFILE_H264_BASELINE},
+   {"main",         MMAL_VIDEO_PROFILE_H264_MAIN},
+   {"high",         MMAL_VIDEO_PROFILE_H264_HIGH},
+//   {"constrained",  MMAL_VIDEO_PROFILE_H264_CONSTRAINED_BASELINE} // Does anyone need this?
+};
+
+static int profile_map_size = sizeof(profile_map) / sizeof(profile_map[0]);
+
+
 static void display_valid_parameters(char *app_name);
 
 /// Command ID's and Structure defining our command line options
@@ -148,6 +161,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandFramerate    8
 #define CommandPreviewEnc   9
 #define CommandIntraPeriod  10
+#define CommandProfile      11
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -162,6 +176,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandFramerate,"-framerate", "fps","Specify the frames per second to record", 1},
    { CommandPreviewEnc,"-penc",     "e",  "Display preview image *after* encoding (shows compression artifacts)", 0},
    { CommandIntraPeriod,"-intra",   "g",  "Specify the intra refresh period (key frame rate/GoP size)", 1},
+   { CommandProfile,  "-profile",   "pf", "Specify H264 profile to use for encoding", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -192,6 +207,7 @@ static void default_status(RASPIVID_STATE *state)
    state->demoMode = 0;
    state->demoInterval = 250; // ms
    state->immutableInput = 1;
+   state->profile = MMAL_VIDEO_PROFILE_H264_HIGH;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -215,6 +231,7 @@ static void dump_status(RASPIVID_STATE *state)
 
    fprintf(stderr, "Width %d, Height %d, filename %s\n", state->width, state->height, state->filename);
    fprintf(stderr, "bitrate %d, framerate %d, time delay %d\n", state->bitrate, state->framerate, state->timeout);
+   fprintf(stderr, "H264 Profile %s\n", raspicli_unmap_xref(state->profile, profile_map, profile_map_size));
 
    raspipreview_dump_parameters(&state->preview_parameters);
    raspicamcontrol_dump_parameters(&state->camera_parameters);
@@ -376,6 +393,17 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          break;
       }
 
+      case CommandProfile: // H264 profile
+      {
+         state->profile = raspicli_map_xref(argv[i + 1], profile_map, profile_map_size);
+
+         if( state->profile == -1)
+            state->profile = MMAL_VIDEO_PROFILE_H264_HIGH;
+
+         i++;
+         break;
+      }
+
       default:
       {
          // Try parsing for any image specific parameters
@@ -422,12 +450,22 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
  */
 static void display_valid_parameters(char *app_name)
 {
+   int i;
+
    fprintf(stderr, "Display camera output to display, and optionally saves an H264 capture at requested bitrate\n\n");
    fprintf(stderr, "\nusage: %s [options]\n\n", app_name);
 
    fprintf(stderr, "Image parameter commands\n\n");
 
    raspicli_display_help(cmdline_commands, cmdline_commands_size);
+
+   // Profile options
+   fprintf(stderr, "\n\nH264 Profile options :\n%s", profile_map[0].mode );
+
+   for (i=1;i<profile_map_size;i++)
+   {
+      fprintf(stderr, ",%s", profile_map[i].mode);
+   }
 
    // Help for preview options
    raspipreview_display_help();
@@ -795,6 +833,23 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
       }
 
    }
+
+   {
+      MMAL_PARAMETER_VIDEO_PROFILE_T  param;
+      param.hdr.id = MMAL_PARAMETER_PROFILE;
+      param.hdr.size = sizeof(param);
+
+      param.profile[0].profile = state->profile;
+      param.profile[0].level = MMAL_VIDEO_LEVEL_H264_4; // This is the only value supported
+
+      status = mmal_port_parameter_set(encoder_output, &param.hdr);
+      if (status != MMAL_SUCCESS)
+      {
+         vcos_log_error("Unable to set H264 profile");
+         goto error;
+      }
+   }
+
 
    if (mmal_port_parameter_set_boolean(encoder_input, MMAL_PARAMETER_VIDEO_IMMUTABLE_INPUT, state->immutableInput) != MMAL_SUCCESS)
    {
