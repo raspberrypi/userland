@@ -74,6 +74,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiPreview.h"
 #include "RaspiCLI.h"
 
+#include <cv.h>
+#include <highgui.h>
 #include <semaphore.h>
 
 /// Camera number to use - we only have one camera, indexed from 0.
@@ -218,8 +220,8 @@ static void default_status(RASPISTILL_STATE *state)
    state->linkname = NULL;
    state->verbose = 0;
    state->thumbnailConfig.enable = 1;
-   state->thumbnailConfig.width = 64;
-   state->thumbnailConfig.height = 48;
+   state->thumbnailConfig.width = 0; //64;
+   state->thumbnailConfig.height = 0; //48;
    state->thumbnailConfig.quality = 35;
    state->demoMode = 0;
    state->demoInterval = 250; // ms
