@@ -258,7 +258,7 @@ static void dump_status(RASPISTILL_STATE *state)
    }
 
    fprintf(stderr, "Width %d, Height %d, quality %d, filename %s\n", state->width,
-         siate->height, state->quality, state->filename);
+         state->height, state->quality, state->filename);
    fprintf(stderr, "Time delay %d, Raw %s\n", state->timeout,
          state->wantRAW ? "yes" : "no");
    fprintf(stderr, "Thumbnail enabled %s, width %d, height %d, quality %d\n",
