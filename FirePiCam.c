@@ -53,10 +53,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <string.h>
 #include <memory.h>
-#include <unistd.h>
-#include <errno.h>
+//#include <unistd.h>
+//#include <errno.h>
 
-#define VERSION_STRING "v1.2"
+//#define VERSION_STRING "v1.2"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
