@@ -75,7 +75,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiCLI.h"
 
 #include <cv.h>
-#include <highgui.h>
+//#include <highgui.h>
 #include <semaphore.h>
 
 /// Camera number to use - we only have one camera, indexed from 0.
@@ -258,7 +258,7 @@ static void dump_status(RASPISTILL_STATE *state)
    }
 
    fprintf(stderr, "Width %d, Height %d, quality %d, filename %s\n", state->width,
-         state->height, state->quality, state->filename);
+         siate->height, state->quality, state->filename);
    fprintf(stderr, "Time delay %d, Raw %s\n", state->timeout,
          state->wantRAW ? "yes" : "no");
    fprintf(stderr, "Thumbnail enabled %s, width %d, height %d, quality %d\n",
