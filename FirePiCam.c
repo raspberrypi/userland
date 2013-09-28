@@ -75,7 +75,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiCLI.h"
 
 #include <cv.h>
-//#include <highgui.h>
+#include <highgui.h>
 #include <semaphore.h>
 
 /// Camera number to use - we only have one camera, indexed from 0.
