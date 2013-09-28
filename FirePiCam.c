@@ -46,6 +46,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * We use the RaspiCamControl code to handle the specific camera settings.
  */
 
+#define PRINT_ELAPSED fprintf(stderr, "%fms ", (float)(1000.0* (clock() - msStart))/CLOCKS_PER_SEC)
+
+
 // We use some GNU extensions (asprintf, basename)
 #define _GNU_SOURCE
 
@@ -96,6 +99,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define MAX_USER_EXIF_TAGS      32
 #define MAX_EXIF_PAYLOAD_LENGTH 128
+
+clock_t msStart;
 
 int mmal_status_to_int(MMAL_STATUS_T status);
 
@@ -586,6 +591,9 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
       if (buffer->length && pData->file_handle)
       {
          mmal_buffer_header_mem_lock(buffer);
+
+				 PRINT_ELAPSED;
+				 fprintf(stderr, "buffer-length: %d\n", buffer->length);
 
 				 // OPENCV START
 				 CvMat* buf = cvCreateMat(1, buffer->length, CV_8UC1);
@@ -1155,9 +1163,6 @@ static void signal_handler(int signal_number)
    exit(255);
 }
 
-//#define PRINT_ELAPSED fprintf(stderr, "%dms ", 1000.0 * ((float)(clock() - msStart))/(float)CLOCKS_PER_SEC);
-#define PRINT_ELAPSED fprintf(stderr, "%fms ", (float)(1000.0* (clock() - msStart))/CLOCKS_PER_SEC)
-
 /**
  * main
  */
@@ -1166,7 +1171,7 @@ int main(int argc, const char **argv)
    // Our main data storage vessel..
    RASPISTILL_STATE state;
 	 
-	 clock_t msStart = clock();
+	 msStart = clock();
    int f;
 	 
 
@@ -1204,7 +1209,7 @@ int main(int argc, const char **argv)
 
    if (state.verbose)
    {
-		 PRINT_ELAPSED;
+			PRINT_ELAPSED;
       fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
 
       dump_status(&state);
