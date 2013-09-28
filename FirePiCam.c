@@ -880,12 +880,12 @@ static MMAL_STATUS_T create_encoder_component(RASPISTILL_STATE *state)
    // Specify out output format
    encoder_output->format->encoding = state->encoding;
 
-   encoder_output->buffer_size = encoder_output->buffer_size_recommended;
+   encoder_output->buffer_size = 100000; //encoder_output->buffer_size_recommended;
 
    if (encoder_output->buffer_size < encoder_output->buffer_size_min)
       encoder_output->buffer_size = encoder_output->buffer_size_min;
 
-   encoder_output->buffer_num = encoder_output->buffer_num_recommended;
+   encoder_output->buffer_num = 1; //encoder_output->buffer_num_recommended;
 
    if (encoder_output->buffer_num < encoder_output->buffer_num_min)
       encoder_output->buffer_num = encoder_output->buffer_num_min;
