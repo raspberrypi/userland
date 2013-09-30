@@ -236,7 +236,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->preview_connection = NULL;
    state->encoder_connection = NULL;
    state->encoder_pool = NULL;
-   state->encoding = MMAL_ENCODING_UNKNOWN; // MMAL_ENCODING_JPEG;
+   state->encoding = MMAL_ENCODING_BMP; // MMAL_ENCODING_JPEG;
    state->numExifTags = 0;
    state->timelapse = 0;
    state->fullResPreview = 0;
@@ -881,7 +881,7 @@ static MMAL_STATUS_T create_encoder_component(RASPISTILL_STATE *state)
    // Specify out output format
    encoder_output->format->encoding = state->encoding;
 
-   encoder_output->buffer_size = (long) state->width * (long) state->height * 3; //encoder_output->buffer_size_recommended;
+   encoder_output->buffer_size = (long) state->width * (long) state->height * 3 + 1024; //encoder_output->buffer_size_recommended;
 
    if (encoder_output->buffer_size < encoder_output->buffer_size_min)
       encoder_output->buffer_size = encoder_output->buffer_size_min;
