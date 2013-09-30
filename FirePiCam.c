@@ -197,7 +197,8 @@ static struct
    {"jpg", MMAL_ENCODING_JPEG},
    {"bmp", MMAL_ENCODING_BMP},
    {"gif", MMAL_ENCODING_GIF},
-   {"png", MMAL_ENCODING_PNG}
+   {"png", MMAL_ENCODING_PNG},
+   {"unk", MMAL_ENCODING_UNKNOWN}
 };
 
 static int encoding_xref_size = sizeof(encoding_xref) / sizeof(encoding_xref[0]);
@@ -217,14 +218,14 @@ static void default_status(RASPISTILL_STATE *state)
    }
 
    state->timeout = 0; //5000; // 5s delay before take image
-   state->width = 864; //2592;
-   state->height = 216; // 1944;
+   state->width = 800; //864; //2592;
+   state->height = 200; //216; // 1944;
    state->quality = 85;
    state->wantRAW = 0;
    state->filename = NULL;
    state->linkname = NULL;
    state->verbose = 0;
-   state->thumbnailConfig.enable = 1;
+   state->thumbnailConfig.enable = 0; //1;
    state->thumbnailConfig.width = 0; //64;
    state->thumbnailConfig.height = 0; //48;
    state->thumbnailConfig.quality = 35;
@@ -235,7 +236,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->preview_connection = NULL;
    state->encoder_connection = NULL;
    state->encoder_pool = NULL;
-   state->encoding = MMAL_ENCODING_JPEG;
+   state->encoding = MMAL_ENCODING_UNKNOWN; // MMAL_ENCODING_JPEG;
    state->numExifTags = 0;
    state->timelapse = 0;
    state->fullResPreview = 0;
@@ -880,7 +881,7 @@ static MMAL_STATUS_T create_encoder_component(RASPISTILL_STATE *state)
    // Specify out output format
    encoder_output->format->encoding = state->encoding;
 
-   encoder_output->buffer_size = 100000; //encoder_output->buffer_size_recommended;
+   encoder_output->buffer_size = (long) state->width * (long) state->height * 3; //encoder_output->buffer_size_recommended;
 
    if (encoder_output->buffer_size < encoder_output->buffer_size_min)
       encoder_output->buffer_size = encoder_output->buffer_size_min;
