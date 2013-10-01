@@ -37,6 +37,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "X11/Xlib.h"
 #endif
 
+#include <wayland-client.h>
+#include "interface/khronos/wayland-egl/wayland-egl-priv.h"
+
 extern VCOS_LOG_CAT_T khrn_client_log;
 
 extern void vc_vchi_khronos_init();
@@ -460,12 +463,29 @@ EGLDisplay khrn_platform_set_display_id(EGLNativeDisplayType display_id)
 	   return EGL_NO_DISPLAY;
 }
 #else
+
+static struct wl_display *hacky_display = NULL;
+
 EGLDisplay khrn_platform_set_display_id(EGLNativeDisplayType display_id)
 {
    if (display_id == EGL_DEFAULT_DISPLAY)
       return (EGLDisplay)1;
-   else
-      return EGL_NO_DISPLAY;
+   else {
+      void *first_pointer = *(void **) display_id;
+
+      /* wl_display is a wl_proxy, which is a wl_object.
+       * wl_object's first element points to the interfacetype. */
+      if (first_pointer == &wl_display_interface) {
+         hacky_display = (struct wl_display*)display_id;
+         return (EGLDisplay)1;
+      } else
+         return EGL_NO_DISPLAY;
+   }
+}
+
+struct wl_display *khrn_platform_get_wl_display()
+{
+   return hacky_display;
 }
 #endif
 
@@ -801,22 +821,71 @@ static EGL_DISPMANX_WINDOW_T *check_default(EGLNativeWindowType win)
 void platform_get_dimensions(EGLDisplay dpy, EGLNativeWindowType win,
       uint32_t *width, uint32_t *height, uint32_t *swapchain_count)
 {
-   EGL_DISPMANX_WINDOW_T *dwin = check_default(win);
-   vcos_assert(dwin);
-   vcos_assert(dwin->width < 1<<16); // sanity check
-   vcos_assert(dwin->height < 1<<16); // sanity check
-   *width = dwin->width;
-   *height = dwin->height;
-   *swapchain_count = 0;
+   if(khrn_platform_get_wl_display()) {
+      struct wl_egl_window *wl_egl_window = (struct wl_egl_window*)win;
+      *width = wl_egl_window->width;
+      *height = wl_egl_window->height;
+      /* This seems to be used for sync'ing with the VC on buffer creation, but
+         we are managing them on the CPU side */
+      *swapchain_count = 1;
+   } else {
+      EGL_DISPMANX_WINDOW_T *dwin = check_default(win);
+      vcos_assert(dwin);
+      vcos_assert(dwin->width < 1<<16); // sanity check
+      vcos_assert(dwin->height < 1<<16); // sanity check
+      *width = dwin->width;
+      *height = dwin->height;
+      *swapchain_count = 0;
+   }
+}
+
+static DISPMANX_ELEMENT_HANDLE_T create_dummy_element()
+{
+   DISPMANX_DISPLAY_HANDLE_T display = vc_dispmanx_display_open(0);
+   DISPMANX_UPDATE_HANDLE_T update = vc_dispmanx_update_start(0);
+   DISPMANX_ELEMENT_HANDLE_T element;
+   VC_DISPMANX_ALPHA_T alpha = {DISPMANX_FLAGS_ALPHA_FIXED_ALL_PIXELS, 255, 0};
+   VC_RECT_T src_rect;
+   VC_RECT_T dst_rect;
+
+   src_rect.x = 0;
+   src_rect.y = 0;
+   src_rect.width = 1 << 16;
+   src_rect.height = 1 << 16;
+
+   dst_rect.x = 0;
+   dst_rect.y = 0;
+   dst_rect.width = 1;
+   dst_rect.height = 1;
+
+   element = vc_dispmanx_element_add(update, display, 0/*layer*/, &dst_rect,
+                                     0/*src*/, &src_rect,
+                                     DISPMANX_PROTECTION_NONE, &alpha,
+                                     0/*clamp*/, 0/*transform*/);
+
+   vc_dispmanx_update_submit_sync(update);
+
+   vc_dispmanx_display_close(display);
+
+   return element;
 }
 
 uint32_t platform_get_handle(EGLDisplay dpy, EGLNativeWindowType win)
 {
-   EGL_DISPMANX_WINDOW_T *dwin = check_default(win);
-   vcos_assert(dwin);
-   vcos_assert(dwin->width < 1<<16); // sanity check
-   vcos_assert(dwin->height < 1<<16); // sanity check
-   return dwin->element;
+   if(khrn_platform_get_wl_display()) {
+      struct wl_egl_window *wl_egl_window = (struct wl_egl_window*)win;
+
+      if (wl_egl_window->dummy_element == PLATFORM_WIN_NONE)
+         wl_egl_window->dummy_element = create_dummy_element();
+
+      return wl_egl_window->dummy_element;
+   } else {
+      EGL_DISPMANX_WINDOW_T *dwin = check_default(win);
+      vcos_assert(dwin);
+      vcos_assert(dwin->width < 1<<16); // sanity check
+      vcos_assert(dwin->height < 1<<16); // sanity check
+      return dwin->element;
+   }
 }
 
 #endif

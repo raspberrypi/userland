@@ -6,6 +6,10 @@
 # have quite a few circular dependencies, and so the only way
 # to make it work seems to be to have everything static.
 
+include_directories(
+   ${WAYLAND_SERVER_INCLUDE_DIRS}
+)
+
 set(EGL_SOURCE
    egl/egl_client_config.c
    egl/egl_client_context.c
@@ -18,6 +22,7 @@ set(EGL_SOURCE
    ext/egl_brcm_flush_client.c
    ext/egl_khr_image_client.c
    ext/egl_khr_sync_client.c
+   ext/egl_wayland.c
    ext/gl_oes_egl_image_client.c
    ext/egl_khr_lock_surface_client.c
    ext/ext_gl_debug_marker.c
@@ -30,6 +35,7 @@ set(EGL_SOURCE
    vg/vg_int_mat3x3.c
    vg/vg_client.c
    common/khrn_client.c
+   common/linux/khrn_wayland.c
    ext/egl_openmaxil_client.c
 #   ../vmcs_host/vc_vchi_dispmanx.c
    ext/gl_oes_draw_texture_client.c
@@ -54,12 +60,27 @@ set(CLIENT_SOURCE
    common/khrn_int_hash.c
    common/khrn_int_hash_asm.s
    common/khrn_client_cache.c)
+set(WAYLAND_EGL_SOURCE
+   wayland-egl/wayland-egl.c)
+
+wayland_add_protocol_server(
+    EGL_SOURCE
+    ext/dispmanx.xml
+    dispmanx
+)
+
+wayland_add_protocol_client(
+    EGL_SOURCE
+    ext/dispmanx.xml
+    dispmanx
+)
 
 add_library(EGL ${SHARED} ${EGL_SOURCE})
 add_library(GLESv2 ${SHARED} ${GLES_SOURCE})
 add_library(OpenVG ${SHARED} ${VG_SOURCE})
 add_library(WFC ${SHARED} ${WFC_SOURCE})
 add_library(khrn_client ${CLIENT_SOURCE})
+add_library(wayland-egl ${SHARED} ${WAYLAND_EGL_SOURCE})
 
 # TODO do we need EGL_static and GLESv2_static now that khrn_static exists?
 add_library(EGL_static STATIC ${EGL_SOURCE})
@@ -67,10 +88,14 @@ add_library(GLESv2_static STATIC ${GLES_SOURCE})
 add_library(khrn_static STATIC
    ${EGL_SOURCE} ${GLES_SOURCE} ${VG_SOURCE} ${WFC_SOURCE} ${CLIENT_SOURCE})
 
-target_link_libraries(EGL khrn_client vchiq_arm vcos bcm_host -lm)
+target_link_libraries(EGL khrn_client vchiq_arm vcos bcm_host -lm wayland-client wayland-server)
 target_link_libraries(GLESv2 EGL khrn_client vcos)
 target_link_libraries(WFC EGL)
 target_link_libraries(OpenVG EGL)
 
-install(TARGETS EGL GLESv2 OpenVG WFC khrn_client DESTINATION lib)
+install(TARGETS EGL GLESv2 OpenVG WFC khrn_client wayland-egl DESTINATION lib)
 install(TARGETS EGL_static GLESv2_static khrn_static DESTINATION lib)
+
+configure_file ("wayland-egl/wayland-egl.pc.in" "wayland-egl/wayland-egl.pc" @ONLY)
+install (FILES "${CMAKE_CURRENT_BINARY_DIR}/wayland-egl/wayland-egl.pc"
+         DESTINATION lib/pkgconfig)

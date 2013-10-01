@@ -39,6 +39,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+struct wl_resource;
+
 // Same function as above, to aid migration of code.
 VCHPRE_ int VCHPOST_ vc_dispman_init( void );
 // Stop the service from being used
@@ -127,6 +130,8 @@ VCHPRE_ void VCHPOST_ vc_vchi_dispmanx_init (VCHI_INSTANCE_T initialise_instance
 VCHPRE_ int VCHPOST_ vc_dispmanx_snapshot( DISPMANX_DISPLAY_HANDLE_T display, 
                                            DISPMANX_RESOURCE_HANDLE_T snapshot_resource, 
                                            DISPMANX_TRANSFORM_T transform );
+
+VCHPRE_ DISPMANX_RESOURCE_HANDLE_T VCHPOST_ vc_dispmanx_get_handle_from_wl_buffer( struct wl_resource *_buffer );
 #ifdef __cplusplus
 }
 #endif

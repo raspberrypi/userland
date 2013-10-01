@@ -153,6 +153,8 @@ by an attribute value"
 #include <stdlib.h>
 #include <string.h>
 
+#include "interface/khronos/wayland-egl/wayland-egl-priv.h"
+#include "interface/khronos/common/linux/khrn_wayland.h"
 
 #include "interface/khronos/egl/egl_client_cr.c"
 
@@ -161,17 +163,6 @@ VCOS_LOG_CAT_T egl_client_log_cat;
 static void egl_current_release(CLIENT_PROCESS_STATE_T *process, EGL_CURRENT_T *current);
 void egl_gl_flush_callback(bool wait);
 void egl_vg_flush_callback(bool wait);
-
-#include "interface/vmcs_host/vc_dispmanx_types.h"
-/**HACKHACK - give us the ability to inject a DispmanX 
- * resource handle into the CreateWindowSurface and 
- * SwapBuffers calls */ 
-static DISPMANX_RESOURCE_HANDLE_T next_resource_handle;
-
-EGLAPI EGLBoolean EGLAPIENTRY eglSetNextResourceHandle(DISPMANX_RESOURCE_HANDLE_T handle)
-{
-   next_resource_handle = handle;
-}
 
 /*
 TODO: do an RPC call to make sure the Khronos vll is loaded (and that it stays loaded until eglTerminate)
@@ -450,6 +441,9 @@ EGLAPI const char EGLAPIENTRY * eglQueryString(EGLDisplay dpy, EGLint name)
             "EGL_KHR_fence_sync "
 #endif
 #endif
+#if EGL_WL_bind_wayland_display
+            "EGL_WL_bind_wayland_display "
+#endif
             ;
          break;
       case EGL_VENDOR:
@@ -654,8 +648,7 @@ EGLAPI EGLSurface EGLAPIENTRY eglCreateWindowSurface(EGLDisplay dpy, EGLConfig c
                                 false,
                                 EGL_NO_TEXTURE,
                                 EGL_NO_TEXTURE,
-                                0, 0,
-                                next_resource_handle);
+                                0, 0);
 
                if (surface) {
                   if (khrn_pointer_map_insert(&process->surfaces, process->next_surface, surface)) {
@@ -900,7 +893,7 @@ EGLAPI EGLSurface EGLAPIENTRY eglCreatePbufferSurface(EGLDisplay dpy, EGLConfig 
                              mipmap_texture,
                              texture_format,
                              texture_target,
-                             0, 0, 0);
+                             0, 0);
 
             if (surface) {
                if (khrn_pointer_map_insert(&process->surfaces, process->next_surface, surface)) {
@@ -1042,7 +1035,7 @@ EGLAPI EGLSurface EGLAPIENTRY eglCreatePixmapSurface(EGLDisplay dpy, EGLConfig c
                                    false,
                                    EGL_NO_TEXTURE,
                                    EGL_NO_TEXTURE,
-                                   pixmap, ((server_handle[0] == 0) && (server_handle[1] == (uint32_t)(-1))) ? NULL : server_handle, 0);
+                                   pixmap, ((server_handle[0] == 0) && (server_handle[1] == (uint32_t)(-1))) ? NULL : server_handle);
 
                      if (surface) {
                         if (khrn_pointer_map_insert(&process->surfaces, process->next_surface, surface)) {
@@ -2244,6 +2237,7 @@ EGLAPI EGLBoolean EGLAPIENTRY eglSwapBuffers(EGLDisplay dpy, EGLSurface surf)
    CLIENT_THREAD_STATE_T *thread;
    CLIENT_PROCESS_STATE_T *process;
    EGLBoolean result;
+   struct wl_display *wl_display = khrn_platform_get_wl_display();
 
    vcos_log_trace("eglSwapBuffers start. dpy=%d. surf=%d.", (int)dpy, (int)surf);
 
@@ -2314,18 +2308,60 @@ EGLAPI EGLBoolean EGLAPIENTRY eglSwapBuffers(EGLDisplay dpy, EGLSurface surf)
 
                vcos_log_trace("eglSwapBuffers server call");
 
-               if (next_resource_handle)
-               RPC_CALL7(eglIntSwapBuffers_impl,
-                     thread,
-                     EGLINTSWAPBUFFERS_ID_V2,
-                     RPC_UINT(surface->serverbuffer),
-                     RPC_UINT(surface->width),
-                     RPC_UINT(surface->height),
-                     RPC_UINT(surface->internal_handle),
-                     RPC_UINT(surface->swap_behavior == EGL_BUFFER_PRESERVED ? 1 : 0),
-                     RPC_UINT(khrn_platform_get_window_position(surface->win)),
-                     RPC_INT(next_resource_handle));
-               else
+               if (wl_display) {
+                  struct wl_egl_window *wl_egl_window = surface->wl_egl_window;
+                  struct wl_dispmanx_client_buffer *buffer_temp;
+                  uint32_t configid;
+                  KHRN_IMAGE_FORMAT_T color;
+                  int ret = 0;
+
+                  buffer_temp = wl_egl_window->front_buffer;
+                  wl_egl_window->front_buffer = wl_egl_window->back_buffer;
+                  wl_egl_window->back_buffer = buffer_temp;
+
+                  configid = egl_config_to_id(surface->config);
+                  color = egl_config_get_color_format(configid);
+
+                  if (wl_egl_window->back_buffer == NULL)
+                     wl_egl_window->back_buffer = allocate_wl_buffer(wl_egl_window, color);
+                  else if (wl_egl_window->back_buffer->width != width ||
+                           wl_egl_window->back_buffer->height != height) {
+
+                     struct wl_dispmanx_client_buffer *buffer;
+
+                     if (wl_egl_window->back_buffer->in_use)
+                        wl_egl_window->back_buffer->pending_destroy = 1;
+                     else {
+                        wl_buffer_destroy(wl_egl_window->back_buffer->wl_buffer);
+                        free(wl_egl_window->back_buffer);
+                     }
+
+                     buffer = allocate_wl_buffer(wl_egl_window, color);
+                     wl_egl_window->back_buffer = buffer;
+                  }
+
+                  RPC_CALL7(eglIntSwapBuffers_impl,
+                        thread,
+                        EGLINTSWAPBUFFERS_ID_V2,
+                        RPC_UINT(surface->serverbuffer),
+                        RPC_UINT(surface->width),
+                        RPC_UINT(surface->height),
+                        RPC_UINT(surface->internal_handle),
+                        RPC_UINT(surface->swap_behavior == EGL_BUFFER_PRESERVED ? 1 : 0),
+                        RPC_UINT(khrn_platform_get_window_position(surface->win)),
+                        RPC_INT(surface->wl_egl_window->back_buffer->resource));
+
+                  wl_egl_window->front_buffer->in_use = 1;
+                  wl_surface_attach(wl_egl_window->wl_surface,
+                                    wl_egl_window->front_buffer->wl_buffer,
+                                    0, 0);
+                  wl_surface_damage(wl_egl_window->wl_surface, 0, 0,
+                                    surface->width, surface->height);
+                  wl_surface_commit(wl_egl_window->wl_surface);
+
+                  while(ret != -1 && wl_egl_window->back_buffer->in_use)
+                     ret = wl_display_dispatch_queue(wl_display, process->wl_queue);
+               } else
                RPC_CALL6(eglIntSwapBuffers_impl,
                      thread,
                      EGLINTSWAPBUFFERS_ID,
