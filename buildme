@@ -17,6 +17,10 @@ fi
 
 BUILDSUBDIR=`echo $BUILDTYPE | tr '[A-Z]' '[a-z]'`;
 
+if [ -n "$BUILD_WAYLAND" ]; then
+       WAYLAND_VARS="-DBUILD_WAYLAND=TRUE"
+fi
+
 if [ $ARCH = "armv6l" ] || [ $ARCH = "armv7l" ] || [ $ARCH = "aarch64" ]; then
 	# Native compile on the Raspberry Pi
 	mkdir -p build/raspberry/$BUILDSUBDIR
@@ -41,9 +45,13 @@ elif [ "$1" = "--native" ]; then
 	make -j `nproc` $*
 else
 	# Cross compile on a more capable machine
+	if [ -n "$BUILD_WAYLAND" ]; then
+		# Use wayland-scanner from the build platform
+		WAYLAND_VARS+=" -DWAYLAND_SCANNER_EXECUTABLE:FILEPATH=/usr/bin/wayland-scanner"
+	fi
 	mkdir -p build/arm-linux/$BUILDSUBDIR
 	pushd build/arm-linux/$BUILDSUBDIR
-	cmake -DCMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_FILE -DCMAKE_BUILD_TYPE=$BUILDTYPE -DARM64=$ARM64 ../../..
+	cmake -DCMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_FILE -DCMAKE_BUILD_TYPE=$BUILDTYPE -DARM64=$ARM64 $WAYLAND_VARS ../../..
 	make -j `nproc`
 
 	if [ "$1" != "" ]; then

@@ -54,6 +54,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "applications/vmcs/khronos/khronos_server.h"
 #endif
 
+#ifdef BUILD_WAYLAND
+#include "interface/khronos/common/linux/khrn_wayland.h"
+#endif
+
 VCOS_LOG_CAT_T khrn_client_log = VCOS_LOG_INIT("khrn_client", VCOS_LOG_WARN);
 
 /*
@@ -142,6 +146,10 @@ void client_try_unload_server(CLIENT_PROCESS_STATE_T *process)
 bool client_process_state_init(CLIENT_PROCESS_STATE_T *process)
 {
    if (!process->inited) {
+#ifdef BUILD_WAYLAND
+      process->wl_global = NULL;
+#endif
+
       if (!khrn_pointer_map_init(&process->contexts, 64))
          return false;
 
@@ -192,6 +200,13 @@ bool client_process_state_init(CLIENT_PROCESS_STATE_T *process)
 
          process->connected = true;
       }
+#endif
+
+#ifdef BUILD_WAYLAND
+      struct wl_display *wl_display = khrn_platform_get_wl_display();
+      if (wl_display)
+         if (!init_process_wayland(process))
+            return false;
 #endif
 
       process->inited = true;

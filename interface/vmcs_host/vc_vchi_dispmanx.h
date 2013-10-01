@@ -66,4 +66,19 @@ typedef struct {
 #define ELEMENT_CHANGE_MASK_RESOURCE  (1<<4)
 #define ELEMENT_CHANGE_TRANSFORM      (1<<5)
 
+#ifdef BUILD_WAYLAND
+/* XXX: This should be in a private header that can be included from EGL and vc_* */
+#include <wayland-server.h>
+#include "interface/vmcs_host/wayland-dispmanx-server-protocol.h"
+struct wl_dispmanx_server_buffer {
+	struct wl_resource *resource;
+	struct wl_dispmanx *dispmanx;
+	enum wl_dispmanx_format format;
+	DISPMANX_RESOURCE_HANDLE_T handle;
+	int32_t width;
+	int32_t height;
+	int in_use;
+};
+#endif
+
 #endif

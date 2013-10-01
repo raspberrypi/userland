@@ -6,6 +6,12 @@
 # have quite a few circular dependencies, and so the only way
 # to make it work seems to be to have everything static.
 
+if (BUILD_WAYLAND)
+include_directories(
+   ${WAYLAND_SERVER_INCLUDE_DIRS}
+)
+endif ()
+
 set(EGL_SOURCE
    egl/egl_client_config.c
    egl/egl_client_context.c
@@ -55,11 +61,54 @@ set(CLIENT_SOURCE
    common/khrn_int_hash_asm.s
    common/khrn_client_cache.c)
 
+set(EGL_LIBS
+   khrn_client
+   vchiq_arm
+   vcos
+   bcm_host)
+
+if (BUILD_WAYLAND)
+   set(EGL_SOURCE
+      ${EGL_SOURCE}
+      ext/egl_wayland.c
+      common/linux/khrn_wayland.c)
+
+   set(EGL_LIBS
+      ${EGL_LIBS}
+      wayland-client
+      wayland-server)
+
+   set(WAYLAND_EGL_SOURCE
+      wayland-egl/wayland-egl.c)
+
+   wayland_add_protocol_server(
+       EGL_SOURCE
+       ../../interface/wayland/dispmanx.xml
+       dispmanx
+   )
+
+   wayland_add_protocol_client(
+       EGL_SOURCE
+       ../../interface/wayland/dispmanx.xml
+       dispmanx
+   )
+
+   add_library(wayland-egl ${SHARED} ${WAYLAND_EGL_SOURCE})
+   install(TARGETS wayland-egl DESTINATION lib)
+
+   configure_file ("wayland-egl/wayland-egl.pc.in" "wayland-egl/wayland-egl.pc" @ONLY)
+   install (FILES "${CMAKE_CURRENT_BINARY_DIR}/wayland-egl/wayland-egl.pc"
+            DESTINATION lib/pkgconfig)
+endif ()
+
 add_library(EGL ${SHARED} ${EGL_SOURCE})
 add_library(GLESv2 ${SHARED} ${GLES_SOURCE})
 add_library(OpenVG ${SHARED} ${VG_SOURCE})
 add_library(WFC ${SHARED} ${WFC_SOURCE})
 add_library(khrn_client ${CLIENT_SOURCE})
+
+set_target_properties(EGL PROPERTIES SOVERSION 1 VERSION 1.0.0)
+set_target_properties(GLESv2 PROPERTIES SOVERSION 2 VERSION 2.0.0)
 
 # TODO do we need EGL_static and GLESv2_static now that khrn_static exists?
 add_library(EGL_static STATIC ${EGL_SOURCE})
@@ -72,8 +121,7 @@ include_directories (../../host_applications/linux/libs/sm )
 set(VCSM_LIBS vcsm)
 add_definitions(-DKHRONOS_HAVE_VCSM)
 endif()
-
-target_link_libraries(EGL khrn_client vchiq_arm vcos bcm_host ${VCSM_LIBS} -lm)
+target_link_libraries(EGL ${EGL_LIBS} ${VCSM_LIBS} -lm)
 target_link_libraries(GLESv2 EGL khrn_client vcos)
 target_link_libraries(WFC EGL)
 target_link_libraries(OpenVG EGL)
@@ -87,7 +135,7 @@ add_library(brcmGLESv2 ${SHARED} ${GLES_SOURCE})
 add_library(brcmOpenVG ${SHARED} ${VG_SOURCE})
 add_library(brcmWFC ${SHARED} ${WFC_SOURCE})
 
-target_link_libraries(brcmEGL khrn_client vchiq_arm vcos bcm_host ${VCSM_LIBS} -lm)
+target_link_libraries(brcmEGL ${EGL_LIBS} ${VCSM_LIBS} -lm)
 target_link_libraries(brcmGLESv2 brcmEGL khrn_client vcos)
 target_link_libraries(brcmWFC brcmEGL)
 target_link_libraries(brcmOpenVG brcmEGL)

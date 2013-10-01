@@ -48,6 +48,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/khronos/common/vcos/khrn_client_platform_filler_vcos.h"
 #endif
 
+#ifdef BUILD_WAYLAND
+#include <wayland-client.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -327,5 +331,9 @@ typedef struct
 } WFC_BOUNCE_DATA_T;
 
 void *platform_wfc_bounce_thread(void *param);
+
+#ifdef BUILD_WAYLAND
+struct wl_display *khrn_platform_get_wl_display();
+#endif
 
 #endif // KHRN_CLIENT_PLATFORM_H

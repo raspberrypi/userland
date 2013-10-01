@@ -30,3 +30,4 @@ build/
 *.pts
 *.ppm
 *.mkv
+*~

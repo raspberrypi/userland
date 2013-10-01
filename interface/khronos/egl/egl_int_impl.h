@@ -57,7 +57,7 @@ FN(int, eglIntCreateSurface_impl, (
    uint32_t sem,
    uint32_t type,
    uint32_t *results,
-   DISPMANX_RESOURCE_HANDLE_T next_resource_handle))
+   DISPMANX_RESOURCE_HANDLE_T resource_handle))
 
 FN(int, eglIntCreatePbufferFromVGImage_impl, (
    VGImage vg_handle,

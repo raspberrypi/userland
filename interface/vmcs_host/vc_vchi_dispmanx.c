@@ -1319,3 +1319,45 @@ static void *dispmanx_notify_func( void *arg ) {
    }
    return 0;
 }
+
+
+#ifdef BUILD_WAYLAND
+/***********************************************************
+ * Name: vc_dispmanx_get_handle_from_wl_buffer
+ *
+ * Arguments:
+ *       struct wl_resource *_buffer
+ *
+ * Description: Return the handle of the resource associated to this Wayland buffer
+ *
+ * Returns: A resource handle
+ *
+ ***********************************************************/
+VCHPRE_ DISPMANX_RESOURCE_HANDLE_T VCHPOST_ vc_dispmanx_get_handle_from_wl_buffer( struct wl_resource *_buffer )
+{
+	struct wl_dispmanx_server_buffer *buffer = (struct wl_dispmanx_server_buffer*)_buffer->data;
+	if (!buffer)
+		return DISPMANX_NO_HANDLE;
+
+	return buffer->handle;
+}
+
+/***********************************************************
+ * Name: vc_dispmanx_set_wl_buffer_in_use
+ *
+ * Arguments:
+ *       struct wl_resource *_buffer
+ *       int in_use
+ *
+ * Description: Mark this Wayland buffer as being in use by the compositor
+ *
+ ***********************************************************/
+VCHPRE_ void VCHPOST_ vc_dispmanx_set_wl_buffer_in_use( struct wl_resource *_buffer, int in_use )
+{
+	struct wl_dispmanx_server_buffer *buffer = (struct wl_dispmanx_server_buffer*)_buffer->data;
+	if (!buffer)
+		return;
+
+	buffer->in_use = in_use;
+}
+#endif
