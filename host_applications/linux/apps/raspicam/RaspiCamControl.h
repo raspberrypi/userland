@@ -129,6 +129,7 @@ typedef struct
    int hflip;                 /// 0 or 1
    int vflip;                 /// 0 or 1
    PARAM_FLOAT_RECT_T  roi;   /// region of interest to use on the sensor. Normalised [0,1] values in the rect
+   int shutter_speed;         /// 0 = auto, otherwise the shutter speed in ms
 } RASPICAM_CAMERA_PARAMETERS;
 
 
@@ -162,6 +163,7 @@ int raspicamcontrol_set_colourFX(MMAL_COMPONENT_T *camera, const MMAL_PARAM_COLO
 int raspicamcontrol_set_rotation(MMAL_COMPONENT_T *camera, int rotation);
 int raspicamcontrol_set_flips(MMAL_COMPONENT_T *camera, int hflip, int vflip);
 int raspicamcontrol_set_ROI(MMAL_COMPONENT_T *camera, PARAM_FLOAT_RECT_T rect);
+int raspicamcontrol_set_shutter_speed(MMAL_COMPONENT_T *camera, int speed_ms);
 
 //Individual getting functions
 int raspicamcontrol_get_saturation(MMAL_COMPONENT_T *camera);
