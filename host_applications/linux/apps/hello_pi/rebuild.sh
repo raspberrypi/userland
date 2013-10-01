@@ -14,6 +14,7 @@ make -C hello_videocube clean
 make -C hello_teapot clean
 make -C hello_fft clean
 make -C hello_mmal_encode clean
+make -C hello_wayland clean
 
 make -C libs/ilclient
 make -C libs/vgfont
@@ -31,4 +32,4 @@ make -C hello_videocube
 make -C hello_teapot
 make -C hello_fft
 make -C hello_mmal_encode
-
+make -C hello_wayland
