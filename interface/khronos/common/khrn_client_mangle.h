@@ -83,6 +83,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define eglReleaseGlobalImageBRCM mangled_eglReleaseGlobalImageBRCM
 #define eglInitGlobalImageBRCM mangled_eglInitGlobalImageBRCM
 #define eglTermGlobalImageBRCM mangled_eglTermGlobalImageBRCM
+#define eglBindWaylandDisplayWL mangled_eglBindWaylandDisplayWL
+#define eglUnbindWaylandDisplayWL mangled_eglUnbindWaylandDisplayWL
+#define eglQueryWaylandBufferWL mangled_eglQueryWaylandBufferWL
 
 /* OpenGL ES 1.1 and 2.0 functions */
 

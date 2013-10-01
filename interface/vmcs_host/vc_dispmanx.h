@@ -39,6 +39,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#ifdef BUILD_WAYLAND
+struct wl_resource;
+#endif
+
 // Same function as above, to aid migration of code.
 VCHPRE_ int VCHPOST_ vc_dispman_init( void );
 // Stop the service from being used
@@ -132,6 +137,11 @@ VCHPRE_ int VCHPOST_ vc_dispmanx_snapshot( DISPMANX_DISPLAY_HANDLE_T display,
 VCHPRE_ int VCHPOST_ vc_dispmanx_resource_set_palette( DISPMANX_RESOURCE_HANDLE_T handle, 
                                                       void * src_address, int offset, int size);
 
+#ifdef BUILD_WAYLAND
+VCHPRE_ DISPMANX_RESOURCE_HANDLE_T VCHPOST_ vc_dispmanx_get_handle_from_wl_buffer( struct wl_resource *_buffer );
+
+VCHPRE_ void VCHPOST_ vc_dispmanx_set_wl_buffer_in_use( struct wl_resource *_buffer, int in_use );
+#endif
 #ifdef __cplusplus
 }
 #endif

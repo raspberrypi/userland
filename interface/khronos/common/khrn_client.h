@@ -310,6 +310,16 @@ struct CLIENT_PROCESS_STATE {
 #ifdef RPC_LIBRARY
    KHRONOS_SERVER_CONNECTION_T khrn_connection;
 #endif
+
+#ifdef BUILD_WAYLAND
+   /* Client-side Wayland state */
+   struct wl_registry *wl_registry;
+   struct wl_dispmanx *wl_dispmanx;
+   struct wl_event_queue *wl_queue;
+
+   /* Compositor-side Wayland state */
+   struct wl_global *wl_global;
+#endif
 };
 
 extern bool client_process_state_init(CLIENT_PROCESS_STATE_T *process);

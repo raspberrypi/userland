@@ -17,6 +17,17 @@ include(makefiles/cmake/global_settings.cmake)
 include(makefiles/cmake/arm-linux.cmake)
 include(makefiles/cmake/vmcs.cmake)
 
+if (BUILD_WAYLAND)
+   include(makefiles/cmake/Wayland.cmake)
+
+   # Find Wayland libraries
+   find_package(PkgConfig)
+   pkg_check_modules(WAYLAND_CLIENT wayland-client REQUIRED)
+   pkg_check_modules(WAYLAND_SERVER wayland-server REQUIRED)
+
+   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DBUILD_WAYLAND")
+endif()
+
 enable_language(ASM)
 
 # Global include paths
