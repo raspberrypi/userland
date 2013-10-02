@@ -54,8 +54,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <string.h>
 #include <memory.h>
+#include <sysexits.h>
 
-#define VERSION_STRING "v1.3"
+#define VERSION_STRING "v1.3.1"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -970,6 +971,7 @@ int main(int argc, const char **argv)
 {
    // Our main data storage vessel..
    RASPIVID_STATE state;
+   int exit_code = EX_OK;
 
    MMAL_STATUS_T status = MMAL_SUCCESS;
    MMAL_PORT_T *camera_preview_port = NULL;
@@ -995,14 +997,14 @@ int main(int argc, const char **argv)
       fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
 
       display_valid_parameters(basename(argv[0]));
-      exit(0);
+      exit(EX_USAGE);
    }
 
    // Parse the command line and put options in to our status structure
    if (parse_cmdline(argc, argv, &state))
    {
       status = -1;
-      exit(0);
+      exit(EX_USAGE);
    }
 
    if (state.verbose)
@@ -1017,17 +1019,20 @@ int main(int argc, const char **argv)
    if ((status = create_camera_component(&state)) != MMAL_SUCCESS)
    {
       vcos_log_error("%s: Failed to create camera component", __func__);
+      exit_code = EX_SOFTWARE;
    }
    else if ((status = raspipreview_create(&state.preview_parameters)) != MMAL_SUCCESS)
    {
       vcos_log_error("%s: Failed to create preview component", __func__);
       destroy_camera_component(&state);
+      exit_code = EX_SOFTWARE;
    }
    else if ((status = create_encoder_component(&state)) != MMAL_SUCCESS)
    {
       vcos_log_error("%s: Failed to create encode component", __func__);
       raspipreview_destroy(&state.preview_parameters);
       destroy_camera_component(&state);
+      exit_code = EX_SOFTWARE;
    }
    else
    {
@@ -1233,6 +1238,6 @@ error:
    if (status != MMAL_SUCCESS)
       raspicamcontrol_check_configuration(128);
 
-   return 0;
+   return exit_code;
 }
 
