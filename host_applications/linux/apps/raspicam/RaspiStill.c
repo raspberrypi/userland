@@ -1447,19 +1447,17 @@ int main(int argc, const char **argv)
                   status = mmal_port_disable(encoder_output_port);
                }
 
+               if (use_filename)
+               {
+                  free(use_filename);
+                  use_filename = NULL;
+               }
+               if (final_filename)
+               {
+                  free(final_filename);
+                  final_filename = NULL;
+               }
             } // end for (frame)
-
-            if (use_filename)
-            {
-               free(use_filename);
-               use_filename = NULL;
-            }
-            if (final_filename)
-            {
-               free(final_filename);
-               final_filename = NULL;
-            }
-            
 
             vcos_semaphore_delete(&callback_data.complete_semaphore);
          }
