@@ -100,7 +100,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MAX_USER_EXIF_TAGS      32
 #define MAX_EXIF_PAYLOAD_LENGTH 128
 
-int64_t msStart = vcos_getmicrosecs64()/1000;
+int64_t msStart;
 
 int mmal_status_to_int(MMAL_STATUS_T status);
 
@@ -1169,6 +1169,8 @@ static void signal_handler(int signal_number)
  */
 int main(int argc, const char **argv)
 {
+  msStart = vcos_getmicrosecs64()/1000;
+
 	//return mainOld(argc, argv);
 	return mainNew(argc, argv);
 }
