@@ -1289,7 +1289,7 @@ int mainNew(int argc, const char **argv)
 
 				 // If in timelapse mode, and timeout set to zero (or less), then take frames forever
 				 for (frame = 1; (num_iterations <= 0) || (frame<=num_iterations); frame++) {
-						vcos_sleep(state.timelapse);
+						//vcos_sleep(state.timelapse);
 
 						// Enable the encoder output port
 						encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&callback_data;
