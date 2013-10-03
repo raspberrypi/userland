@@ -46,7 +46,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * We use the RaspiCamControl code to handle the specific camera settings.
  */
 
-#define PRINT_ELAPSED fprintf(stderr, "%dms ", (vcos_getmicrosecs64()- usStart)/1000)
+#define PRINT_ELAPSED fprintf(stderr, "%"PRId64"ms ", (vcos_getmicrosecs64()- usStart)/1000)
 
 
 // We use some GNU extensions (asprintf, basename)
