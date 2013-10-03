@@ -599,11 +599,19 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 
 				 // OPENCV START
 				 CvMat* buf = cvCreateMat(1, buffer->length, CV_8UC1);
+				 PRINT_ELAPSED;
+				 fprintf(stderr, "cvCreateMat");
+
 				 buf->data.ptr = buffer->data;
 				 //IplImage *img = cvDecodeImage(buf, CV_LOAD_IMAGE_COLOR);
 				 IplImage *img = cvDecodeImage(buf, CV_LOAD_IMAGE_GRAYSCALE);
+				 PRINT_ELAPSED;
+				 fprintf(stderr, "cvDecodeImage");
+
 				 sprintf(filename, "camcv%d.bmp", pData->iteration);
 				 cvSaveImage(filename, img, 0);
+				 PRINT_ELAPSED;
+				 fprintf(stderr, "cvSaveImage");
 				 // OPENCV END
 
 				 if (pData->use_file_handle) {
