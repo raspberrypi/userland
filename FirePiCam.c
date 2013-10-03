@@ -46,7 +46,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * We use the RaspiCamControl code to handle the specific camera settings.
  */
 
-#define PRINT_ELAPSED fprintf(stderr, "%dms ", (vcos_getmicrosecs64()/1000 - msStart))
+#define PRINT_ELAPSED fprintf(stderr, "%dms ", (vcos_getmicrosecs64()- usStart)/1000)
 
 
 // We use some GNU extensions (asprintf, basename)
@@ -100,7 +100,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MAX_USER_EXIF_TAGS      32
 #define MAX_EXIF_PAYLOAD_LENGTH 128
 
-int64_t msStart;
+int64_t usStart;
 
 int mmal_status_to_int(MMAL_STATUS_T status);
 
@@ -1169,7 +1169,7 @@ static void signal_handler(int signal_number)
  */
 int main(int argc, const char **argv)
 {
-  msStart = vcos_getmicrosecs64()/1000;
+  usStart = vcos_getmicrosecs64()/1000;
 
 	//return mainOld(argc, argv);
 	return mainNew(argc, argv);
@@ -1180,7 +1180,6 @@ int mainNew(int argc, const char **argv)
    // Our main data storage vessel..
    RASPISTILL_STATE state;
 	 
-	 msStart = clock();
    int f;
 	 
 
@@ -1393,7 +1392,6 @@ int mainOld(int argc, const char **argv)
    // Our main data storage vessel..
    RASPISTILL_STATE state;
 	 
-	 msStart = clock();
    int f;
 	 
 
