@@ -100,7 +100,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MAX_USER_EXIF_TAGS      32
 #define MAX_EXIF_PAYLOAD_LENGTH 128
 
-int65_t msStart = vcos_getmicrosecs64()/1000;
+int64_t msStart = vcos_getmicrosecs64()/1000;
 
 int mmal_status_to_int(MMAL_STATUS_T status);
 
