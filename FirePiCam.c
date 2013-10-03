@@ -46,7 +46,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * We use the RaspiCamControl code to handle the specific camera settings.
  */
 
-#define PRINT_ELAPSED fprintf(stderr, "%fms ", (float)(1000.0* (clock() - msStart))/CLOCKS_PER_SEC)
+#define PRINT_ELAPSED fprintf(stderr, "%dms ", (vcos_getmicrosecs64()/1000 - msStart)))
 
 
 // We use some GNU extensions (asprintf, basename)
@@ -100,7 +100,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MAX_USER_EXIF_TAGS      32
 #define MAX_EXIF_PAYLOAD_LENGTH 128
 
-clock_t msStart;
+int65_t msStart = vcos_getmicrosecs64()/1000;
 
 int mmal_status_to_int(MMAL_STATUS_T status);
 
