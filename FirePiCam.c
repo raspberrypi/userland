@@ -1169,7 +1169,7 @@ static void signal_handler(int signal_number)
  */
 int main(int argc, const char **argv)
 {
-  usStart = vcos_getmicrosecs64()/1000;
+  usStart = vcos_getmicrosecs64();
 
 	//return mainOld(argc, argv);
 	return mainNew(argc, argv);
