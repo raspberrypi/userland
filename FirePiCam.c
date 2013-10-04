@@ -599,19 +599,16 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 
 				 // OPENCV START
 				 CvMat* buf = cvCreateMat(1, buffer->length, CV_8UC1);
-				 PRINT_ELAPSED;
-				 fprintf(stderr, "cvCreateMat\n");
+				 // PRINT_ELAPSED; fprintf(stderr, "cvCreateMat\n");
 
 				 buf->data.ptr = buffer->data;
 				 //IplImage *img = cvDecodeImage(buf, CV_LOAD_IMAGE_COLOR);
 				 IplImage *img = cvDecodeImage(buf, CV_LOAD_IMAGE_GRAYSCALE);
-				 PRINT_ELAPSED;
-				 fprintf(stderr, "cvDecodeImage\n");
+				 // PRINT_ELAPSED; fprintf(stderr, "cvDecodeImage\n");
 
 				 sprintf(filename, "camcv%d.bmp", pData->iteration);
 				 cvSaveImage(filename, img, 0);
-				 PRINT_ELAPSED;
-				 fprintf(stderr, "cvSaveImage\n");
+				 // PRINT_ELAPSED; fprintf(stderr, "cvSaveImage\n");
 				 // OPENCV END
 
 				 if (pData->use_file_handle) {
@@ -709,7 +706,7 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
          .max_stills_w = state->width,
          .max_stills_h = state->height,
          .stills_yuv422 = 0,
-         .one_shot_stills = 1,
+         .one_shot_stills = 0, //1,
          .max_preview_video_w = state->preview_parameters.previewWindow.width,
          .max_preview_video_h = state->preview_parameters.previewWindow.height,
          .num_preview_video_frames = 3,
