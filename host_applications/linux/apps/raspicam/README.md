@@ -114,7 +114,6 @@ Set the EV compensation of the image. Range is -10 to +10, default is 0.
 
 Possible options are: 
 
-off 
 auto 		Use automatic exposure mode
 night 		Select setting for night shooting
 nightpreview
@@ -201,8 +200,11 @@ Flips the preview and saved image vertically.
 
 Allows the specification of the area of the sensor to be used as the source for the preview and capture. This is defined as x,y for the top left corner, and a width and height, all values in normalised coordinates (0.0-1.0). So to set a ROI at half way across and down the sensor, and an width and height of a quarter of the sensor use :
 
-	-roi 0.5,0.5,0.25,0.25
+		-roi 0.5,0.5,0.25,0.25
 
+	--shutter,	-ss	Set shutter speed
+
+Set the shutter speed to the specified value (in microseconds). There is currently an upper limit of approximately 330000us (330ms, 0.33s) past which operation is undefined. This is being investigated.
 
 Application specific settings
 
