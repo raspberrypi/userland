@@ -1,6 +1,6 @@
-﻿RaspiCam Documentation
+RaspiCam Documentation
 
-This document describes the use of the three Raspberry Pi camera applications as of July 2013.
+This document describes the use of the three Raspberry Pi camera applications as of October 2013.
 
 There are three applications provided, raspistill, raspivid and raspistillyuv. raspistill and raspistillyuv are very similar and are intended for capturing images, raspivid is for capturing video.
 
@@ -18,7 +18,7 @@ Command line help is available by typing just the application name in on the com
 Setting up the Camera hardware
 
 
-Warning. Cameras are static sensitive. Earth yourself prior to handling the PCB, a sink tap/faucet or similar should suffice if you don’t have an earthing strap.
+Warning. Cameras are static sensitive. Earth yourself prior to handling the PCB, a sink tap/faucet or similar should suffice if you don't have an earthing strap.
 The camera board attaches to the Raspberry Pi via a 15 way ribbon cable. There are only two connections to make, the ribbon cable need to be attached to the camera PCB and the Raspberry Pi itself. You need to get it the right way round or the camera will not work. On the camera PCB, the blue backing on the cable should be away from the PCB, and on the Raspberry Pi it should be towards the Ethernet connection (or where the Ethernet connector would be if you are using a model A).
 
 Although the connectors on the PCB and the Pi are different, they work in a similar way. On the Raspberry Pi, pull up the tabs on each end of the connector. It should slide up easily, and be able to pivot around slightly. Fully insert the ribbon cable into the slot, ensuring it is straight, then gently press down the tabs to clip it into place. The camera PCB itself also requires you to pull the tabs away from the board, gently insert the cable, then push the tabs back. The PCB connector is a little more awkward than the one on the Pi itself. 
@@ -222,6 +222,10 @@ This option inserts the raw Bayer data from the camera in to the JPEG metadata
 
 Specify the output filename. If not specified, no file is saved. If the filename is '-', then all output is sent to stdout.
 
+	--latest		-l		Link latest frame to filename <filename>
+
+Make a file system link under this name to the latest frame.
+
 	--verbose,	-v		Output verbose information during run
 
 Outputs debugging/information messages during the program run.
@@ -340,6 +344,9 @@ Switch on an option to display the preview after compression. This will show any
 
 Sets the intra refresh period (GoP) rate for the recorded video. H264 video uses a complete frame (I-frame) every intra refresh period from which subsequent frames are based. This options specifies the numbers of frames between each I-frame. Larger numbers here will reduce the size of the resulting video, smaller numbers make the stream more robust to error.
 
+	--profile,	-pf	Specify H264 profile to use for encoding
+
+Sets the H264 profile to be used for the encoding. Options are :  baseline, main, high.
 
 Examples
 
@@ -369,7 +376,7 @@ Disable preview entirely
 
 Save the image as a png file (lossless compression, but slower than JPEG). Note that the filename suffix is ignored when choosing the image encoding. 
 
-	raspistill -t 2000 -o image.png –e png 
+	raspistill -t 2000 -o image.png -e png 
 
 Add some EXIF information to the JPEG. This sets the Artist tag name to Boris, and the GPS altitude to 123.5m. Note that if setting GPS tags you should set as a minimum GPSLatitude, GPSLatitudeRef, GPSLongitude, GPSLongitudeRef, GPSAltitude and GPSAltitudeRef.
 
@@ -387,9 +394,9 @@ Run preview ONLY for 2s, no saved image.
 
 	raspistill -t 2000 
 
-Take timelapse picture, one every 10 seconds for 10 minutes (10 minutes = 600000ms), named image_number_1_today.jpg, image_number_2_today.jpg onwards.
+Take timelapse picture, one every 10 seconds for 10 minutes (10 minutes = 600000ms), named image_num_001_today.jpg, image_num_002_today.jpg onwards, with the latest picture also available under the name latest.jpg.
 
-	raspistill -t 600000 -tl 10000 -o image_num_%d_today.jpg
+	raspistill -t 600000 -tl 10000 -o image_num_%03d_today.jpg -l latest.jpg
 
 Take a picture and send image data to stdout
 
@@ -426,7 +433,14 @@ Encode a 5s camera stream and send image data to file
 
 
 
+Shell Error Codes
 
+The applications described here will return a standard error code to the shell on completion. Possible error codes are : 
+
+ER_OK			0	Application ran successfully.
+EX_USAGE		64	Bad command line parameter
+ER_SOFTWARE		70	Software or camera error
+			130	Application terminated by ctrl-C.
 
 
 
