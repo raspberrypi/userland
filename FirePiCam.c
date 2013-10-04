@@ -595,7 +595,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
          mmal_buffer_header_mem_lock(buffer);
 
 				 PRINT_ELAPSED;
-				 fprintf(stderr, "buffer-length: %d\n", buffer->length);
+				 fprintf(stderr, "%x buffer-length: %d\n", buffer, buffer->length);
 
 				 // OPENCV START
 				 CvMat* buf = cvCreateMat(1, buffer->length, CV_8UC1);
@@ -867,14 +867,12 @@ static MMAL_STATUS_T create_encoder_component(RASPISTILL_STATE *state)
 
    status = mmal_component_create(MMAL_COMPONENT_DEFAULT_IMAGE_ENCODER, &encoder);
 
-   if (status != MMAL_SUCCESS)
-   {
+   if (status != MMAL_SUCCESS) {
       vcos_log_error("Unable to create JPEG encoder component");
       goto error;
    }
 
-   if (!encoder->input_num || !encoder->output_num)
-   {
+   if (!encoder->input_num || !encoder->output_num) {
       status = MMAL_ENOSYS;
       vcos_log_error("JPEG encoder doesn't have input/output ports");
       goto error;
@@ -894,7 +892,7 @@ static MMAL_STATUS_T create_encoder_component(RASPISTILL_STATE *state)
    if (encoder_output->buffer_size < encoder_output->buffer_size_min)
       encoder_output->buffer_size = encoder_output->buffer_size_min;
 
-   encoder_output->buffer_num = 1; //encoder_output->buffer_num_recommended;
+   encoder_output->buffer_num = 2; //encoder_output->buffer_num_recommended;
 
    if (encoder_output->buffer_num < encoder_output->buffer_num_min)
       encoder_output->buffer_num = encoder_output->buffer_num_min;
@@ -902,8 +900,7 @@ static MMAL_STATUS_T create_encoder_component(RASPISTILL_STATE *state)
    // Commit the port changes to the output port
    status = mmal_port_format_commit(encoder_output);
 
-   if (status != MMAL_SUCCESS)
-   {
+   if (status != MMAL_SUCCESS) {
       vcos_log_error("Unable to set format on video encoder output port");
       goto error;
    }
@@ -911,8 +908,7 @@ static MMAL_STATUS_T create_encoder_component(RASPISTILL_STATE *state)
    // Set the JPEG quality level
    status = mmal_port_parameter_set_uint32(encoder_output, MMAL_PARAMETER_JPEG_Q_FACTOR, state->quality);
 
-   if (status != MMAL_SUCCESS)
-   {
+   if (status != MMAL_SUCCESS) {
       vcos_log_error("Unable to set JPEG quality");
       goto error;
    }
@@ -921,8 +917,7 @@ static MMAL_STATUS_T create_encoder_component(RASPISTILL_STATE *state)
    {
       MMAL_PARAMETER_THUMBNAIL_CONFIG_T param_thumb = {{MMAL_PARAMETER_THUMBNAIL_CONFIGURATION, sizeof(MMAL_PARAMETER_THUMBNAIL_CONFIG_T)}, 0, 0, 0, 0};
 
-      if ( state->thumbnailConfig.width > 0 && state->thumbnailConfig.height > 0 )
-      {
+      if ( state->thumbnailConfig.width > 0 && state->thumbnailConfig.height > 0 ) {
          // Have a valid thumbnail defined
          param_thumb.enable = 1;
          param_thumb.width = state->thumbnailConfig.width;
@@ -935,8 +930,7 @@ static MMAL_STATUS_T create_encoder_component(RASPISTILL_STATE *state)
    //  Enable component
    status = mmal_component_enable(encoder);
 
-   if (status  != MMAL_SUCCESS)
-   {
+   if (status  != MMAL_SUCCESS) {
       vcos_log_error("Unable to enable video encoder component");
       goto error;
    }
@@ -944,8 +938,7 @@ static MMAL_STATUS_T create_encoder_component(RASPISTILL_STATE *state)
    /* Create pool of buffer headers for the output port to consume */
    pool = mmal_port_pool_create(encoder_output, encoder_output->buffer_num, encoder_output->buffer_size);
 
-   if (!pool)
-   {
+   if (!pool) {
       vcos_log_error("Failed to create buffer header pool for encoder output port %s", encoder_output->name);
    }
 
@@ -1287,12 +1280,11 @@ int mainNew(int argc, const char **argv)
             goto error;
          }
 
-				 int num_iterations =  state.timelapse ? state.timeout / state.timelapse : 1;
+				 int num_iterations =  10;
 				 int frame;
 				 FILE *output_file = NULL;
 				 char *use_filename = NULL;      // Temporary filename while image being written
 				 char *final_filename = NULL;    // Name that gets file once complete
-				 int64_t next_frame_ms = vcos_getmicrosecs64()/1000;
 				 int num, q;
 
 				 // If in timelapse mode, and timeout set to zero (or less), then take frames forever
@@ -1395,6 +1387,8 @@ error:
    return 0;
 }
 
+
+/*
 int mainOld(int argc, const char **argv)
 {
    // Our main data storage vessel..
@@ -1751,7 +1745,6 @@ error:
 
       mmal_connection_destroy(state.encoder_connection);
 
-      /* Disable components */
       if (state.encoder_component)
          mmal_component_disable(state.encoder_component);
 
@@ -1776,4 +1769,5 @@ error:
       
    return 0;
 }
+*/
 

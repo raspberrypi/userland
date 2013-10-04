@@ -3,6 +3,9 @@
 *.lo
 *.o
 
+# Other binaries
+*.bmp
+
 # Compiled Dynamic libraries
 *.so
 
