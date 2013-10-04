@@ -55,8 +55,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <memory.h>
 #include <unistd.h>
 #include <errno.h>
+#include <sysexits.h>
 
-#define VERSION_STRING "v1.3"
+#define VERSION_STRING "v1.3.1"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -399,7 +400,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          else
             valid = 0;
          break;
-         
+
       }
       case CommandVerbose: // display lots of data during run
          state->verbose = 1;
@@ -1092,11 +1093,11 @@ static MMAL_STATUS_T connect_ports(MMAL_PORT_T *output_port, MMAL_PORT_T *input_
 /**
  * Allocates and generates a filename based on the
  * user-supplied pattern and the frame number.
- * On successful return, finalName and tempName point to malloc()ed strings 
+ * On successful return, finalName and tempName point to malloc()ed strings
  * which must be freed externally.  (On failure, returns nulls that
  * don't need free()ing.)
  *
- * @param finalName pointer receives an 
+ * @param finalName pointer receives an
  * @param pattern sprintf pattern with %d to be replaced by frame
  * @param frame for timelapse, the frame number
  * @return Returns a MMAL_STATUS_T giving result of operation
@@ -1109,12 +1110,12 @@ MMAL_STATUS_T create_filenames(char** finalName, char** tempName, char * pattern
    if (0 > asprintf(finalName, pattern, frame) ||
        0 > asprintf(tempName, "%s~", *finalName))
    {
-      if (*finalName != NULL) 
+      if (*finalName != NULL)
       {
          free(*finalName);
       }
       return MMAL_ENOMEM;    // It may be some other error, but it is not worth getting it right
-   }    
+   }
    return MMAL_SUCCESS;
 }
 
@@ -1143,7 +1144,7 @@ static void signal_handler(int signal_number)
 
    // Need to close any open stuff...
 
-   exit(255);
+   exit(130);
 }
 
 /**
@@ -1153,6 +1154,7 @@ int main(int argc, const char **argv)
 {
    // Our main data storage vessel..
    RASPISTILL_STATE state;
+   int exit_code = EX_OK;
 
    MMAL_STATUS_T status = MMAL_SUCCESS;
    MMAL_PORT_T *camera_preview_port = NULL;
@@ -1177,13 +1179,13 @@ int main(int argc, const char **argv)
       fprintf(stderr, "\%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
 
       display_valid_parameters(basename(argv[0]));
-      exit(0);
+      exit(EX_USAGE);
    }
 
    // Parse the command line and put options in to our status structure
    if (parse_cmdline(argc, argv, &state))
    {
-      exit(0);
+      exit(EX_USAGE);
    }
 
    if (state.verbose)
@@ -1201,17 +1203,20 @@ int main(int argc, const char **argv)
    if ((status = create_camera_component(&state)) != MMAL_SUCCESS)
    {
       vcos_log_error("%s: Failed to create camera component", __func__);
+      exit_code = EX_SOFTWARE;
    }
    else if ((status = raspipreview_create(&state.preview_parameters)) != MMAL_SUCCESS)
    {
       vcos_log_error("%s: Failed to create preview component", __func__);
       destroy_camera_component(&state);
+      exit_code = EX_SOFTWARE;
    }
    else if ((status = create_encoder_component(&state)) != MMAL_SUCCESS)
    {
       vcos_log_error("%s: Failed to create encode component", __func__);
       raspipreview_destroy(&state.preview_parameters);
       destroy_camera_component(&state);
+      exit_code = EX_SOFTWARE;
    }
    else
    {
@@ -1338,9 +1343,9 @@ int main(int argc, const char **argv)
                      if (state.verbose)
                         fprintf(stderr, "Opening output file %s\n", final_filename);
                         // Technically it is opening the temp~ filename which will be ranamed to the final filename
-   
+
                      output_file = fopen(use_filename, "wb");
-   
+
                      if (!output_file)
                      {
                         // Notify user, carry on but discarding encoded output buffers
@@ -1349,7 +1354,7 @@ int main(int argc, const char **argv)
 
                      // asprintf used in timelapse mode allocates its own memory which we need to free
                   }
-                           
+
                   callback_data.file_handle = output_file;
                }
 
@@ -1421,7 +1426,7 @@ int main(int argc, const char **argv)
                      vcos_assert(use_filename != NULL && final_filename != NULL);
                      if (0 != rename(use_filename, final_filename))
                      {
-                        vcos_log_error("Could not rename temp file to: %s; %s", 
+                        vcos_log_error("Could not rename temp file to: %s; %s",
                                           final_filename,strerror(errno));
                      }
                      if (state.linkname)
@@ -1429,14 +1434,14 @@ int main(int argc, const char **argv)
                         char *use_link;
                         char *final_link;
                         status = create_filenames(&final_link, &use_link, state.linkname, frame);
-                        
+
                         // Create hard link if possible, symlink otherwise
                         if (status != MMAL_SUCCESS
                             || (0 != link(final_filename, use_link)
                                 &&  0 != symlink(final_filename, use_link))
                             || 0 != rename(use_link, final_link))
                         {
-                           vcos_log_error("Could not link as filename: %s; %s", 
+                           vcos_log_error("Could not link as filename: %s; %s",
                                           state.linkname,strerror(errno));
                         }
                         if (use_link) free(use_link);
@@ -1503,7 +1508,7 @@ error:
 
    if (status != MMAL_SUCCESS)
       raspicamcontrol_check_configuration(128);
-      
-   return 0;
+
+   return exit_code;
 }
 
