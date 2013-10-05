@@ -91,7 +91,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 // Stills format information
-#define STILLS_FRAME_RATE_NUM 15
+//#define STILLS_FRAME_RATE_NUM 15
+#define STILLS_FRAME_RATE_NUM 3
 #define STILLS_FRAME_RATE_DEN 1
 
 /// Video render needs at least 2 buffers.
@@ -241,7 +242,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->preview_connection = NULL;
    state->encoder_connection = NULL;
    state->encoder_pool = NULL;
-   state->encoding = MMAL_ENCODING_I420;
+   state->encoding = MMAL_ENCODING_JPEG;
    state->numExifTags = 0;
    state->timelapse = 100;
    state->fullResPreview = 0;
@@ -790,7 +791,12 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
    format = still_port->format;
 
    // Set our stills format on the stills (for encoder) port
-   format->encoding = MMAL_ENCODING_OPAQUE;
+
+	 //format->encoding = MMAL_ENCODING_BGR24; //RGB
+	 //format->encoding_variant = MMAL_ENCODING_BGR24; //RGB
+	 format->encoding = MMAL_ENCODING_I420; //YUV
+	 format->encoding_variant = MMAL_ENCODING_I420; //YUV
+   //format->encoding = MMAL_ENCODING_OPAQUE;
    format->es->video.width = state->width;
    format->es->video.height = state->height;
    format->es->video.crop.x = 0;
