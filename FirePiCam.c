@@ -407,8 +407,6 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
    PORT_USERDATA *pData = (PORT_USERDATA *)port->userdata;
 
    if (pData) {
-      int bytes_written = buffer->length;
-
       if (buffer->length) {
          mmal_buffer_header_mem_lock(buffer);
 
@@ -422,7 +420,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 				 buf->data.ptr = buffer->data;
 				 //IplImage *img = cvDecodeImage(buf, CV_LOAD_IMAGE_COLOR);
 				 IplImage *img = cvDecodeImage(buf, CV_LOAD_IMAGE_GRAYSCALE);
-				 // PRINT_ELAPSED; fprintf(stderr, "cvDecodeImage\n");
+				 PRINT_ELAPSED; fprintf(stderr, "%x cvDecodeImage\n", img->imageData);
 
 				 sprintf(filename, "camcv%d.bmp", pData->iteration);
 				 cvSaveImage(filename, img, 0);
@@ -430,12 +428,6 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 				 // OPENCV END
 
          mmal_buffer_header_mem_unlock(buffer);
-      }
-
-      // We need to check we wrote what we wanted - it's possible we have run out of storage.
-      if (bytes_written != buffer->length) {
-         vcos_log_error("Unable to write buffer to file - aborting");
-         complete = 1;
       }
 
       // Now flag if we have completed
