@@ -714,7 +714,7 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
          .max_preview_video_h = state->preview_parameters.previewWindow.height,
          .num_preview_video_frames =  3,
          .stills_capture_circular_buffer_height = 0,
-         .fast_preview_resume = 1, //0,
+         .fast_preview_resume = 0,
          .use_stc_timestamp = MMAL_PARAM_TIMESTAMP_MODE_RESET_STC
       };
 
