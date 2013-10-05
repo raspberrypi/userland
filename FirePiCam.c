@@ -197,9 +197,9 @@ static struct
 } encoding_xref[] =
 {
    {"jpg", MMAL_ENCODING_JPEG},
-   {"bmp", MMAL_ENCODING_BMP},
-   {"gif", MMAL_ENCODING_GIF},  // 659ms (7ms decode/write)
-   {"png", MMAL_ENCODING_PNG},	// 774ms (77ms decode/write)
+   {"bmp", MMAL_ENCODING_BMP},  // 654ms (14ms decode/write bmp)
+   {"gif", MMAL_ENCODING_GIF},  // 659ms (7ms decode/write bmp)
+   {"png", MMAL_ENCODING_PNG},	// 774ms (77ms decode/write bmp)
    {"unk", MMAL_ENCODING_UNKNOWN}
 };
 
@@ -238,8 +238,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->preview_connection = NULL;
    state->encoder_connection = NULL;
    state->encoder_pool = NULL;
-   //state->encoding = MMAL_ENCODING_BMP; 
-   state->encoding = MMAL_ENCODING_BMP;
+   state->encoding = MMAL_ENCODING_JPEG;
    state->numExifTags = 0;
    state->timelapse = 100;
    state->fullResPreview = 0;
