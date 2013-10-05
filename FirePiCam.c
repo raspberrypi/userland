@@ -47,7 +47,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 /*
- * Moidifications (c) 2013 Karl Lew, http://www.firepick.org, all rights reserved
+ * Modifications (c) 2013 Karl Lew, http://www.firepick.org, all rights reserved
  * \date 1 Oct 2013
  * \Author: Karl Lew
  */
@@ -152,14 +152,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandWidth        1
 #define CommandHeight       2
 #define CommandQuality      3
-#define CommandRaw          4
-#define CommandOutput       5
-#define CommandVerbose      6
-#define CommandThumbnail    8
-#define CommandDemoMode     9
-#define CommandEncoding     10
-#define CommandFullResPreview 13
-#define CommandLink         14
+#define CommandVerbose      4
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -167,12 +160,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandWidth,   "-width",      "w",  "Set image width <size>", 1 },
    { CommandHeight,  "-height",     "h",  "Set image height <size>", 1 },
    { CommandQuality, "-quality",    "q",  "Set jpeg quality <0 to 100>", 1 },
-   { CommandRaw,     "-raw",        "r",  "Add raw bayer data to jpeg metadata", 0 },
    { CommandVerbose, "-verbose",    "v",  "Output verbose information during run", 0 },
-   { CommandThumbnail,"-thumb",     "th", "Set thumbnail parameters (x:y:quality)", 1},
-   { CommandDemoMode,"-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 0},
-   { CommandEncoding,"-encoding",   "e",  "Encoding to use for output file (jpg, bmp, gif, png)", 1},
-   { CommandFullResPreview,"-fullpreview", "fp", "Run the preview using the still capture resolution (may reduce preview fps)", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -225,7 +213,6 @@ static void default_status(RASPISTILL_STATE *state)
    state->encoder_connection = NULL;
    state->encoder_pool = NULL;
    state->encoding = MMAL_ENCODING_JPEG;
-   state->fullResPreview = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -257,7 +244,6 @@ static void dump_status(RASPISTILL_STATE *state)
    fprintf(stderr, "Thumbnail enabled %s, width %d, height %d, quality %d\n",
          state->thumbnailConfig.enable ? "Yes":"No", state->thumbnailConfig.width,
          state->thumbnailConfig.height, state->thumbnailConfig.quality);
-   fprintf(stderr, "Full resolution preview %s\n\n", state->fullResPreview ? "Yes": "No");
 
    raspipreview_dump_parameters(&state->preview_parameters);
    raspicamcontrol_dump_parameters(&state->camera_parameters);
