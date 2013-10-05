@@ -198,7 +198,7 @@ static struct
 {
    {"jpg", MMAL_ENCODING_JPEG},
    {"bmp", MMAL_ENCODING_BMP},
-   {"gif", MMAL_ENCODING_GIF},
+   {"gif", MMAL_ENCODING_GIF},  // 659ms (7ms decode/write)
    {"png", MMAL_ENCODING_PNG},	// 774ms (77ms decode/write)
    {"unk", MMAL_ENCODING_UNKNOWN}
 };
@@ -239,7 +239,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->encoder_connection = NULL;
    state->encoder_pool = NULL;
    //state->encoding = MMAL_ENCODING_BMP; 
-   state->encoding = MMAL_ENCODING_GIF;
+   state->encoding = MMAL_ENCODING_BMP;
    state->numExifTags = 0;
    state->timelapse = 100;
    state->fullResPreview = 0;
