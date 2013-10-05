@@ -196,9 +196,10 @@ static struct
    MMAL_FOURCC_T encoding;
 } encoding_xref[] =
 {
+   {"i420", MMAL_ENCODING_I420}, // FAILED mmal_vc_port_enable
    {"tga", MMAL_ENCODING_TGA}, // FAILED mmal_vc_port_enable
    {"ppm", MMAL_ENCODING_PPM}, // FAILED mmal_vc_port_enable
-   {"jpg", MMAL_ENCODING_JPEG}, // 609ms (38ms decode/write bmp)
+   {"jpg", MMAL_ENCODING_JPEG}, // 582ms (22ms decode/write bmp)
    {"bmp", MMAL_ENCODING_BMP},  // 654ms (14ms decode/write bmp)
    {"gif", MMAL_ENCODING_GIF},  // 659ms (7ms decode/write bmp)
    {"png", MMAL_ENCODING_PNG},	// 774ms (77ms decode/write bmp)
@@ -240,7 +241,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->preview_connection = NULL;
    state->encoder_connection = NULL;
    state->encoder_pool = NULL;
-   state->encoding = MMAL_ENCODING_JPEG;
+   state->encoding = MMAL_ENCODING_I420;
    state->numExifTags = 0;
    state->timelapse = 100;
    state->fullResPreview = 0;
