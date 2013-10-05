@@ -101,7 +101,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define STILLS_FRAME_RATE_DEN 1
 
 /// Video render needs at least 2 buffers.
-#define VIDEO_OUTPUT_BUFFERS_NUM 3
+#define VIDEO_OUTPUT_BUFFERS_NUM 2
 
 int64_t usStart;
 
@@ -673,6 +673,7 @@ static MMAL_STATUS_T create_encoder_component(RASPISTILL_STATE *state)
    // Specify out output format
    encoder_output->format->encoding = state->encoding;
 
+	 // RGB size buffer + fudge is good for all encodings
    encoder_output->buffer_size = (long) state->width * (long) state->height * 3 + 1024; //encoder_output->buffer_size_recommended;
 
    if (encoder_output->buffer_size < encoder_output->buffer_size_min)
