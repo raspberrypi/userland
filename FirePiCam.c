@@ -225,7 +225,7 @@ static void default_status(RASPISTILL_STATE *state)
 
    state->timeout = 1000; //5000; // 5s delay before take image
    state->width = 800; //864; //2592;
-   state->height = 200; //216; // 1944;
+   state->height = 100; // 200; //216; // 1944;
    state->quality = 85;
    state->wantRAW = 0;
    state->filename = "cam.bmp\0\0\0\0\0\0\0\0\0\0\0"; //NULL;
@@ -249,8 +249,8 @@ static void default_status(RASPISTILL_STATE *state)
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
-	 state->preview_parameters.previewWindow.width = 32; // state->width;
-	 state->preview_parameters.previewWindow.height = 32; // state->height;
+	 state->preview_parameters.previewWindow.width = 50; // state->width;
+	 state->preview_parameters.previewWindow.height = 50; // state->height;
 
 
    // Set up the camera_parameters to default
