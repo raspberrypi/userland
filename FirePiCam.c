@@ -419,7 +419,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 
 				 // OPENCV START
 				 CvMat* buf = cvCreateMatHeader(1, buffer->length, CV_8UC1);
-				 SetData(buf, buffer->data, buffer->length);
+				 cvSetData(buf, buffer->data, buffer->length);
 				 // PRINT_ELAPSED; fprintf(stderr, "cvCreateMat\n");
 
 				 //CvReleaseMat(&buf);
