@@ -200,7 +200,7 @@ static struct
    {"i420", MMAL_ENCODING_I420}, // FAILED mmal_vc_port_enable
    {"tga", MMAL_ENCODING_TGA}, // FAILED mmal_vc_port_enable
    {"ppm", MMAL_ENCODING_PPM}, // FAILED mmal_vc_port_enable
-   {"jpg", MMAL_ENCODING_JPEG}, // 582ms (22ms decode/write bmp)
+   {"jpg", MMAL_ENCODING_JPEG}, // 582ms (22ms decode/write bmp) YUV 598ms (48ms decode/write bmp)
    {"bmp", MMAL_ENCODING_BMP},  // 654ms (14ms decode/write bmp)
    {"gif", MMAL_ENCODING_GIF},  // 659ms (7ms decode/write bmp)
    {"png", MMAL_ENCODING_PNG},	// 774ms (77ms decode/write bmp)
@@ -792,10 +792,10 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
 
    // Set our stills format on the stills (for encoder) port
 
-	 //format->encoding = MMAL_ENCODING_BGR24; //RGB
-	 //format->encoding_variant = MMAL_ENCODING_BGR24; //RGB
-	 format->encoding = MMAL_ENCODING_I420; //YUV
-	 format->encoding_variant = MMAL_ENCODING_I420; //YUV
+	 format->encoding = MMAL_ENCODING_BGR24; //RGB
+	 format->encoding_variant = MMAL_ENCODING_BGR24; //RGB
+	 //format->encoding = MMAL_ENCODING_I420; //YUV
+	 //format->encoding_variant = MMAL_ENCODING_I420; //YUV
    //format->encoding = MMAL_ENCODING_OPAQUE;
    format->es->video.width = state->width;
    format->es->video.height = state->height;
