@@ -138,11 +138,9 @@ typedef struct
  */
 typedef struct
 {
-   FILE *file_handle;                   /// File handle to write buffer data to.
    VCOS_SEMAPHORE_T complete_semaphore; /// semaphore which is posted when we reach end of frame (indicates end of capture or fault)
    RASPISTILL_STATE *pstate;            /// pointer to our state in case required in callback
 	 int iteration;												/// callback count
-	 char use_file_handle; 					  /// write out buffer to file_handle?
 } PORT_USERDATA;
 
 static void display_valid_parameters(char *app_name);
@@ -423,7 +421,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
    if (pData) {
       int bytes_written = buffer->length;
 
-      if (buffer->length && (!pData->use_file_handle || pData->file_handle)) {
+      if (buffer->length) {
          mmal_buffer_header_mem_lock(buffer);
 
 				 PRINT_ELAPSED;
@@ -442,10 +440,6 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 				 cvSaveImage(filename, img, 0);
 				 // PRINT_ELAPSED; fprintf(stderr, "cvSaveImage\n");
 				 // OPENCV END
-
-				 if (pData->use_file_handle) {
-					 bytes_written = fwrite(buffer->data, 1, buffer->length, pData->file_handle);
-				 }
 
          mmal_buffer_header_mem_unlock(buffer);
       }
