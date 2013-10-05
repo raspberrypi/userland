@@ -405,13 +405,14 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
    // We pass our file handle and other stuff in via the userdata field.
 
    PORT_USERDATA *pData = (PORT_USERDATA *)port->userdata;
-	 struct mstats memStats;
-	 memStats = mstats();
 
    if (pData) {
       if (buffer->length) {
          mmal_buffer_header_mem_lock(buffer);
 
+
+				 PRINT_ELAPSED;
+				 malloc_stats();
 
 				 PRINT_ELAPSED;
 				 fprintf(stderr, "%x buffer-length: %d %d\n", buffer, buffer->length, memStats.bytes_free);
