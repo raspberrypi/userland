@@ -405,6 +405,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
    // We pass our file handle and other stuff in via the userdata field.
 
    PORT_USERDATA *pData = (PORT_USERDATA *)port->userdata;
+	 struct mstats memStats = mstats();
 
    if (pData) {
       if (buffer->length) {
@@ -412,7 +413,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 
 
 				 PRINT_ELAPSED;
-				 fprintf(stderr, "%x buffer-length: %d %d\n", buffer, buffer->length, _bytes_free);
+				 fprintf(stderr, "%x buffer-length: %d %d\n", buffer, buffer->length, memStats.bytes_free);
 
 				 // OPENCV START
 				 CvMat* buf = cvCreateMat(1, buffer->length, CV_8UC1);
