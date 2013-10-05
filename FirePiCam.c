@@ -328,28 +328,6 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          state->verbose = 1;
          break;
 
-      case CommandEncoding :
-      {
-         int len = strlen(argv[i + 1]);
-         valid = 0;
-
-         if (len)
-         {
-            int j;
-            for (j=0;j<encoding_xref_size;j++)
-            {
-               if (strcmp(encoding_xref[j].format, argv[i+1]) == 0)
-               {
-                  state->encoding = encoding_xref[j].encoding;
-                  valid = 1;
-                  i++;
-                  break;
-               }
-            }
-         }
-         break;
-      }
-
       default:
       {
          // Try parsing for any image specific parameters
