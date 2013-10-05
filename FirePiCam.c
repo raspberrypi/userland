@@ -405,7 +405,8 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
    // We pass our file handle and other stuff in via the userdata field.
 
    PORT_USERDATA *pData = (PORT_USERDATA *)port->userdata;
-	 mstats memStats = mstats();
+	 struct mstats memStats;
+	 memStats = mstats();
 
    if (pData) {
       if (buffer->length) {
