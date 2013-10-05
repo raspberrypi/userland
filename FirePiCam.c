@@ -245,8 +245,8 @@ static void default_status(RASPISTILL_STATE *state)
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
-	 state->preview_parameters.previewWindow.width = 32; // state->width;
-	 state->preview_parameters.previewWindow.height = 32; // state->height;
+	 state->preview_parameters.previewWindow.width = 50; // state->width;
+	 state->preview_parameters.previewWindow.height = 50; // state->height;
 
 
    // Set up the camera_parameters to default
