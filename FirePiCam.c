@@ -921,7 +921,7 @@ int mainNew(int argc, const char **argv)
             goto error;
          }
 
-				 int num_iterations =  10;
+				 int num_iterations =  1000;
 				 int frame;
 				 FILE *output_file = NULL;
 				 int num, q;
@@ -935,7 +935,7 @@ int mainNew(int argc, const char **argv)
 						}
 
 				 for (frame = 1; (num_iterations <= 0) || (frame<=num_iterations); frame++) {
-						callback_data.iteration = frame;
+						callback_data.iteration = frame % 10;
 						// Send all the buffers to the encoder output port
 						num = mmal_queue_length(state.encoder_pool->queue);
 
