@@ -114,10 +114,7 @@ typedef struct
    int width;                          /// Requested width of image
    int height;                         /// requested height of image
    int quality;                        /// JPEG quality setting (1-100)
-   MMAL_PARAM_THUMBNAIL_CONFIG_T thumbnailConfig;
    int verbose;                        /// !0 if want detailed run information
-   int demoMode;                       /// Run app in demo mode
-   int demoInterval;                   /// Interval between camera settings changes
    MMAL_FOURCC_T encoding;             /// Encoding to use for the output file.
    int fullResPreview;                 /// If set, the camera preview port runs at capture resolution. Reduces fps.
 
@@ -199,12 +196,6 @@ static void default_status(RASPISTILL_STATE *state)
    state->height = 200; //216; // 1944;
    state->quality = 85;
    state->verbose = 0;
-   state->thumbnailConfig.enable = 0; //1;
-   state->thumbnailConfig.width = 0; //64;
-   state->thumbnailConfig.height = 0; //48;
-   state->thumbnailConfig.quality = 35;
-   state->demoMode = 0;
-   state->demoInterval = 250; // ms
    state->camera_component = NULL;
    state->encoder_component = NULL;
    state->preview_connection = NULL;
@@ -239,9 +230,6 @@ static void dump_status(RASPISTILL_STATE *state)
 
    fprintf(stderr, "Width %d, Height %d, quality %d\n", state->width,
          state->height, state->quality );
-   fprintf(stderr, "Thumbnail enabled %s, width %d, height %d, quality %d\n",
-         state->thumbnailConfig.enable ? "Yes":"No", state->thumbnailConfig.width,
-         state->thumbnailConfig.height, state->thumbnailConfig.quality);
 
    raspipreview_dump_parameters(&state->preview_parameters);
    raspicamcontrol_dump_parameters(&state->camera_parameters);
@@ -711,17 +699,9 @@ static MMAL_STATUS_T create_encoder_component(RASPISTILL_STATE *state)
       goto error;
    }
 
-   // Set up any required thumbnail
+   // Disable thumbnail
    {
       MMAL_PARAMETER_THUMBNAIL_CONFIG_T param_thumb = {{MMAL_PARAMETER_THUMBNAIL_CONFIGURATION, sizeof(MMAL_PARAMETER_THUMBNAIL_CONFIG_T)}, 0, 0, 0, 0};
-
-      if ( state->thumbnailConfig.width > 0 && state->thumbnailConfig.height > 0 ) {
-         // Have a valid thumbnail defined
-         param_thumb.enable = 1;
-         param_thumb.width = state->thumbnailConfig.width;
-         param_thumb.height = state->thumbnailConfig.height;
-         param_thumb.quality = state->thumbnailConfig.quality;
-      }
       status = mmal_port_parameter_set(encoder->control, &param_thumb.hdr);
    }
 
