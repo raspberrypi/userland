@@ -792,11 +792,11 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
 
    // Set our stills format on the stills (for encoder) port
 
-	 format->encoding = MMAL_ENCODING_BGR24; //RGB
-	 format->encoding_variant = MMAL_ENCODING_BGR24; //RGB
+	 //format->encoding = MMAL_ENCODING_BGR24; //RGB
+	 //format->encoding_variant = MMAL_ENCODING_BGR24; //RGB
 	 //format->encoding = MMAL_ENCODING_I420; //YUV
 	 //format->encoding_variant = MMAL_ENCODING_I420; //YUV
-   //format->encoding = MMAL_ENCODING_OPAQUE;
+   format->encoding = MMAL_ENCODING_OPAQUE;
    format->es->video.width = state->width;
    format->es->video.height = state->height;
    format->es->video.crop.x = 0;
