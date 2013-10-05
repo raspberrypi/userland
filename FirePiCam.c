@@ -239,7 +239,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->encoder_connection = NULL;
    state->encoder_pool = NULL;
    //state->encoding = MMAL_ENCODING_BMP; 
-   state->encoding = MMAL_ENCODING_JPEG;
+   state->encoding = MMAL_ENCODING_PNG;
    state->numExifTags = 0;
    state->timelapse = 100;
    state->fullResPreview = 0;
