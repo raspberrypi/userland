@@ -441,6 +441,9 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
       vcos_log_error("Received a encoder buffer callback with no state");
    }
 
+   // release buffer back to the pool
+   mmal_buffer_header_release(buffer);
+
    // and send one back to the port (if still open)
    if (port->is_enabled) {
       MMAL_STATUS_T status = MMAL_SUCCESS;
@@ -454,9 +457,6 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
       if (!new_buffer || status != MMAL_SUCCESS)
          vcos_log_error("Unable to return a buffer to the encoder port");
    }
-
-   // release buffer back to the pool
-   mmal_buffer_header_release(buffer);
 
    if (complete) {
       vcos_semaphore_post(&(pData->complete_semaphore));
