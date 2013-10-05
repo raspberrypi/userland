@@ -415,7 +415,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 				 malloc_stats();
 
 				 PRINT_ELAPSED;
-				 fprintf(stderr, "%x buffer-length: %d %d\n", buffer, buffer->length, memStats.bytes_free);
+				 fprintf(stderr, "%x buffer-length: %d\n", buffer, buffer->length);
 
 				 // OPENCV START
 				 CvMat* buf = cvCreateMat(1, buffer->length, CV_8UC1);
