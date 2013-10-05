@@ -1289,19 +1289,14 @@ int mainNew(int argc, const char **argv)
 
 				 // If in timelapse mode, and timeout set to zero (or less), then take frames forever
 				 for (frame = 1; (num_iterations <= 0) || (frame<=num_iterations); frame++) {
-						//vcos_sleep(state.timelapse);
-
 						// Enable the encoder output port
 						encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&callback_data;
 						callback_data.iteration = frame;
-
+						status = mmal_port_enable(encoder_output_port, encoder_buffer_callback);
 						if (state.verbose) {
 							 PRINT_ELAPSED;
-							 fprintf(stderr, "Enabling encoder output port\n");
+							 fprintf(stderr, "Enabled encoder output port\n");
 						}
-
-						// Enable the encoder output port and tell it its callback function
-						status = mmal_port_enable(encoder_output_port, encoder_buffer_callback);
 
 						// Send all the buffers to the encoder output port
 						num = mmal_queue_length(state.encoder_pool->queue);
@@ -1323,15 +1318,15 @@ int mainNew(int argc, const char **argv)
 
 						if (mmal_port_parameter_set_boolean(camera_still_port, MMAL_PARAMETER_CAPTURE, 1) != MMAL_SUCCESS) {
 							 vcos_log_error("%s: Failed to start capture", __func__);
-						} else {
-							 // Wait for capture to complete
-							 // For some reason using vcos_semaphore_wait_timeout sometimes returns immediately with bad parameter error
-							 // even though it appears to be all correct, so reverting to untimed one until figure out why its erratic
-							 vcos_semaphore_wait(&callback_data.complete_semaphore);
-							 if (state.verbose) {
-									PRINT_ELAPSED;
-									fprintf(stderr, "Finished capture %d\n", frame);
-							}
+							 goto error;
+						} 
+						// Wait for capture to complete
+						// For some reason using vcos_semaphore_wait_timeout sometimes returns immediately with bad parameter error
+						// even though it appears to be all correct, so reverting to untimed one until figure out why its erratic
+						vcos_semaphore_wait(&callback_data.complete_semaphore);
+						if (state.verbose) {
+							PRINT_ELAPSED;
+							fprintf(stderr, "Finished capture %d\n", frame);
 						}
 
 						// Disable encoder output port
