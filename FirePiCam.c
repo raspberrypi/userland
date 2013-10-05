@@ -200,7 +200,7 @@ static struct
    {"i420", MMAL_ENCODING_I420}, // FAILED mmal_vc_port_enable
    {"tga", MMAL_ENCODING_TGA}, // FAILED mmal_vc_port_enable
    {"ppm", MMAL_ENCODING_PPM}, // FAILED mmal_vc_port_enable
-   {"jpg", MMAL_ENCODING_JPEG}, // 582ms (22ms decode/write bmp) YUV 598ms (48ms decode/write bmp)
+   {"jpg", MMAL_ENCODING_JPEG}, // 582ms (41ms decode/write bmp) YUV 598ms (48ms decode/write bmp)
    {"bmp", MMAL_ENCODING_BMP},  // 654ms (14ms decode/write bmp)
    {"gif", MMAL_ENCODING_GIF},  // 659ms (7ms decode/write bmp)
    {"png", MMAL_ENCODING_PNG},	// 774ms (77ms decode/write bmp)
@@ -249,8 +249,8 @@ static void default_status(RASPISTILL_STATE *state)
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
-	 state->preview_parameters.previewWindow.width = 50; // state->width;
-	 state->preview_parameters.previewWindow.height = 50; // state->height;
+	 state->preview_parameters.previewWindow.width = 32; // state->width;
+	 state->preview_parameters.previewWindow.height = 32; // state->height;
 
 
    // Set up the camera_parameters to default
