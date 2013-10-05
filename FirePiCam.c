@@ -238,7 +238,8 @@ static void default_status(RASPISTILL_STATE *state)
    state->preview_connection = NULL;
    state->encoder_connection = NULL;
    state->encoder_pool = NULL;
-   state->encoding = MMAL_ENCODING_BMP; // MMAL_ENCODING_JPEG;
+   //state->encoding = MMAL_ENCODING_BMP; 
+   state->encoding = MMAL_ENCODING_JPEG;
    state->numExifTags = 0;
    state->timelapse = 100;
    state->fullResPreview = 0;
@@ -1315,11 +1316,11 @@ int mainNew(int argc, const char **argv)
 							 PRINT_ELAPSED;
 							 fprintf(stderr, "Starting capture %d\n", frame);
 						}
-
 						if (mmal_port_parameter_set_boolean(camera_still_port, MMAL_PARAMETER_CAPTURE, 1) != MMAL_SUCCESS) {
 							 vcos_log_error("%s: Failed to start capture", __func__);
 							 goto error;
 						} 
+
 						// Wait for capture to complete
 						// For some reason using vcos_semaphore_wait_timeout sometimes returns immediately with bad parameter error
 						// even though it appears to be all correct, so reverting to untimed one until figure out why its erratic
