@@ -249,6 +249,8 @@ static void default_status(RASPISTILL_STATE *state)
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
+	 state->preview_parameters.wantPreview = 0;
+	 state->preview_parameters.wantFullScreenPreview = 0;
 	 state->preview_parameters.previewWindow.width = 48; // state->width;
 	 state->preview_parameters.previewWindow.height = 48; // state->height;
 
