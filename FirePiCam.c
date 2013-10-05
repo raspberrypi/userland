@@ -418,14 +418,11 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 				 fprintf(stderr, "%x buffer-length: %d\n", buffer, buffer->length);
 
 				 // OPENCV START
-				 CvMat* buf = cvCreateMat(1, buffer->length, CV_8UC1);
+				 CvMat* buf = cvCreateMatHeader(1, buffer->length, CV_8UC1);
+				 SetData(buf, buffer->data, buffer->length);
 				 // PRINT_ELAPSED; fprintf(stderr, "cvCreateMat\n");
 
-				 buf->data.ptr = buffer->data;
-				 buf->data.ptr = null;
-
-				 CvReleaseMat(&buf);
-				 /*
+				 //CvReleaseMat(&buf);
 				 //IplImage *img = cvDecodeImage(buf, CV_LOAD_IMAGE_COLOR);
 				 //IplImage *img = cvDecodeImage(buf, CV_LOAD_IMAGE_GRAYSCALE);
 				 //PRINT_ELAPSED; fprintf(stderr, "%x cvDecodeImage\n", img->imageData);
@@ -438,6 +435,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 				 // PRINT_ELAPSED; fprintf(stderr, "cvSaveImage\n");
 				 // OPENCV END
 				 // 
+				 /*
 				 */
 
          mmal_buffer_header_mem_unlock(buffer);
