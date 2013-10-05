@@ -131,12 +131,15 @@ typedef struct
 
 } RASPISTILL_STATE;
 
+#define IMAGE_COUNT 10
+
 /** Struct used to pass information in encoder port userdata to callback
  */
 typedef struct
 {
    VCOS_SEMAPHORE_T complete_semaphore; /// semaphore which is posted when we reach end of frame (indicates end of capture or fault)
    RASPISTILL_STATE *pstate;            /// pointer to our state in case required in callback
+	 CMat* images[IMAGE_COUNT];
 	 int iteration;												/// callback count
 } PORT_USERDATA;
 
@@ -418,25 +421,14 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 				 fprintf(stderr, "%x buffer-length: %d\n", buffer, buffer->length);
 
 				 // OPENCV START
-				 CvMat* buf = cvCreateMatHeader(1, buffer->length, CV_8UC1);
-				 cvSetData(buf, buffer->data, buffer->length);
-				 // PRINT_ELAPSED; fprintf(stderr, "cvCreateMat\n");
-
-				 //IplImage *img = cvDecodeImage(buf, CV_LOAD_IMAGE_COLOR);
-				 //IplImage *img = cvDecodeImage(buf, CV_LOAD_IMAGE_GRAYSCALE);
-				 //PRINT_ELAPSED; fprintf(stderr, "%x cvDecodeImage\n", img->imageData);
-				 CvMat *img = cvDecodeImageM(buf, CV_LOAD_IMAGE_GRAYSCALE);
-
+				 CvMat* cameraImage = cvCreateMatHeader(1, buffer->length, CV_8UC1);
+				 cvSetData(cameraImage, buffer->data, buffer->length);
+				 CvMat *grayImage = cvDecodeImageM(cameraImage, CV_LOAD_IMAGE_GRAYSCALE);
 				 sprintf(filename, "camcv%d.bmp", pData->iteration);
-				 cvSaveImage(filename, img, 0);
-
-				 cvReleaseMatHeader(&buf);
-				 cvReleaseMat(&img);
-				 // PRINT_ELAPSED; fprintf(stderr, "cvSaveImage\n");
+				 cvSaveImage(filename, grayImage, 0);
+				 cvReleaseMatHeader(&cameraImage);
+				 cvReleaseMat(&grayImage);
 				 // OPENCV END
-				 // 
-				 /*
-				 */
 
          mmal_buffer_header_mem_unlock(buffer);
       }
@@ -916,6 +908,7 @@ int mainNew(int argc, const char **argv)
          }
 
          // Set up our userdata - this is passed though to the callback where we need the information.
+				 memset(&callback_data, 0, sizeof(callback_data));
          callback_data.pstate = &state;
          vcos_status = vcos_semaphore_create(&callback_data.complete_semaphore, "RaspiStill-sem", 0);
 
