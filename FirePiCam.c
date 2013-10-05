@@ -414,6 +414,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 				 PRINT_ELAPSED;
 				 malloc_stats();
 
+				 /*
 				 PRINT_ELAPSED;
 				 fprintf(stderr, "%x buffer-length: %d\n", buffer, buffer->length);
 
@@ -433,6 +434,8 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 				 cvReleaseMat(&img);
 				 // PRINT_ELAPSED; fprintf(stderr, "cvSaveImage\n");
 				 // OPENCV END
+				 // 
+				 */
 
          mmal_buffer_header_mem_unlock(buffer);
       }
