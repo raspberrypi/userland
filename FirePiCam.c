@@ -1287,17 +1287,17 @@ int mainNew(int argc, const char **argv)
 				 char *final_filename = NULL;    // Name that gets file once complete
 				 int num, q;
 
-				 // If in timelapse mode, and timeout set to zero (or less), then take frames forever
-				 for (frame = 1; (num_iterations <= 0) || (frame<=num_iterations); frame++) {
 						// Enable the encoder output port
 						encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&callback_data;
-						callback_data.iteration = frame;
 						status = mmal_port_enable(encoder_output_port, encoder_buffer_callback);
 						if (state.verbose) {
 							 PRINT_ELAPSED;
 							 fprintf(stderr, "Enabled encoder output port\n");
 						}
 
+				 // If in timelapse mode, and timeout set to zero (or less), then take frames forever
+				 for (frame = 1; (num_iterations <= 0) || (frame<=num_iterations); frame++) {
+						callback_data.iteration = frame;
 						// Send all the buffers to the encoder output port
 						num = mmal_queue_length(state.encoder_pool->queue);
 
@@ -1329,9 +1329,9 @@ int mainNew(int argc, const char **argv)
 							fprintf(stderr, "Finished capture %d\n", frame);
 						}
 
+				 } // end for (frame)
 						// Disable encoder output port
 						status = mmal_port_disable(encoder_output_port);
-				 } // end for (frame)
 
 				 vcos_semaphore_delete(&callback_data.complete_semaphore);
       } else {
