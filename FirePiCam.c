@@ -139,7 +139,7 @@ typedef struct
 {
    VCOS_SEMAPHORE_T complete_semaphore; /// semaphore which is posted when we reach end of frame (indicates end of capture or fault)
    RASPISTILL_STATE *pstate;            /// pointer to our state in case required in callback
-	 CMat* images[IMAGE_COUNT];
+	 CvMat* images[IMAGE_COUNT];
 	 int iteration;												/// callback count
 } PORT_USERDATA;
 
