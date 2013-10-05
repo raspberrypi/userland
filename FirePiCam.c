@@ -428,6 +428,8 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 
 				 sprintf(filename, "camcv%d.bmp", pData->iteration);
 				 cvSaveImage(filename, img, 0);
+
+				 cvReleaseImage(&img);
 				 // PRINT_ELAPSED; fprintf(stderr, "cvSaveImage\n");
 				 // OPENCV END
 
