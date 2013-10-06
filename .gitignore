@@ -6,6 +6,7 @@
 # Other binaries
 *.bmp
 *.jpg
+*.jpeg
 *.class
 *.swp
 firepicam
@@ -13,6 +14,7 @@ firepicam
 # Compiled Dynamic libraries
 a.out
 *.so
+*.swo
 
 # Compiled Static libraries
 *.lai
