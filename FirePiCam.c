@@ -198,7 +198,7 @@ static void default_status(RASPISTILL_STATE *state)
 
    state->width = 800; //864; //2592;
    state->height = 200; //216; // 1944;
-   state->quality = 85;
+   state->quality = 100; // 85;
    state->verbose = 0;
    state->camera_component = NULL;
    state->encoder_component = NULL;
@@ -424,7 +424,8 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 				 if (pData->images[pData->imageIndex]) {
 					 cvReleaseMat(&pData->images[pData->imageIndex]);
 				 }
-				 pData->images[pData->imageIndex] = cvDecodeImageM(cameraImage, CV_LOAD_IMAGE_GRAYSCALE);
+				 //pData->images[pData->imageIndex] = cvDecodeImageM(cameraImage, CV_LOAD_IMAGE_GRAYSCALE);
+				 pData->images[pData->imageIndex] = cvCloneMat(cameraImage);
 				 cvReleaseMatHeader(&cameraImage);
 
          mmal_buffer_header_mem_unlock(buffer);
