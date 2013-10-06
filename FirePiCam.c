@@ -423,7 +423,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 				 CvMat* cameraImage = cvCreateMatHeader(1, buffer->length, CV_8UC1);
 				 cvSetData(cameraImage, buffer->data, buffer->length);
 				 if (pData->images[pData->imageIndex]) {
-					 CvReleaseMat(&pData->images[pData->imageIndex]);
+					 cvReleaseMat(&pData->images[pData->imageIndex]);
 				 }
 				 pData->images[pData->imageIndex] = cvDecodeImageM(cameraImage, CV_LOAD_IMAGE_GRAYSCALE);
 				 cvReleaseMatHeader(&cameraImage);
