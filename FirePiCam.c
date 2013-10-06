@@ -141,6 +141,7 @@ typedef struct
    RASPISTILL_STATE *pstate;            /// pointer to our state in case required in callback
 	 CvMat* images[IMAGE_COUNT];
 	 int imageIndex;												
+	 char verbose; 
 } PORT_USERDATA;
 
 static void display_valid_parameters(char *app_name);
@@ -412,12 +413,11 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
       if (buffer->length) {
          mmal_buffer_header_mem_lock(buffer);
 
-
-				 PRINT_ELAPSED;
-				 malloc_stats();
-
-				 PRINT_ELAPSED;
-				 fprintf(stderr, "%x buffer-length: %d\n", buffer, buffer->length);
+				 if (pData->verbose) {
+					 PRINT_ELAPSED;
+					 fprintf(stderr, "%x buffer-length: %d\n", buffer, buffer->length);
+					 // malloc_stats();
+				 }
 
 				 CvMat* cameraImage = cvCreateMatHeader(1, buffer->length, CV_8UC1);
 				 cvSetData(cameraImage, buffer->data, buffer->length);
@@ -907,6 +907,7 @@ int mainNew(int argc, const char **argv)
          // Set up our userdata - this is passed though to the callback where we need the information.
 				 memset(&callback_data, 0, sizeof(callback_data));
          callback_data.pstate = &state;
+				 callback_data.verbose = state.verbose;
          vcos_status = vcos_semaphore_create(&callback_data.complete_semaphore, "RaspiStill-sem", 0);
 
          vcos_assert(vcos_status == VCOS_SUCCESS);
