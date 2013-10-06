@@ -403,7 +403,6 @@ static void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
    int complete = 0;
-	 char filename[100];
 
    // We pass our file handle and other stuff in via the userdata field.
 
@@ -427,9 +426,6 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 				 }
 				 pData->images[pData->imageIndex] = cvDecodeImageM(cameraImage, CV_LOAD_IMAGE_GRAYSCALE);
 				 cvReleaseMatHeader(&cameraImage);
-
-				 sprintf(filename, "camcv%d.bmp", pData->imageIndex);
-				 cvSaveImage(filename, pData->images[pData->imageIndex], 0);
 
          mmal_buffer_header_mem_unlock(buffer);
       }
@@ -920,7 +916,6 @@ int mainNew(int argc, const char **argv)
             goto error;
          }
 
-				 int num_iterations =  1000;
 				 int frame;
 				 FILE *output_file = NULL;
 				 int num, q;
@@ -933,8 +928,8 @@ int mainNew(int argc, const char **argv)
 							 fprintf(stderr, "Enabled encoder output port\n");
 						}
 
-				 for (frame = 1; (num_iterations <= 0) || (frame<=num_iterations); frame++) {
-						callback_data.imageIndex = frame % IMAGE_COUNT;
+				 int num_iterations =  1000;
+				 for (frame = 0; frame<=num_iterations; frame++) {
 						// Send all the buffers to the encoder output port
 						num = mmal_queue_length(state.encoder_pool->queue);
 
@@ -948,6 +943,18 @@ int mainNew(int argc, const char **argv)
 									vcos_log_error("Unable to send a buffer to encoder output port (%d)", q);
 						}
 
+
+						if (frame > 0) { // Save file
+							 char filename[100];
+							 sprintf(filename, "camcv%d.bmp", callback_data.imageIndex);
+							 cvSaveImage(filename, callback_data.images[callback_data.imageIndex], 0);
+							 if (state.verbose) {
+							    PRINT_ELAPSED;
+							    fprintf(stderr, "Saved %s\n", filename);
+							 }
+						}
+
+						callback_data.imageIndex = frame % IMAGE_COUNT;
 						if (state.verbose) {
 							 PRINT_ELAPSED;
 							 fprintf(stderr, "Starting capture %d\n", frame);
@@ -956,7 +963,7 @@ int mainNew(int argc, const char **argv)
 							 vcos_log_error("%s: Failed to start capture", __func__);
 							 goto error;
 						} 
-
+		
 						// Wait for capture to complete
 						// For some reason using vcos_semaphore_wait_timeout sometimes returns immediately with bad parameter error
 						// even though it appears to be all correct, so reverting to untimed one until figure out why its erratic
@@ -965,6 +972,7 @@ int mainNew(int argc, const char **argv)
 							PRINT_ELAPSED;
 							fprintf(stderr, "Finished capture %d\n", frame);
 						}
+
 
 				 } // end for (frame)
 						// Disable encoder output port
