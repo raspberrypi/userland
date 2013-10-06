@@ -425,7 +425,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 					 cvReleaseMat(&pData->images[pData->imageIndex]);
 				 }
 				 //pData->images[pData->imageIndex] = cvDecodeImageM(cameraImage, CV_LOAD_IMAGE_GRAYSCALE);
-				 pData->images[pData->imageIndex] = cvCloneMat(cameraImage);
+				 pData->images[pData->imageIndex] = cvDecodeImageM(cameraImage, CV_LOAD_IMAGE_COLOR);
 				 cvReleaseMatHeader(&cameraImage);
 
          mmal_buffer_header_mem_unlock(buffer);
