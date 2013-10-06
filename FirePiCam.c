@@ -140,7 +140,7 @@ typedef struct
    VCOS_SEMAPHORE_T complete_semaphore; /// semaphore which is posted when we reach end of frame (indicates end of capture or fault)
    RASPISTILL_STATE *pstate;            /// pointer to our state in case required in callback
 	 CvMat* images[IMAGE_COUNT];
-	 int iteration;												/// callback count
+	 int imageIndex;												
 } PORT_USERDATA;
 
 static void display_valid_parameters(char *app_name);
@@ -420,15 +420,16 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 				 PRINT_ELAPSED;
 				 fprintf(stderr, "%x buffer-length: %d\n", buffer, buffer->length);
 
-				 // OPENCV START
 				 CvMat* cameraImage = cvCreateMatHeader(1, buffer->length, CV_8UC1);
 				 cvSetData(cameraImage, buffer->data, buffer->length);
-				 CvMat *grayImage = cvDecodeImageM(cameraImage, CV_LOAD_IMAGE_GRAYSCALE);
-				 sprintf(filename, "camcv%d.bmp", pData->iteration);
-				 cvSaveImage(filename, grayImage, 0);
+				 if (pData->images[pData->imageIndex]) {
+					 CvReleaseMat(&pData->images[pData->imageIndex]);
+				 }
+				 pData->images[pData->imageIndex] = cvDecodeImageM(cameraImage, CV_LOAD_IMAGE_GRAYSCALE);
 				 cvReleaseMatHeader(&cameraImage);
-				 cvReleaseMat(&grayImage);
-				 // OPENCV END
+
+				 sprintf(filename, "camcv%d.bmp", pData->imageIndex);
+				 cvSaveImage(filename, pData->images[pData->imageIndex], 0);
 
          mmal_buffer_header_mem_unlock(buffer);
       }
@@ -933,7 +934,7 @@ int mainNew(int argc, const char **argv)
 						}
 
 				 for (frame = 1; (num_iterations <= 0) || (frame<=num_iterations); frame++) {
-						callback_data.iteration = frame % 10;
+						callback_data.imageIndex = frame % IMAGE_COUNT;
 						// Send all the buffers to the encoder output port
 						num = mmal_queue_length(state.encoder_pool->queue);
 
