@@ -7,6 +7,6 @@ class HelloWorld
 	}
 
 	static {
-		System.loadLibrary("libHelloWorld");
+		System.loadLibrary("HelloWorld");
 	}
 }

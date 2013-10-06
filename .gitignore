@@ -5,11 +5,23 @@
 
 # Other binaries
 *.bmp
+*.jpg
+*.class
+*.swp
+firepicam
 
 # Compiled Dynamic libraries
+a.out
 *.so
 
 # Compiled Static libraries
 *.lai
 *.la
 *.a
+
+# Special
+CMakeFiles
+CMakeCache.txt
+Makefile
+cmake_install.cmake
+
