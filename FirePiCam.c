@@ -91,8 +91,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 // Stills format information
-//#define STILLS_FRAME_RATE_NUM 15
-#define STILLS_FRAME_RATE_NUM 3
+#define STILLS_FRAME_RATE_NUM 15
 #define STILLS_FRAME_RATE_DEN 1
 
 /// Video render needs at least 2 buffers.
@@ -414,6 +413,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
            // malloc_stats();
          }
 
+	 // BackgroundSubtractorMOG2
          CvMat* cameraImage = cvCreateMatHeader(1, buffer->length, CV_8UC1);
          cvSetData(cameraImage, buffer->data, buffer->length);
          if (pData->images[pData->imageIndex]) {
@@ -508,7 +508,7 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
        .one_shot_stills = 1,
        .max_preview_video_w = state->preview_parameters.previewWindow.width,
        .max_preview_video_h = state->preview_parameters.previewWindow.height,
-       .num_preview_video_frames =  3,
+       .num_preview_video_frames =  2, //3,
        .stills_capture_circular_buffer_height = 0,
        .fast_preview_resume = 0,
        .use_stc_timestamp = MMAL_PARAM_TIMESTAMP_MODE_RESET_STC
@@ -661,12 +661,14 @@ static MMAL_STATUS_T create_encoder_component(RASPISTILL_STATE *state)
    encoder_output->format->encoding = state->encoding;
 
    // RGB size buffer + fudge is good for all encodings
-   encoder_output->buffer_size = (long) state->width * (long) state->height * 3 + 1024; //encoder_output->buffer_size_recommended;
+   encoder_output->buffer_size = (long) state->width * (long) state->height * 3 + 1024; 
+   //encoder_output->buffer_size = encoder_output->buffer_size_recommended;
 
    if (encoder_output->buffer_size < encoder_output->buffer_size_min)
       encoder_output->buffer_size = encoder_output->buffer_size_min;
 
-   encoder_output->buffer_num = 2; //encoder_output->buffer_num_recommended;
+   //encoder_output->buffer_num = encoder_output->buffer_num_recommended;
+   encoder_output->buffer_num = 2; 
 
    if (encoder_output->buffer_num < encoder_output->buffer_num_min)
       encoder_output->buffer_num = encoder_output->buffer_num_min;
@@ -712,7 +714,7 @@ static MMAL_STATUS_T create_encoder_component(RASPISTILL_STATE *state)
    state->encoder_component = encoder;
 
    if (state->verbose)
-      fprintf(stderr, "Encoder component done\n");
+      fprintf(stderr, "Encoder component done %d buffer_size\n", encoder_output->buffer_size);
 
    return status;
 
