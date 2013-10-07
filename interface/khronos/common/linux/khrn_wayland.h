@@ -31,3 +31,5 @@ int init_process_wayland(CLIENT_PROCESS_STATE_T *process);
 int do_wl_roundtrip();
 
 struct wl_dispmanx_client_buffer *allocate_wl_buffer(struct wl_egl_window *window, KHRN_IMAGE_FORMAT_T color);
+
+void maybe_destroy_wl_buffer(struct wl_dispmanx_client_buffer *buffer);

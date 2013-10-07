@@ -2329,12 +2329,7 @@ EGLAPI EGLBoolean EGLAPIENTRY eglSwapBuffers(EGLDisplay dpy, EGLSurface surf)
 
                      struct wl_dispmanx_client_buffer *buffer;
 
-                     if (wl_egl_window->back_buffer->in_use)
-                        wl_egl_window->back_buffer->pending_destroy = 1;
-                     else {
-                        wl_buffer_destroy(wl_egl_window->back_buffer->wl_buffer);
-                        free(wl_egl_window->back_buffer);
-                     }
+                     maybe_destroy_wl_buffer(wl_egl_window->back_buffer);
 
                      buffer = allocate_wl_buffer(wl_egl_window, color);
                      wl_egl_window->back_buffer = buffer;

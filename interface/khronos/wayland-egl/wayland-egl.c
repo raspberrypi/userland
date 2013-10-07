@@ -5,6 +5,7 @@
 #include <wayland-client.h>
 #include <wayland-egl.h>
 #include "wayland-egl-priv.h"
+#include "interface/khronos/common/linux/khrn_wayland.h"
 
 WL_EGL_EXPORT void
 wl_egl_window_resize(struct wl_egl_window *egl_window,
@@ -35,8 +36,6 @@ wl_egl_window_create(struct wl_surface *surface,
 
 	egl_window->wl_surface = surface;
 	wl_egl_window_resize(egl_window, width, height, 0, 0);
-	egl_window->attached_width  = 0;
-	egl_window->attached_height = 0;
 	egl_window->dummy_element = PLATFORM_WIN_NONE;
 	
 	return egl_window;
@@ -45,6 +44,16 @@ wl_egl_window_create(struct wl_surface *surface,
 WL_EGL_EXPORT void
 wl_egl_window_destroy(struct wl_egl_window *egl_window)
 {
+        if (egl_window->back_buffer != NULL) {
+                maybe_destroy_wl_buffer(egl_window->back_buffer);
+                egl_window->back_buffer = NULL;
+        }
+
+        if (egl_window->front_buffer != NULL) {
+                maybe_destroy_wl_buffer(egl_window->front_buffer);
+                egl_window->front_buffer = NULL;
+        }
+
 	free(egl_window);
 }
 

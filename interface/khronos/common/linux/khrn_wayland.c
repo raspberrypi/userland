@@ -219,3 +219,15 @@ allocate_wl_buffer(struct wl_egl_window *window, KHRN_IMAGE_FORMAT_T color)
 
    return wl_dispmanx_client_buffer;
 }
+
+void maybe_destroy_wl_buffer(struct wl_dispmanx_client_buffer *buffer)
+{
+   struct wl_display *wl_display = khrn_platform_get_wl_display();
+
+   if (buffer->in_use) {
+      buffer->pending_destroy = 1;
+   } else {
+      wl_buffer_destroy(buffer->wl_buffer);
+      free(buffer);
+   }
+}
