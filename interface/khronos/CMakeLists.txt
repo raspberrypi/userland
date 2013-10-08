@@ -65,13 +65,13 @@ set(WAYLAND_EGL_SOURCE
 
 wayland_add_protocol_server(
     EGL_SOURCE
-    ext/dispmanx.xml
+    ../../interface/wayland/dispmanx.xml
     dispmanx
 )
 
 wayland_add_protocol_client(
     EGL_SOURCE
-    ext/dispmanx.xml
+    ../../interface/wayland/dispmanx.xml
     dispmanx
 )
 
