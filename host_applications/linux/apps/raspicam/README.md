@@ -1,6 +1,6 @@
 RaspiCam Documentation
 
-This document describes the use of the three Raspberry Pi camera applications as of October 2013.
+This document describes the use of the three Raspberry Pi camera applications as of October 11th 2013.
 
 There are three applications provided, raspistill, raspivid and raspistillyuv. raspistill and raspistillyuv are very similar and are intended for capturing images, raspivid is for capturing video.
 
@@ -49,6 +49,7 @@ Are the ribbon connectors all firmly seated and the right way round? They must b
 Is the camera module connector firmly attached to the camera PCB? This is the connection from the smaller black camera module itself to the camera PCB. Sometimes this connection can come loose. Using a fingernail, flip up the connector on the PCB, then reseat it with gentle pressure, it engages with a very slight click.
 Have sudo apt-get update, sudo apt-get upgrade been run?
 Has raspi-config been run and the camera enabled?
+Is your power supply sufficient? The camera adds about 200-250mA to the power requirements of the Raspberry Pi.
 
 So, if things are still not working, try the following:
 
@@ -244,6 +245,8 @@ The specific value is the time between shots in milliseconds. Note you should sp
 
 will produce a capture every 2 seconds, over a total period of 30s, named image1.jpg, image0002.jpg..image0015.jpg. Note that the %04d indicates a 4 digit number with leading zero's added to pad to the required number of digits. So, for example,  %08d would result in an 8 digit number.
 
+If a timelapse value of 0 is entered, the application will take pictures as fast as possible. Note there is an minimum enforced pause of 30ms between captures to ensure that exposure calculations can be made. 
+
 	--thumb,	-th		Set thumbnail parameters (x:y:quality)
 
 Allows specification of the thumbnail image inserted in to the JPEG file. If not specified, defaults are a size of 64x48 at quality 35.
@@ -254,7 +257,7 @@ This options cycles through range of camera options, no capture is done, the dem
 
 	--encoding,	-e		Encoding to use for output file
 
-Valid options are jpg, bmp, gif and png. Note that unaccelerated image types (gif, png, bmp) will take much longer to save than JPG which is hardware accelerated. Also note that the filename suffix is completely ignored when encoding a file.
+Valid options are jpg, bmp, gif and png. Note that unaccelerated image types (gif, png, bmp) will take much longer to save than JPG which is hardware accelerated. Also note that the filename suffix is completely ignored when deciding the encoding of a file.
 
 	--exif,		-x		EXIF tag to apply to captures (format as 'key=value')
 
@@ -285,6 +288,9 @@ Note that a small subset of these tags will be set automatically by the camera s
 
 This runs the preview windows using the full resolution capture mode. Maximum frames per second in this mode is 15fps and the preview will have the same field of view as the capture. Captures should happen more quickly as no mode change should be required. This feature is currently under development.
 
+	--keypress		-k	Keypress mode
+
+The camera is run for the requested time (-t), and a captures can be initiated throughout that by pressing the Enter key.  Press X then Enter will exit the application before the timeout is reached. If the timeout is set to 0, the camera will run indefinitely until X then Enter is typed. Using the verbose option (-v) will display a prompt asking for user input, otherwise no prompt is displayed. 
 
 raspistillyuv
 
@@ -408,7 +414,9 @@ Take a picture and send image data to file
 
 	raspistill -t 2000 -o - > my_file.jpg
 
+Run camera forever, taking a picture when Enter is pressed
 
+	raspistill -t 0 -k -o my_pics%02d.jpg 
 Video Captures
 
 Image size and preview settings are the same as for stills capture. Default size for video recording is 1080p (1920x1080)
