@@ -27,12 +27,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // A rotating cube rendered with OpenGL|ES. Three images used as textures on the cube faces.
 
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <assert.h>
 #include <unistd.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 #include <wayland-egl.h>
 #include <wayland-client.h>
@@ -83,6 +87,12 @@ typedef struct
    struct wl_compositor *wl_compositor;
    struct wl_surface *wl_surface;
    struct wl_callback *wl_callback;
+   struct wl_egl_window *wl_egl_window;
+   int needs_update;
+   int ellapsed_frames;
+   int kill_compositor;
+   int single_frame;
+   int terminate_abruptly;
 } CUBE_STATE_T;
 
 static void init_ogl(CUBE_STATE_T *state);
@@ -94,9 +104,7 @@ static void redraw_scene(CUBE_STATE_T *state);
 static void update_model(CUBE_STATE_T *state);
 static void init_textures(CUBE_STATE_T *state);
 static void load_tex_images(CUBE_STATE_T *state);
-static void exit_func(void);
-static volatile int terminate;
-static CUBE_STATE_T _state, *state=&_state;
+static void exit_func(CUBE_STATE_T *state);
 
 static void
 registry_handle_global(void *data, struct wl_registry *registry,
@@ -138,10 +146,8 @@ static const struct wl_registry_listener registry_listener = {
  ***********************************************************/
 static void init_ogl(CUBE_STATE_T *state)
 {
-   int32_t success = 0;
    EGLBoolean result;
    EGLint num_config;
-   struct wl_egl_window *nativewindow;
 
    static const EGLint attribute_list[] =
    {
@@ -188,9 +194,9 @@ static void init_ogl(CUBE_STATE_T *state)
    wl_shell_surface_set_toplevel(state->wl_shell_surface);
    wl_shell_surface_set_title(state->wl_shell_surface, "triangle.c");
 
-   nativewindow = wl_egl_window_create(state->wl_surface, state->screen_width, state->screen_height);
+   state->wl_egl_window = wl_egl_window_create(state->wl_surface, state->screen_width, state->screen_height);
 
-   state->surface = eglCreateWindowSurface( state->display, config, nativewindow, NULL );
+   state->surface = eglCreateWindowSurface( state->display, config, state->wl_egl_window, NULL );
    assert(state->surface != EGL_NO_SURFACE);
 
    // connect the context to the surface
@@ -345,18 +351,64 @@ static GLfloat inc_and_clip_distance(GLfloat distance, GLfloat distance_inc)
    return distance;
 }
 
-static void redraw_scene(CUBE_STATE_T *state);
+static pid_t get_server_pid(CUBE_STATE_T *state)
+{
+   struct ucred ucred;
+   socklen_t len;
+   int fd;
+
+   fd = wl_display_get_fd(state->wl_display);
+   len = sizeof ucred;
+   getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &ucred, &len);
+
+   return ucred.pid;
+}
 
 static void
 frame(void *data, struct wl_callback *callback, uint32_t time)
 {
-   update_model((CUBE_STATE_T *) data);
-   redraw_scene((CUBE_STATE_T *) data);
+   CUBE_STATE_T *state = (CUBE_STATE_T *) data;
+
+   state->needs_update = 1;
 }
 
 static const struct wl_callback_listener frame_listener = {
 	frame
 };
+
+static void
+update(CUBE_STATE_T *state)
+{
+   if (!state->single_frame || state->ellapsed_frames == 0) {
+      update_model(state);
+      redraw_scene(state);
+   }
+
+   state->wl_callback = wl_surface_frame(state->wl_surface);
+   wl_callback_add_listener(state->wl_callback, &frame_listener, state);
+
+   if (state->ellapsed_frames == 100) {
+      if (state->kill_compositor) {
+         fprintf(stderr, "reached frame 100, killing compositor\n");
+         pid_t pid = get_server_pid(state);
+         kill(pid, SIGTERM);
+      } else if (state->terminate_abruptly) {
+         fprintf(stderr, "reached frame 100, terminating right away\n");
+         exit_func(state);
+         exit(0);
+      }
+   }
+
+   if (!state->single_frame || state->ellapsed_frames == 0)
+      eglSwapBuffers(state->display, state->surface);
+   else {
+      wl_surface_damage(state->wl_surface, 0, 0, state->screen_width,
+                        state->screen_height);
+      wl_surface_commit(state->wl_surface);
+   }
+
+   state->ellapsed_frames++;
+}
 
 /***********************************************************
  * Name: redraw_scene
@@ -405,11 +457,6 @@ static void redraw_scene(CUBE_STATE_T *state)
    glBindTexture(GL_TEXTURE_2D, state->tex[5]);
    glRotatef(90.f, 0.f, 1.f, 0.f ); // bottom face normal along y axis
    glDrawArrays( GL_TRIANGLE_STRIP, 20, 4);
-
-   state->wl_callback = wl_surface_frame(state->wl_surface);
-   wl_callback_add_listener(state->wl_callback, &frame_listener, state);
-
-   eglSwapBuffers(state->display, state->surface);
 }
 
 /***********************************************************
@@ -526,8 +573,7 @@ static void load_tex_images(CUBE_STATE_T *state)
 
 //------------------------------------------------------------------------------
 
-static void exit_func(void)
-// Function to be passed to atexit().
+static void exit_func(CUBE_STATE_T *state)
 {
    // clear screen
    glClear( GL_COLOR_BUFFER_BIT );
@@ -535,6 +581,11 @@ static void exit_func(void)
 
    // Release OpenGL resources
    eglMakeCurrent( state->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT );
+
+   wl_egl_window_destroy(state->wl_egl_window);
+   wl_shell_surface_destroy(state->wl_shell_surface);
+   wl_surface_destroy(state->wl_surface);
+
    eglDestroySurface( state->display, state->surface );
    eglDestroyContext( state->display, state->context );
    eglTerminate( state->display );
@@ -557,34 +608,56 @@ signal_int(int signum)
 
 //==============================================================================
 
-int main ()
+int main (int argc, char *argv[])
 {
    struct sigaction sigint;
+   CUBE_STATE_T state = {0,};
    int ret = 0;
+   int i;
 
-   // Clear application state
-   memset( state, 0, sizeof( *state ) );
-      
+   for (i = 0; i < argc; i++) {
+      if (strcmp(argv[i], "--kill-compositor") == 0)
+         state.kill_compositor = 1;
+      if (strcmp(argv[i], "--single-frame") == 0)
+         state.single_frame = 1;
+      if (strcmp(argv[i], "--terminate-abruptly") == 0)
+         state.terminate_abruptly = 1;
+      else if (strcmp(argv[i], "--help") == 0 ||
+               strcmp(argv[i], "-h") == 0) {
+         printf("Usage: hello_wayland.bin [OPTION]\n\n");
+         printf("\t--kill-compositor\tkill the Wayland compositor after 100 frames\n");
+         printf("\t-h, --help\t\tshow this text\n");
+         printf("\t--single-frame\t\tupdate the display only once\n");
+         printf("\t--terminate-abruptly\texit right after rendering the 100th frame\n");
+         return 0;
+      }
+   }
+
    // Start OGLES
-   init_ogl(state);
+   init_ogl(&state);
 
    // Setup the model world
-   init_model_proj(state);
+   init_model_proj(&state);
 
    // initialise the OGLES texture(s)
-   init_textures(state);
-
-   frame(state, NULL, 0);
+   init_textures(&state);
 
    sigint.sa_handler = signal_int;
    sigemptyset(&sigint.sa_mask);
    sigint.sa_flags = SA_RESETHAND;
    sigaction(SIGINT, &sigint, NULL);
 
-   while (running && ret != -1)
-      ret = wl_display_dispatch(state->wl_display);
+   state.needs_update = 1;
+   while (running && ret != -1) {
+      if (state.needs_update) {
+         update(&state);
+         state.needs_update = 0;
+      }
 
-   exit_func();
+      ret = wl_display_dispatch(state.wl_display);
+   }
+
+   exit_func(&state);
 
    return 0;
 }
