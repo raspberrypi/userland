@@ -57,7 +57,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <errno.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.2"
+#define VERSION_STRING "v1.3.3"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -96,6 +96,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MAX_USER_EXIF_TAGS      32
 #define MAX_EXIF_PAYLOAD_LENGTH 128
 
+/// Frame advance method
+#define FRAME_NEXT_SINGLE        0
+#define FRAME_NEXT_TIMELAPSE     1
+#define FRAME_NEXT_KEYPRESS      2
+#define FRAME_NEXT_FOREVER       3
+#define FRAME_NEXT_GPIO          4
+#define FRAME_NEXT_SIGNAL        5
+#define FRAME_NEXT_IMMEDIATELY   6
+
+
 int mmal_status_to_int(MMAL_STATUS_T status);
 
 /** Structure containing all state information for the current run
@@ -118,6 +128,7 @@ typedef struct
    int numExifTags;                    /// Number of supplied tags
    int timelapse;                      /// Delay between each picture in timelapse mode. If 0, disable timelapse
    int fullResPreview;                 /// If set, the camera preview port runs at capture resolution. Reduces fps.
+   int frameNextMethod;                /// Which method to use to advance to next frame
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -160,6 +171,7 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandTimelapse    12
 #define CommandFullResPreview 13
 #define CommandLink         14
+#define CommandKeypress     15
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -177,7 +189,8 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandEncoding,"-encoding",   "e",  "Encoding to use for output file (jpg, bmp, gif, png)", 1},
    { CommandExifTag, "-exif",       "x",  "EXIF tag to apply to captures (format as 'key=value')", 1},
    { CommandTimelapse,"-timelapse", "tl", "Timelapse mode. Takes a picture every <t>ms", 1},
-   { CommandFullResPreview,"-fullpreview", "fp", "Run the preview using the still capture resolution (may reduce preview fps)", 0},
+   { CommandFullResPreview,"-fullpreview","fp", "Run the preview using the still capture resolution (may reduce preview fps)", 0},
+   { CommandKeypress,"-keypress",   "k",  "Wait between captures for a ENTER, X then ENTER to exit", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -196,6 +209,22 @@ static struct
 
 static int encoding_xref_size = sizeof(encoding_xref) / sizeof(encoding_xref[0]);
 
+
+static struct
+{
+   char *description;
+   int nextFrameMethod;
+} next_frame_description[] =
+{
+      {"Single capture",         FRAME_NEXT_SINGLE},
+      {"Capture on timelapse",   FRAME_NEXT_TIMELAPSE},
+      {"Capture on keypress",    FRAME_NEXT_KEYPRESS},
+      {"Run forever",            FRAME_NEXT_FOREVER},
+      {"Capture on GPIO",        FRAME_NEXT_GPIO},
+      {"Capture on signal",      FRAME_NEXT_SIGNAL},
+};
+
+static int next_frame_description_size = sizeof(next_frame_description) / sizeof(next_frame_description[0]);
 
 /**
  * Assign a default set of parameters to the state passed in
@@ -233,6 +262,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->numExifTags = 0;
    state->timelapse = 0;
    state->fullResPreview = 0;
+   state->frameNextMethod = FRAME_NEXT_SINGLE;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -272,7 +302,15 @@ static void dump_status(RASPISTILL_STATE *state)
    {
       fprintf(stderr, " no\n");
    }
-   fprintf(stderr, "Full resolution preview %s\n\n", state->fullResPreview ? "Yes": "No");
+   fprintf(stderr, "Full resolution preview %s\n", state->fullResPreview ? "Yes": "No");
+
+   fprintf(stderr, "Capture method : ");
+   for (i=0;i<next_frame_description_size;i++)
+   {
+      if (state->frameNextMethod == next_frame_description[i].nextFrameMethod)
+         fprintf(stderr, next_frame_description[i].description);
+   }
+   fprintf(stderr, "\n\n");
 
    if (state->numExifTags)
    {
@@ -410,7 +448,10 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
       {
          if (sscanf(argv[i + 1], "%u", &state->timeout) == 1)
          {
-            // TODO : What limits do we need for timeout?
+            // Ensure that if previously selected CommandKeypress we don't overwrite it
+            if (state->timeout == 0 && state->frameNextMethod != FRAME_NEXT_KEYPRESS)
+               state->frameNextMethod = FRAME_NEXT_FOREVER;
+
             i++;
          }
          else
@@ -477,12 +518,25 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          if (sscanf(argv[i + 1], "%u", &state->timelapse) != 1)
             valid = 0;
          else
+         {
+            if (state->timelapse)
+               state->frameNextMethod = FRAME_NEXT_TIMELAPSE;
+            else
+               state->frameNextMethod = FRAME_NEXT_IMMEDIATELY;
+
+
             i++;
+         }
          break;
 
       case CommandFullResPreview:
          state->fullResPreview = 1;
          break;
+
+      case CommandKeypress: // Set keypress between capture mode
+         state->frameNextMethod = FRAME_NEXT_KEYPRESS;
+         break;
+
 
       default:
       {
@@ -1148,6 +1202,144 @@ static void signal_handler(int signal_number)
 }
 
 /**
+ * Function to wait in various ways (depending on settings) for the next frame
+ *
+ * @param state Pointer to the state data
+ * @param [in][out] frame The last frame number, adjusted to next frame number on output
+ * @return !0 if to continue, 0 if reached end of run
+ */
+static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
+{
+   static int64_t complete_time = -1;
+   int keep_running = 1;
+
+   int64_t current_time =  vcos_getmicrosecs64()/1000;
+
+   if (complete_time == -1)
+      complete_time =  current_time + state->timeout;
+
+   // if we have run out of time, flag we need to exit
+   // If timeout = 0 then always continue
+   if (current_time >= complete_time && state->timeout != 0)
+      keep_running = 0;
+
+   switch (state->frameNextMethod)
+   {
+   case FRAME_NEXT_SINGLE :
+      // simple timeout for a single capture
+      vcos_sleep(state->timeout);
+      return 0;
+
+   case FRAME_NEXT_FOREVER :
+   {
+      *frame+=1;
+
+      // Have a sleep so we don't hog the CPU.
+      vcos_sleep(10000);
+
+      // Run forever so never indicate end of loop
+      return 1;
+   }
+
+   case FRAME_NEXT_TIMELAPSE :
+   {
+      static int64_t next_frame_ms = -1;
+
+      // Always need to increment by at least one, may add a skip later
+      *frame += 1;
+
+      if (next_frame_ms == -1)
+      {
+         vcos_sleep(state->timelapse);
+
+         // Update our current time after the sleep
+         current_time =  vcos_getmicrosecs64()/1000;
+
+         // Set our initial 'next frame time'
+         next_frame_ms = current_time + state->timelapse;
+      }
+      else
+      {
+         int64_t this_delay_ms = next_frame_ms - current_time;
+
+         if (this_delay_ms < 0)
+         {
+            // We are already past the next exposure time
+            if (-this_delay_ms < -state->timelapse/2)
+            {
+               // Less than a half frame late, take a frame and hope to catch up next time
+               next_frame_ms += state->timelapse;
+               vcos_log_error("Frame %d is %d ms late", *frame, (int)(-this_delay_ms));
+            }
+            else
+            {
+               int nskip = 1 + (-this_delay_ms)/state->timelapse;
+               vcos_log_error("Skipping frame %d to restart at frame %d", *frame, *frame+nskip);
+               *frame += nskip;
+               this_delay_ms += nskip * state->timelapse;
+               vcos_sleep(this_delay_ms);
+               next_frame_ms += (nskip + 1) * state->timelapse;
+            }
+         }
+         else
+         {
+            vcos_sleep(this_delay_ms);
+            next_frame_ms += state->timelapse;
+         }
+      }
+
+      return keep_running;
+   }
+
+   case FRAME_NEXT_KEYPRESS :
+   {
+    	int ch;
+
+    	if (state->verbose)
+         fprintf(stderr, "Press Enter to capture, X then ENTER to exit\n");
+
+    	ch = getchar();
+    	*frame+=1;
+    	if (ch == 'x' || ch == 'X')
+    	   return 0;
+    	else
+    	{
+ 	      return keep_running;
+    	}
+   }
+
+   case FRAME_NEXT_IMMEDIATELY :
+   {
+      // No wait, just go to next frame.
+      // Actually, we do need a slight delay here otherwise exposure goes
+      // badly wrong since we never allow it frames to work it out
+      // This could probably be tuned down.
+      vcos_sleep(30);
+      *frame+=1;
+
+      return keep_running;
+   }
+
+   case FRAME_NEXT_GPIO :
+   {
+       // Intended for GPIO firing of a capture
+      return 0;
+   }
+
+   case FRAME_NEXT_SIGNAL :
+   {
+       // Intended for communications of some sort via a signal.
+      return 0;
+   }
+   } // end of switch
+
+   // Should have returned by now, but default to timeout
+   return keep_running;
+}
+
+
+
+/**
  * main
  */
 int main(int argc, const char **argv)
@@ -1281,44 +1473,16 @@ int main(int argc, const char **argv)
          }
          else
          {
-            int num_iterations =  state.timelapse ? state.timeout / state.timelapse : 1;
-            int frame;
+            int frame, keep_looping = 1;
             FILE *output_file = NULL;
             char *use_filename = NULL;      // Temporary filename while image being written
-            char *final_filename = NULL;    // Name that gets file once complete
-            int64_t next_frame_ms = vcos_getmicrosecs64()/1000;
+            char *final_filename = NULL;    // Name that file gets once writing complete
 
-            // If in timelapse mode, and timeout set to zero (or less), then take frames forever
-            for (frame = 1; (num_iterations <= 0) || (frame<=num_iterations); frame++)
+            frame = 0;
+
+            while (keep_looping)
             {
-               if (state.timelapse)
-               {
-                  int64_t this_delay_ms = next_frame_ms - vcos_getmicrosecs64()/1000;
-                  if (this_delay_ms < 0)
-                  {   // We are already past the next exposure time
-                     if (-this_delay_ms < -state.timelapse/2)
-                     { // Less than a half frame late, take a frame and hope to catch up next time
-                        next_frame_ms += state.timelapse;
-                        vcos_log_error("Frame %d is %d ms late", frame, (int)(-this_delay_ms));
-                      }
-                      else
-                      {
-                         int nskip = 1 + (-this_delay_ms)/state.timelapse;
-                         vcos_log_error("Skipping frame %d to restart at frame %d", frame, frame+nskip);
-                         frame += nskip;
-                         this_delay_ms += nskip * state.timelapse;
-                         vcos_sleep(this_delay_ms);
-                         next_frame_ms += (nskip + 1) * state.timelapse;
-                      }
-                  }
-                  else
-                  {
-                     vcos_sleep(this_delay_ms);
-                     next_frame_ms += state.timelapse;
-                  }
-               }
-               else
-                  vcos_sleep(state.timeout);
+            	keep_looping = wait_for_next_frame(&state, &frame);
 
                // Open the file
                if (state.filename)
@@ -1351,8 +1515,6 @@ int main(int argc, const char **argv)
                         // Notify user, carry on but discarding encoded output buffers
                         vcos_log_error("%s: Error opening output file: %s\nNo output file will be generated\n", __func__, use_filename);
                      }
-
-                     // asprintf used in timelapse mode allocates its own memory which we need to free
                   }
 
                   callback_data.file_handle = output_file;
@@ -1511,4 +1673,5 @@ error:
 
    return exit_code;
 }
+
 
