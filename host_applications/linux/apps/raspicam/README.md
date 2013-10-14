@@ -292,6 +292,12 @@ This runs the preview windows using the full resolution capture mode. Maximum fr
 
 The camera is run for the requested time (-t), and a captures can be initiated throughout that by pressing the Enter key.  Press X then Enter will exit the application before the timeout is reached. If the timeout is set to 0, the camera will run indefinitely until X then Enter is typed. Using the verbose option (-v) will display a prompt asking for user input, otherwise no prompt is displayed. 
 
+	--signal			-s	Signal mode
+
+The camera is run for the requested time (-t), and a captures can be initiated throughout that time by sending a USR1 signal to the camera process. This can be done using the kill command. You can find the camera process ID using the 'ps ax' command.
+
+		kill -USR1 <process id of raspistill>
+
 raspistillyuv
 
 
