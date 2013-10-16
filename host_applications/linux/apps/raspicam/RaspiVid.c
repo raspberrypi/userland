@@ -56,7 +56,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <memory.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.2"
+#define VERSION_STRING "v1.3.3"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -97,11 +97,36 @@ const int MAX_BITRATE = 30000000; // 30Mbits/s
 const int ABORT_INTERVAL = 100; // ms
 
 
+/// Capture/Pause switch method
+/// Simply capture for time specified
+#define WAIT_METHOD_NONE           0
+/// Cycle between capture and pause for times specified
+#define WAIT_METHOD_TIMED          1
+/// Switch between capture and pause on keypress
+#define WAIT_METHOD_KEYPRESS       2
+/// Switch between capture and pause on signal
+#define WAIT_METHOD_SIGNAL         3
+
+
+
 int mmal_status_to_int(MMAL_STATUS_T status);
+static void signal_handler(int signal_number);
+
+// Forward
+typedef struct RASPIVID_STATE_S RASPIVID_STATE;
+
+/** Struct used to pass information in encoder port userdata to callback
+ */
+typedef struct
+{
+   FILE *file_handle;                   /// File handle to write buffer data to.
+   RASPIVID_STATE *pstate;              /// pointer to our state in case required in callback
+   int abort;                           /// Set to 1 in callback if an error occurs to attempt to abort the capture
+} PORT_USERDATA;
 
 /** Structure containing all state information for the current run
  */
-typedef struct
+struct RASPIVID_STATE_S
 {
    int timeout;                        /// Time taken before frame is grabbed and app then shuts down. Units are milliseconds
    int width;                          /// Requested width of image
@@ -116,6 +141,11 @@ typedef struct
    int immutableInput;                 /// Flag to specify whether encoder works in place or creates a new buffer. Result is preview can display either
                                        /// the camera output or the encoder output (with compression artifacts)
    int profile;                        /// H264 profile to use for encoding
+   int waitMethod;                     /// Method for switching between pause and capture
+
+   int onTime;                         /// In timed cycle mode, the amount of time the capture is on per cycle
+   int offTime;                        /// In timed cycle mode, the amount of time the capture is off per cycle
+
    RASPIPREVIEW_PARAMETERS preview_parameters;   /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
 
@@ -125,16 +155,13 @@ typedef struct
    MMAL_CONNECTION_T *encoder_connection; /// Pointer to the connection from camera to encoder
 
    MMAL_POOL_T *encoder_pool; /// Pointer to the pool of buffers used by encoder output port
-} RASPIVID_STATE;
 
-/** Struct used to pass information in encoder port userdata to callback
- */
-typedef struct
-{
-   FILE *file_handle;                   /// File handle to write buffer data to.
-   RASPIVID_STATE *pstate;              /// pointer to our state in case required in callback
-   int abort;                           /// Set to 1 in callback if an error occurs to attempt to abort the capture
-} PORT_USERDATA;
+   PORT_USERDATA callback_data;        /// Used to move data to the encoder callback
+
+   int bCapturing;                     /// State of capture/pause
+
+};
+
 
 /// Structure to cross reference H264 profile strings against the MMAL parameter equivalent
 static XREF_T  profile_map[] =
@@ -146,6 +173,14 @@ static XREF_T  profile_map[] =
 };
 
 static int profile_map_size = sizeof(profile_map) / sizeof(profile_map[0]);
+
+static XREF_T  initial_map[] =
+{
+   {"record",     0},
+   {"pause",      1},
+};
+
+static int initial_map_size = sizeof(initial_map) / sizeof(initial_map[0]);
 
 
 static void display_valid_parameters(char *app_name);
@@ -163,6 +198,10 @@ static void display_valid_parameters(char *app_name);
 #define CommandPreviewEnc   9
 #define CommandIntraPeriod  10
 #define CommandProfile      11
+#define CommandTimed        12
+#define CommandSignal       13
+#define CommandKeypress     14
+#define CommandInitialState 15
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -178,9 +217,30 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandPreviewEnc,"-penc",     "e",  "Display preview image *after* encoding (shows compression artifacts)", 0},
    { CommandIntraPeriod,"-intra",   "g",  "Specify the intra refresh period (key frame rate/GoP size)", 1},
    { CommandProfile,  "-profile",   "pf", "Specify H264 profile to use for encoding", 1},
+   { CommandTimed,    "-timed",     "td", "Cycle between capture and pause. -cycle on,off where on is record time and off is pause time in ms", 0},
+   { CommandSignal,   "-signal",    "s",  "Cycle between capture and pause on Signal", 0},
+   { CommandKeypress, "-keypress",  "k",  "Cycle between capture and pause on ENTER", 0},
+   { CommandInitialState,"-initial","i",  "Initial state. Use 'record' or 'pause'. Default 'record'", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
+
+
+static struct
+{
+   char *description;
+   int nextWaitMethod;
+} wait_method_description[] =
+{
+      {"Simple capture",         WAIT_METHOD_NONE},
+      {"Cycle on time",          WAIT_METHOD_TIMED},
+      {"Cycle on keypress",      WAIT_METHOD_KEYPRESS},
+      {"Cycle on signal",        WAIT_METHOD_SIGNAL},
+};
+
+static int wait_method_description_size = sizeof(wait_method_description) / sizeof(wait_method_description[0]);
+
+
 
 /**
  * Assign a default set of parameters to the state passed in
@@ -209,6 +269,11 @@ static void default_status(RASPIVID_STATE *state)
    state->demoInterval = 250; // ms
    state->immutableInput = 1;
    state->profile = MMAL_VIDEO_PROFILE_H264_HIGH;
+   state->waitMethod = WAIT_METHOD_NONE;
+   state->onTime = 5000;
+   state->offTime = 5000;
+
+   state->bCapturing = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -217,6 +282,7 @@ static void default_status(RASPIVID_STATE *state)
    raspicamcontrol_set_defaults(&state->camera_parameters);
 }
 
+
 /**
  * Dump image state parameters to printf. Used for debugging
  *
@@ -224,6 +290,8 @@ static void default_status(RASPIVID_STATE *state)
  */
 static void dump_status(RASPIVID_STATE *state)
 {
+   int i;
+
    if (!state)
    {
       vcos_assert(0);
@@ -233,6 +301,14 @@ static void dump_status(RASPIVID_STATE *state)
    fprintf(stderr, "Width %d, Height %d, filename %s\n", state->width, state->height, state->filename);
    fprintf(stderr, "bitrate %d, framerate %d, time delay %d\n", state->bitrate, state->framerate, state->timeout);
    fprintf(stderr, "H264 Profile %s\n", raspicli_unmap_xref(state->profile, profile_map, profile_map_size));
+   fprintf(stderr, "Wait method : ");
+   for (i=0;i<wait_method_description_size;i++)
+   {
+      if (state->waitMethod == wait_method_description[i].nextWaitMethod)
+         fprintf(stderr, wait_method_description[i].description);
+   }
+   fprintf(stderr, "\nInitial state '%s'\n", raspicli_unmap_xref(state->bCapturing, initial_map, initial_map_size));
+   fprintf(stderr, "\n\n");
 
    raspipreview_dump_parameters(&state->preview_parameters);
    raspicamcontrol_dump_parameters(&state->camera_parameters);
@@ -404,6 +480,50 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          i++;
          break;
       }
+
+      case CommandTimed:
+      {
+         if (sscanf(argv[i + 1], "%u,%u", &state->onTime, &state->offTime) == 2)
+         {
+            i++;
+
+            if (state->onTime < 1000)
+               state->onTime = 1000;
+
+            if (state->offTime < 1000)
+               state->offTime = 1000;
+
+            state->waitMethod = WAIT_METHOD_TIMED;
+         }
+         else
+            valid = 0;
+         break;
+      }
+
+      case CommandKeypress:
+
+         printf("Keypress\n");
+
+         state->waitMethod = WAIT_METHOD_KEYPRESS;
+         break;
+
+      case CommandSignal:
+         state->waitMethod = WAIT_METHOD_SIGNAL;
+         // Reenable the signal
+         signal(SIGUSR1, signal_handler);
+         break;
+
+      case CommandInitialState:
+      {
+         state->bCapturing = raspicli_map_xref(argv[i + 1], initial_map, initial_map_size);
+
+         if( state->bCapturing == -1)
+            state->bCapturing = 0;
+
+         i++;
+         break;
+      }
+
 
       default:
       {
@@ -858,6 +978,15 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
       // Continue rather than abort..
    }
 
+#if 0
+   //set INLINE HEADER flag to generate SPS and PPS for every IDR
+   status = mmal_port_parameter_set_boolean(encoder_output, MMAL_PARAMETER_VIDEO_ENCODE_INLINE_HEADER, MMAL_TRUE);
+   if(status != MMAL_SUCCESS)
+   {
+      vcos_log_error("failed to set INLINE HEADER FLAG parameters");
+   }
+#endif
+
    //  Enable component
    status = mmal_component_enable(encoder);
 
@@ -956,12 +1085,128 @@ static void check_disable_port(MMAL_PORT_T *port)
  */
 static void signal_handler(int signal_number)
 {
-   // Going to abort on all signals
-   vcos_log_error("Aborting program\n");
+   if (signal_number == SIGUSR1)
+   {
+      // Handle but ignore - prevents us dropping out if started in none-signal mode
+      // and someone sends us the USR1 signal anyway
+   }
+   else
+   {
+      // Going to abort on all other signals
+      vcos_log_error("Aborting program\n");
+      exit(130);
+   }
 
-   // TODO : Need to close any open stuff...how?
+}
 
-   exit(255);
+/**
+ * Pause for specified time, but return early if detect an abort request
+ *
+ * @param state Pointer to state control struct
+ * @param pause Time in ms to pause
+ * @param callback Struct contain an abort flag tested for early termination
+ *
+ */
+static int pause_and_test_abort(RASPIVID_STATE *state, int pause)
+{
+   int wait;
+
+   if (!pause)
+      return 0;
+
+   // Going to check every ABORT_INTERVAL milliseconds
+   for (wait = 0; wait < pause; wait+= ABORT_INTERVAL)
+   {
+      vcos_sleep(ABORT_INTERVAL);
+      if (state->callback_data.abort)
+         return 1;
+   }
+
+   return 0;
+}
+
+
+
+static int wait_for_next_change(RASPIVID_STATE *state)
+{
+   int keep_running = 1;
+   static int64_t complete_time = -1;
+
+   // Have we actually exceeded our timeout?
+   int64_t current_time =  vcos_getmicrosecs64()/1000;
+
+   if (complete_time == -1)
+      complete_time =  current_time + state->timeout;
+
+   // if we have run out of time, flag we need to exit
+   if (current_time >= complete_time && state->timeout != 0)
+      keep_running = 0;
+
+   switch (state->waitMethod)
+   {
+   case WAIT_METHOD_NONE:
+      (void)pause_and_test_abort(state, state->timeout);
+      return 0;
+
+   case WAIT_METHOD_TIMED:
+   {
+      int abort;
+
+      if (state->bCapturing)
+         abort = pause_and_test_abort(state, state->onTime);
+      else
+         abort = pause_and_test_abort(state, state->offTime);
+
+      if (abort)
+         return 0;
+      else
+         return keep_running;
+   }
+
+   case WAIT_METHOD_KEYPRESS:
+   {
+      char ch;
+
+      if (state->verbose)
+         fprintf(stderr, "Press Enter to %s, X then ENTER to exit\n", state->bCapturing ? "pause" : "capture");
+
+      ch = getchar();
+      if (ch == 'x' || ch == 'X')
+         return 0;
+      else
+         return keep_running;
+   }
+
+   case WAIT_METHOD_SIGNAL:
+   {
+      // Need to wait for a SIGUSR1 signal
+      sigset_t waitset;
+      int sig;
+      int result = 0;
+
+      sigemptyset( &waitset );
+      sigaddset( &waitset, SIGUSR1 );
+
+      // We are multi threaded because we use mmal, so need to use the pthread
+      // variant of procmask to block SIGUSR1 so we can wait on it.
+      pthread_sigmask( SIG_BLOCK, &waitset, NULL );
+
+      if (state->verbose)
+      {
+         fprintf(stderr, "Waiting for SIGUSR1 to %s\n", state->bCapturing ? "pause" : "capture");
+      }
+
+      result = sigwait( &waitset, &sig );
+
+      if (state->verbose && result != 0)
+         fprintf(stderr, "Bad signal received - error %d\n", errno);
+
+      return keep_running;
+   }
+
+   } // switch
+
+   return keep_running;
 }
 
 /**
@@ -988,6 +1233,9 @@ int main(int argc, const char **argv)
    vcos_log_register("RaspiVid", VCOS_LOG_CATEGORY);
 
    signal(SIGINT, signal_handler);
+
+   // Disable USR1 for the moment - may be reenabled if go in to signal capture mode
+   signal(SIGUSR1, SIG_IGN);
 
    default_status(&state);
 
@@ -1036,8 +1284,6 @@ int main(int argc, const char **argv)
    }
    else
    {
-      PORT_USERDATA callback_data;
-
       if (state.verbose)
          fprintf(stderr, "Starting component connection stage\n");
 
@@ -1103,11 +1349,11 @@ int main(int argc, const char **argv)
          }
 
          // Set up our userdata - this is passed though to the callback where we need the information.
-         callback_data.file_handle = output_file;
-         callback_data.pstate = &state;
-         callback_data.abort = 0;
+         state.callback_data.file_handle = output_file;
+         state.callback_data.pstate = &state;
+         state.callback_data.abort = 0;
 
-         encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&callback_data;
+         encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&state.callback_data;
 
          if (state.verbose)
             fprintf(stderr, "Enabling encoder output port\n");
@@ -1141,15 +1387,7 @@ int main(int argc, const char **argv)
             // Only encode stuff if we have a filename and it opened
             if (output_file)
             {
-               int wait;
-
-               if (state.verbose)
-                  fprintf(stderr, "Starting video capture\n");
-
-               if (mmal_port_parameter_set_boolean(camera_video_port, MMAL_PARAMETER_CAPTURE, 1) != MMAL_SUCCESS)
-               {
-                  goto error;
-               }
+               int running = 1;
 
                // Send all the buffers to the encoder output port
                {
@@ -1164,19 +1402,26 @@ int main(int argc, const char **argv)
 
                      if (mmal_port_send_buffer(encoder_output_port, buffer)!= MMAL_SUCCESS)
                         vcos_log_error("Unable to send a buffer to encoder output port (%d)", q);
-
                   }
                }
 
-               // Now wait until we need to stop. Whilst waiting we do need to check to see if we have aborted (for example
-               // out of storage space)
-               // Going to check every ABORT_INTERVAL milliseconds
-
-               for (wait = 0; state.timeout == 0 || wait < state.timeout; wait+= ABORT_INTERVAL)
+               while (running)
                {
-                  vcos_sleep(ABORT_INTERVAL);
-                  if (callback_data.abort)
-                     break;
+                  // Change state
+
+                  state.bCapturing = !state.bCapturing;
+
+                  if (mmal_port_parameter_set_boolean(camera_video_port, MMAL_PARAMETER_CAPTURE, state.bCapturing) != MMAL_SUCCESS)
+                  {
+                     // How to handle?
+                  }
+
+                  if (state.bCapturing)
+                     fprintf(stderr, "Starting video capture\n");
+                  else
+                     fprintf(stderr, "Pausing video capture\n");
+
+                  running = wait_for_next_change(&state);
                }
 
                if (state.verbose)
@@ -1187,7 +1432,11 @@ int main(int argc, const char **argv)
                if (state.timeout)
                   vcos_sleep(state.timeout);
                else
-                  for (;;) vcos_sleep(ABORT_INTERVAL);
+               {
+                  // timeout = 0 so run forever
+                  while(1)
+                     vcos_sleep(ABORT_INTERVAL);
+               }
             }
          }
       }
