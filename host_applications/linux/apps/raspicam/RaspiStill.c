@@ -57,7 +57,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <errno.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.3"
+#define VERSION_STRING "v1.3.4"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -107,6 +107,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 int mmal_status_to_int(MMAL_STATUS_T status);
+static void signal_handler(int signal_number);
+
 
 /** Structure containing all state information for the current run
  */
@@ -172,6 +174,7 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandFullResPreview 13
 #define CommandLink         14
 #define CommandKeypress     15
+#define CommandSignal       16
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -191,6 +194,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandTimelapse,"-timelapse", "tl", "Timelapse mode. Takes a picture every <t>ms", 1},
    { CommandFullResPreview,"-fullpreview","fp", "Run the preview using the still capture resolution (may reduce preview fps)", 0},
    { CommandKeypress,"-keypress",   "k",  "Wait between captures for a ENTER, X then ENTER to exit", 0},
+   { CommandSignal,  "-signal",     "s",  "Wait between captures for a SIGUSR1 from another process", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -537,6 +541,11 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          state->frameNextMethod = FRAME_NEXT_KEYPRESS;
          break;
 
+      case CommandSignal:   // Set SIGUSR1 between capture mode
+         state->frameNextMethod = FRAME_NEXT_SIGNAL;
+         // Reenable the signal
+         signal(SIGUSR1, signal_handler);
+         break;
 
       default:
       {
@@ -1193,13 +1202,19 @@ static void check_disable_port(MMAL_PORT_T *port)
  */
 static void signal_handler(int signal_number)
 {
-   // Going to abort on all signals
-   vcos_log_error("Aborting program\n");
-
-   // Need to close any open stuff...
-
-   exit(130);
+   if (signal_number == SIGUSR1)
+   {
+      // Handle but ignore - prevents us dropping out if started in none-signal mode
+      // and someone sends us the USR1 signal anyway
+   }
+   else
+   {
+      // Going to abort on all other signals
+      vcos_log_error("Aborting program\n");
+      exit(130);
+   }
 }
+
 
 /**
  * Function to wait in various ways (depending on settings) for the next frame
@@ -1310,11 +1325,16 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
 
    case FRAME_NEXT_IMMEDIATELY :
    {
-      // No wait, just go to next frame.
+      // Not waiting, just go to next frame.
       // Actually, we do need a slight delay here otherwise exposure goes
       // badly wrong since we never allow it frames to work it out
       // This could probably be tuned down.
-      vcos_sleep(30);
+      // First frame has a much longer delay to ensure we get exposure to a steady state
+      if (*frame == 0)
+         vcos_sleep(1000);
+      else
+         vcos_sleep(30);
+
       *frame+=1;
 
       return keep_running;
@@ -1328,8 +1348,40 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
 
    case FRAME_NEXT_SIGNAL :
    {
-       // Intended for communications of some sort via a signal.
-      return 0;
+      // Need to wait for a SIGUSR1 signal
+      sigset_t waitset;
+      int sig;
+      int result = 0;
+
+      sigemptyset( &waitset );
+      sigaddset( &waitset, SIGUSR1 );
+
+      // We are multi threaded because we use mmal, so need to use the pthread
+      // variant of procmask to block SIGUSR1 so we can wait on it.
+      pthread_sigmask( SIG_BLOCK, &waitset, NULL );
+
+      if (state->verbose)
+      {
+         fprintf(stderr, "Waiting for SIGUSR1 to initiate capture\n");
+      }
+
+      result = sigwait( &waitset, &sig );
+
+      if (state->verbose)
+      {
+         if( result == 0)
+         {
+            fprintf(stderr, "Received SIGUSR1\n");
+         }
+         else
+         {
+            fprintf(stderr, "Bad signal received - error %d\n", errno);
+         }
+      }
+
+      *frame+=1;
+
+      return keep_running;
    }
    } // end of switch
 
@@ -1362,6 +1414,9 @@ int main(int argc, const char **argv)
    vcos_log_register("RaspiStill", VCOS_LOG_CATEGORY);
 
    signal(SIGINT, signal_handler);
+
+   // Disable USR1 for the moment - may be reenabled if go in to signal capture mode
+   signal(SIGUSR1, SIG_IGN);
 
    default_status(&state);
 
