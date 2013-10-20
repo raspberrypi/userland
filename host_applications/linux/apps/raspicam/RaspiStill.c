@@ -128,6 +128,7 @@ typedef struct
    MMAL_FOURCC_T encoding;             /// Encoding to use for the output file.
    const char *exifTags[MAX_USER_EXIF_TAGS]; /// Array of pointers to tags supplied from the command line
    int numExifTags;                    /// Number of supplied tags
+   int enableExifTags;                 /// Enable/Disable EXIF tags in output
    int timelapse;                      /// Delay between each picture in timelapse mode. If 0, disable timelapse
    int fullResPreview;                 /// If set, the camera preview port runs at capture resolution. Reduces fps.
    int frameNextMethod;                /// Which method to use to advance to next frame
@@ -187,10 +188,10 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandLink,    "-latest",     "l",  "Link latest complete image to filename <filename>", 1},
    { CommandVerbose, "-verbose",    "v",  "Output verbose information during run", 0 },
    { CommandTimeout, "-timeout",    "t",  "Time (in ms) before takes picture and shuts down (if not specified, set to 5s)", 1 },
-   { CommandThumbnail,"-thumb",     "th", "Set thumbnail parameters (x:y:quality)", 1},
+   { CommandThumbnail,"-thumb",     "th", "Set thumbnail parameters (x:y:quality) or none", 1},
    { CommandDemoMode,"-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 0},
    { CommandEncoding,"-encoding",   "e",  "Encoding to use for output file (jpg, bmp, gif, png)", 1},
-   { CommandExifTag, "-exif",       "x",  "EXIF tag to apply to captures (format as 'key=value')", 1},
+   { CommandExifTag, "-exif",       "x",  "EXIF tag to apply to captures (format as 'key=value') or none", 1},
    { CommandTimelapse,"-timelapse", "tl", "Timelapse mode. Takes a picture every <t>ms", 1},
    { CommandFullResPreview,"-fullpreview","fp", "Run the preview using the still capture resolution (may reduce preview fps)", 0},
    { CommandKeypress,"-keypress",   "k",  "Wait between captures for a ENTER, X then ENTER to exit", 0},
@@ -264,6 +265,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->encoder_pool = NULL;
    state->encoding = MMAL_ENCODING_JPEG;
    state->numExifTags = 0;
+   state->enableExifTags = 1;
    state->timelapse = 0;
    state->fullResPreview = 0;
    state->frameNextMethod = FRAME_NEXT_SINGLE;
@@ -463,8 +465,17 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          break;
       }
       case CommandThumbnail : // thumbnail parameters - needs string "x:y:quality"
-         sscanf(argv[i + 1], "%d:%d:%d", &state->thumbnailConfig.width,&state->thumbnailConfig.height,
-                  &state->thumbnailConfig.quality);
+         if ( strcmp( argv[ i + 1 ], "none" ) == 0 )
+         {
+            state->thumbnailConfig.enable = 0;
+         }
+         else
+         {
+            sscanf(argv[i + 1], "%d:%d:%d",
+                   &state->thumbnailConfig.width,
+                   &state->thumbnailConfig.height,
+                   &state->thumbnailConfig.quality);
+         }
          i++;
          break;
 
@@ -514,7 +525,14 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
       }
 
       case CommandExifTag:
-         store_exif_tag(state, argv[i+1]);
+         if ( strcmp( argv[ i + 1 ], "none" ) == 0 )
+         {
+            state->enableExifTags = 0;
+         }
+         else
+         {
+            store_exif_tag(state, argv[i+1]);
+         }
          i++;
          break;
 
@@ -959,7 +977,8 @@ static MMAL_STATUS_T create_encoder_component(RASPISTILL_STATE *state)
    {
       MMAL_PARAMETER_THUMBNAIL_CONFIG_T param_thumb = {{MMAL_PARAMETER_THUMBNAIL_CONFIGURATION, sizeof(MMAL_PARAMETER_THUMBNAIL_CONFIG_T)}, 0, 0, 0, 0};
 
-      if ( state->thumbnailConfig.width > 0 && state->thumbnailConfig.height > 0 )
+      if ( state->thumbnailConfig.enable &&
+           state->thumbnailConfig.width > 0 && state->thumbnailConfig.height > 0 )
       {
          // Have a valid thumbnail defined
          param_thumb.enable = 1;
@@ -1582,7 +1601,15 @@ int main(int argc, const char **argv)
 
                   // Must do this before the encoder output port is enabled since
                   // once enabled no further exif data is accepted
-                  add_exif_tags(&state);
+                  if ( state.enableExifTags )
+                  {
+                     add_exif_tags(&state);
+                  }
+                  else
+                  {
+                     mmal_port_parameter_set_boolean(
+                        state.encoder_component->output[0], MMAL_PARAMETER_EXIF_DISABLE, 1);
+                  }
 
                   // Same with raw, apparently need to set it for each capture, whilst port
                   // is not enabled
