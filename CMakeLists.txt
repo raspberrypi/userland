@@ -10,4 +10,6 @@ include_directories(/opt/vc/userland/interface/vcos/pthreads)
 include_directories(/opt/vc/userland/interface/vmcs_host/linux)
 add_executable(firepicam RaspiCamControl.c RaspiCLI.c RaspiPreview.c FirePiCam.c)
 target_link_libraries(firepicam /opt/vc/lib/libmmal_core.so /opt/vc/lib/libmmal_util.so /opt/vc/lib/libmmal_vc_client.so /opt/vc/lib/libvcos.so /opt/vc/lib/libbcm_host.so ${OpenCV_LIBS})
+add_executable(fpc RaspiCamControl.c RaspiCLI.c RaspiPreview.c fpc.cpp)
+target_link_libraries(fpc /opt/vc/lib/libmmal_core.so /opt/vc/lib/libmmal_util.so /opt/vc/lib/libmmal_vc_client.so /opt/vc/lib/libvcos.so /opt/vc/lib/libbcm_host.so ${OpenCV_LIBS})
 

@@ -79,6 +79,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <cv.h>
 #include <highgui.h>
+#include <opencv2/video/background_segm.hpp>
 #include <semaphore.h>
 
 /// Camera number to use - we only have one camera, indexed from 0.
@@ -413,8 +414,11 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
            // malloc_stats();
          }
 
-	 // BackgroundSubtractorMOG2
          CvMat* cameraImage = cvCreateMatHeader(1, buffer->length, CV_8UC1);
+	 //Mat fgMask = cameraImage.clone();
+	 //pData->mog2.operator()(cameraImage, fgMask);
+	 //cvReleaseMat(fgMask);
+
          cvSetData(cameraImage, buffer->data, buffer->length);
          if (pData->images[pData->imageIndex]) {
            cvReleaseMat(&pData->images[pData->imageIndex]);

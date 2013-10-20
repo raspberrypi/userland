@@ -10,6 +10,9 @@
 *.class
 *.swp
 firepicam
+firefuse
+fpc
+uv4l
 
 # Compiled Dynamic libraries
 a.out

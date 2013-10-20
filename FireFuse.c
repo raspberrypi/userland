@@ -30,10 +30,14 @@ static int firefuse_getattr(const char *path, struct stat *stbuf)
 	if (strcmp(path, "/") == 0) {
 		stbuf->st_mode = S_IFDIR | 0755;
 		stbuf->st_nlink = 2;
-	} else if (strcmp(path, firefuse_path) == 0) {
+	} else if (strcmp(path, status_path) == 0) {
 		stbuf->st_mode = S_IFREG | 0444;
 		stbuf->st_nlink = 1;
-		stbuf->st_size = strlen(firefuse_str);
+		stbuf->st_size = strlen(status_str);
+	} else if (strcmp(path, pnpcam_path) == 0) {
+		stbuf->st_mode = S_IFREG | 0444;
+		stbuf->st_nlink = 1;
+		stbuf->st_size = strlen(pnpcam_str);
 	} else
 		res = -ENOENT;
 
@@ -63,7 +67,7 @@ static int firefuse_open(const char *path, struct fuse_file_info *fi)
 		if ((fi->flags & 3) != O_RDONLY) {
 			return -EACCES;
 		}
-	} else if (strcmp(path, pnpcamp_path) == 0) {
+	} else if (strcmp(path, pnpcam_path) == 0) {
 		if ((fi->flags & 3) != O_RDONLY) {
 			return -EACCES;
 		}
@@ -74,7 +78,7 @@ static int firefuse_open(const char *path, struct fuse_file_info *fi)
 	return 0;
 }
 
-static int firefuse_close(const char *path, struct fuse_file_info *fi)
+static int firefuse_release(const char *path, struct fuse_file_info *fi)
 {
 	return 0;
 }
@@ -113,7 +117,7 @@ static struct fuse_operations firefuse_oper = {
 	.getattr	= firefuse_getattr,
 	.readdir	= firefuse_readdir,
 	.open		= firefuse_open,
-	.close		= firefuse_close,
+	.release	= firefuse_release,
 	.read		= firefuse_read,
 };
 
