@@ -130,6 +130,7 @@ static const int metering_mode_map_size = sizeof(metering_mode_map)/sizeof(meter
 #define CommandHFlip       13
 #define CommandVFlip       14
 #define CommandROI         15
+#define CommandShutterSpeed 16
 
 static COMMAND_LIST  cmdline_commands[] =
 {
@@ -148,7 +149,8 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandRotation,    "-rotation",  "rot","Set image rotation (0-359)", 1},
    {CommandHFlip,       "-hflip",     "hf", "Set horizontal flip", 0},
    {CommandVFlip,       "-vflip",     "vf", "Set vertical flip", 0},
-   {CommandROI,         "-roi",       "roi","Set region of interest (x,y,w,d as normalised coordinates [0.0-1.0])", 1}
+   {CommandROI,         "-roi",       "roi","Set region of interest (x,y,w,d as normalised coordinates [0.0-1.0])", 1},
+   {CommandShutterSpeed,"-shutter",   "ss", "Set shutter speed in microseconds", 1}
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -572,6 +574,12 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
       break;
    }
 
+   case CommandShutterSpeed : // Shutter speed needs single number parameter
+      sscanf(arg2, "%d", &params->shutter_speed);
+      used = 2;
+      break;
+
+
    }
 
    return used;
@@ -703,6 +711,7 @@ void raspicamcontrol_set_defaults(RASPICAM_CAMERA_PARAMETERS *params)
    params->hflip = params->vflip = 0;
    params->roi.x = params->roi.y = 0.0;
    params->roi.w = params->roi.h = 1.0;
+   params->shutter_speed = 0;          // 0 = auto
 }
 
 /**
@@ -762,6 +771,7 @@ int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_
    result += raspicamcontrol_set_rotation(camera, params->rotation);
    result += raspicamcontrol_set_flips(camera, params->hflip, params->vflip);
    result += raspicamcontrol_set_ROI(camera, params->roi);
+   result += raspicamcontrol_set_shutter_speed(camera, params->shutter_speed);
 
    return result;
 }
@@ -1123,6 +1133,21 @@ int raspicamcontrol_set_ROI(MMAL_COMPONENT_T *camera, PARAM_FLOAT_RECT_T rect)
 
    return mmal_port_parameter_set(camera->control, &crop.hdr);
 }
+
+/**
+ * Adjust the exposure time used for images
+ * @param camera Pointer to camera component
+ * @param shutter speed in microseconds
+ * @return 0 if successful, non-zero if any parameters out of range
+ */
+int raspicamcontrol_set_shutter_speed(MMAL_COMPONENT_T *camera, int speed)
+{
+   if (!camera)
+      return 1;
+
+   return mmal_status_to_int(mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_SHUTTER_SPEED, speed));
+}
+
 
 
 /**
