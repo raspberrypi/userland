@@ -61,7 +61,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/stat.h>
 #include <sys/file.h>
 
-#define VERSION_STRING "v1.2"
+#define VERSION_STRING "v1.3.4"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
