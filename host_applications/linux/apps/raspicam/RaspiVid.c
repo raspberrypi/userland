@@ -1218,12 +1218,7 @@ static int wait_for_next_change(RASPIVID_STATE *state)
  */
 int main(int argc, const char **argv)
 {
-   char *home_dir = getenv("HOME");
-   char *lock_file_path = malloc(strlen(home_dir) + strlen("/.raspicam"));
-   strcpy(lock_file_path, home_dir);
-   strcat(lock_file_path, "/.raspicam");
-
-   int lock_file = creat(lock_file_path, S_IRUSR | S_IWUSR);
+   int lock_file = creat("/run/lock/raspicam", S_IRUSR | S_IWUSR);
    if(lock_file == -1)
    {
       printf("Open/create lock file failed!\n");
