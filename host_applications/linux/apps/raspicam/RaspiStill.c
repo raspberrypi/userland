@@ -1419,19 +1419,6 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
  */
 int main(int argc, const char **argv)
 {
-   int lock_file = creat("/run/lock/raspicam", S_IRUSR | S_IWUSR);
-   if(lock_file == -1)
-   {
-      printf("Open/create lock file failed!\n");
-      exit(255);
-   }
-   int lock_state = flock(lock_file, LOCK_EX | LOCK_NB);
-   if(lock_state == -1)
-   {
-      printf("Only one instance of RaspiCam may run at once.\n");
-      exit(255);
-   }
-
    // Our main data storage vessel..
    RASPISTILL_STATE state;
    int exit_code = EX_OK;
@@ -1469,6 +1456,19 @@ int main(int argc, const char **argv)
    if (parse_cmdline(argc, argv, &state))
    {
       exit(EX_USAGE);
+   }
+
+   int lock_file = creat("/run/lock/raspicam", S_IRUSR | S_IWUSR);
+   if(lock_file == -1)
+   {
+      printf("Failed to open or create lock file!\n");
+      exit(255);
+   }
+   int lock_state = flock(lock_file, LOCK_EX | LOCK_NB);
+   if(lock_state == -1)
+   {
+      printf("Only one instance of RaspiCam may run at once.\nIf this is the only instance try deleting /run/lock/raspicam and try again.\n");
+      exit(255);
    }
 
    if (state.verbose)
