@@ -57,7 +57,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <errno.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.4"
+#define VERSION_STRING "v1.3.5"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -318,18 +318,23 @@ static void dump_status(RASPISTILL_STATE *state)
    }
    fprintf(stderr, "\n\n");
 
-   if (state->numExifTags)
+   if (state->enableExifTags)
    {
-      fprintf(stderr, "User supplied EXIF tags :\n");
+	   if (state->numExifTags)
+	   {
+		  fprintf(stderr, "User supplied EXIF tags :\n");
 
-      for (i=0;i<state->numExifTags;i++)
-      {
-         fprintf(stderr, "%s", state->exifTags[i]);
-         if (i != state->numExifTags-1)
-            fprintf(stderr, ",");
-      }
-      fprintf(stderr, "\n\n");
+		  for (i=0;i<state->numExifTags;i++)
+		  {
+			 fprintf(stderr, "%s", state->exifTags[i]);
+			 if (i != state->numExifTags-1)
+				fprintf(stderr, ",");
+		  }
+		  fprintf(stderr, "\n\n");
+	   }
    }
+   else
+      fprintf(stderr, "EXIF tags disabled\n");
 
    raspipreview_dump_parameters(&state->preview_parameters);
    raspicamcontrol_dump_parameters(&state->camera_parameters);
@@ -1620,6 +1625,11 @@ int main(int argc, const char **argv)
                         vcos_log_error("RAW was requested, but failed to enable");
                      }
                   }
+
+                  // There is a possibility that shutter needs to be set each loop.
+                  if (mmal_status_to_int(mmal_port_parameter_set_uint32(state.camera_component->control, MMAL_PARAMETER_SHUTTER_SPEED, state.camera_parameters.shutter_speed) != MMAL_SUCCESS))
+                     vcos_log_error("Unable to set shutter speed");
+
 
                   // Enable the encoder output port
                   encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&callback_data;

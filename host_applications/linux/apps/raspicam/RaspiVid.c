@@ -56,7 +56,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <memory.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.3"
+#define VERSION_STRING "v1.3.4"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -91,7 +91,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define VIDEO_OUTPUT_BUFFERS_NUM 3
 
 // Max bitrate we allow for recording
-const int MAX_BITRATE = 30000000; // 30Mbits/s
+const int MAX_BITRATE = 25000000; // 25Mbits/s
 
 /// Interval at which we check for an failure abort during capture
 const int ABORT_INTERVAL = 100; // ms
@@ -106,6 +106,8 @@ const int ABORT_INTERVAL = 100; // ms
 #define WAIT_METHOD_KEYPRESS       2
 /// Switch between capture and pause on signal
 #define WAIT_METHOD_SIGNAL         3
+/// Run/record forever
+#define WAIT_METHOD_FOREVER        4
 
 
 
@@ -233,6 +235,7 @@ static struct
 } wait_method_description[] =
 {
       {"Simple capture",         WAIT_METHOD_NONE},
+      {"Capture forever",        WAIT_METHOD_FOREVER},
       {"Cycle on time",          WAIT_METHOD_TIMED},
       {"Cycle on keypress",      WAIT_METHOD_KEYPRESS},
       {"Cycle on signal",        WAIT_METHOD_SIGNAL},
@@ -284,7 +287,7 @@ static void default_status(RASPIVID_STATE *state)
 
 
 /**
- * Dump image state parameters to printf. Used for debugging
+ * Dump image state parameters to stderr.
  *
  * @param state Pointer to state structure to assign defaults to
  */
@@ -411,7 +414,10 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
       {
          if (sscanf(argv[i + 1], "%u", &state->timeout) == 1)
          {
-            // TODO : What limits do we need for timeout?
+            // Ensure that if previously selected a waitMethod we dont overwrite it
+            if (state->timeout == 0 && state->waitMethod == WAIT_METHOD_NONE)
+               state->waitMethod = WAIT_METHOD_FOREVER;
+
             i++;
          }
          else
@@ -501,9 +507,6 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
       }
 
       case CommandKeypress:
-
-         printf("Keypress\n");
-
          state->waitMethod = WAIT_METHOD_KEYPRESS;
          break;
 
@@ -1126,7 +1129,13 @@ static int pause_and_test_abort(RASPIVID_STATE *state, int pause)
 }
 
 
-
+/**
+ * Function to wait in various ways (depending on settings)
+ *
+ * @param state Pointer to the state data
+ *
+ * @return !0 if to continue, 0 if reached end of run
+ */
 static int wait_for_next_change(RASPIVID_STATE *state)
 {
    int keep_running = 1;
@@ -1147,6 +1156,16 @@ static int wait_for_next_change(RASPIVID_STATE *state)
    case WAIT_METHOD_NONE:
       (void)pause_and_test_abort(state, state->timeout);
       return 0;
+
+   case WAIT_METHOD_FOREVER:
+   {
+      // We never return from this. Expect a ctrl-c to exit.
+      while (1)
+         // Have a sleep so we don't hog the CPU.
+         vcos_sleep(10000);
+
+      return 0;
+   }
 
    case WAIT_METHOD_TIMED:
    {
@@ -1416,10 +1435,13 @@ int main(int argc, const char **argv)
                      // How to handle?
                   }
 
-                  if (state.bCapturing)
-                     fprintf(stderr, "Starting video capture\n");
-                  else
-                     fprintf(stderr, "Pausing video capture\n");
+                  if (state.verbose)
+                  {
+                     if (state.bCapturing)
+                        fprintf(stderr, "Starting video capture\n");
+                     else
+                        fprintf(stderr, "Pausing video capture\n");
+                  }
 
                   running = wait_for_next_change(&state);
                }
