@@ -83,6 +83,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #undef eglReleaseGlobalImageBRCM
 #undef eglInitGlobalImageBRCM
 #undef eglTermGlobalImageBRCM
+#undef eglBindWaylandDisplayWL
+#undef eglUnbindWaylandDisplayWL
+#undef eglQueryWaylandBufferWL
 
 /* OpenGL ES 1.1 and 2.0 functions */
 

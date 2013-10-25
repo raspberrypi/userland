@@ -46,6 +46,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/khronos/egl/egl_int_impl.h"
 #endif
 
+#include "interface/khronos/wayland-egl/wayland-egl-priv.h"
+#include "interface/khronos/common/linux/khrn_wayland.h"
+
 #include <stdlib.h>
 
 
@@ -325,6 +328,8 @@ EGL_SURFACE_T *egl_surface_create(
    EGLint   config_depth_bits;
    EGLint   config_stencil_bits;
    CLIENT_THREAD_STATE_T *thread = CLIENT_GET_THREAD_STATE();
+   struct wl_display *wl_display = khrn_platform_get_wl_display();
+   DISPMANX_RESOURCE_HANDLE_T resource;
 
    EGL_SURFACE_T *surface = egl_surface_pool_alloc();
 
@@ -388,6 +393,17 @@ EGL_SURFACE_T *egl_surface_create(
    egl_config_get_attrib(configid, EGL_STENCIL_SIZE, &config_stencil_bits);
 
    vcos_assert(color != IMAGE_FORMAT_INVALID);
+
+   if (type == WINDOW && wl_display) {
+      surface->wl_egl_window = (struct wl_egl_window*)win;
+      surface->wl_egl_window->egl_surface = surface;
+      surface->wl_egl_window->back_buffer = allocate_wl_buffer(
+            surface->wl_egl_window, color);
+      resource = surface->wl_egl_window->back_buffer->resource;
+   } else {
+      surface->wl_egl_window = NULL;
+      resource = DISPMANX_NO_HANDLE;
+   }
 
 #ifdef KHRONOS_EGL_PLATFORM_OPENWFC
    // Create stream for this window
@@ -473,6 +489,27 @@ EGL_SURFACE_T *egl_surface_create(
 #endif
          uint32_t results[3];
 
+         if (resource != DISPMANX_NO_HANDLE)
+         RPC_CALL16_OUT_CTRL(eglIntCreateSurface_impl,
+                             thread,
+                             EGLINTCREATESURFACE_ID_V2,
+                             RPC_UINT(serverwin),
+                             RPC_UINT(buffers),
+                             RPC_UINT(width),
+                             RPC_UINT(height),
+                             RPC_UINT(color),
+                             RPC_UINT(depth),
+                             RPC_UINT(mask),
+                             RPC_UINT(multi),
+                             RPC_UINT(largest_pbuffer),
+                             RPC_UINT(mipmap_texture),
+                             RPC_UINT(config_depth_bits),
+                             RPC_UINT(config_stencil_bits),
+                             RPC_UINT(sem_name),
+                             RPC_UINT(type),
+                             RPC_INT(resource),
+                             results);
+         else
          RPC_CALL15_OUT_CTRL(eglIntCreateSurface_impl,
                              thread,
                              EGLINTCREATESURFACE_ID,

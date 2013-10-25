@@ -16,6 +16,7 @@ set(VCOS_PTHREADS_BUILD_SHARED TRUE)
 include(makefiles/cmake/global_settings.cmake)
 include(makefiles/cmake/arm-linux.cmake)
 include(makefiles/cmake/vmcs.cmake)
+include(makefiles/cmake/Wayland.cmake)
 
 enable_language(ASM)
 
@@ -116,3 +117,8 @@ include_directories("${PROJECT_BINARY_DIR}")
 
 # Remove cache entry, if one added by command line
 unset(KHRONOS_EGL_PLATFORM CACHE)
+
+# Find Wayland libraries
+find_package(PkgConfig)
+pkg_check_modules(WAYLAND_CLIENT wayland-client REQUIRED)
+pkg_check_modules(WAYLAND_SERVER wayland-server REQUIRED)
