@@ -41,7 +41,7 @@ add_definitions(-D_REENTRANT)
 add_definitions(-DUSE_VCHIQ_ARM -DVCHI_BULK_ALIGN=1 -DVCHI_BULK_GRANULARITY=1)
 add_definitions(-DOMX_SKIP64BIT)
 add_definitions(-DEGL_SERVER_DISPMANX)
-add_definitions(-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE)
+add_definitions(-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64)
 
 # do we actually need this?
 add_definitions(-D__VIDEOCORE4__)
