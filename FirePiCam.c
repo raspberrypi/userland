@@ -77,7 +77,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiPreview.h"
 #include "RaspiCLI.h"
 
-#include <cv.h>
+//#include <cv.h>
 #include <highgui.h>
 //#include <opencv2/video/background_segm.hpp>
 #include <semaphore.h>
@@ -87,6 +87,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define FIREPICAM_BYTES ((long)FIREPICAM_WIDTH * (long)FIREPICAM_HEIGHT * 3 + 1024)
 #define FIREPICAM_IMAGE_COUNT 3
 #define IMAGE_COUNT 10
+
+typedef struct JPG_Buffer {
+  char * pData;
+  int length;
+} JPG_Buffer;
 
 /// Camera number to use - we only have one camera, indexed from 0.
 #define CAMERA_NUMBER 0
@@ -137,10 +142,9 @@ typedef struct
  */
 typedef struct
 {
-   VCOS_SEMAPHORE_T complete_semaphore; /// semaphore which is posted when we reach end of frame (indicates end of capture or fault)
+   VCOS_SEMAPHORE_T complete_semaphore; /// indicates end of frame capture or fault
    RASPISTILL_STATE *pstate;            /// pointer to our state in case required in callback
-   CvMat* images[FIREPICAM_BUFFER_COUNT];
-   MMAL_BUFFER_HEADER_T bfrs[FIREPICAM_BUFFER_COUNT];
+   JPG_Buffer jpgBuffers[FIREPICAM_IMAGE_COUNT];
    int imageIndex;                        
    char verbose; 
 } PORT_USERDATA;
@@ -414,16 +418,13 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
       if (buffer->length) {
          if (pData->verbose) {
            PRINT_ELAPSED;
-           fprintf(stderr, "%x buffer-length: %d\n", buffer, buffer->length);
+           fprintf(stderr, "%x %x buffer-length: %d\n", buffer, buffer->data, buffer->length);
          }
 
-         CvMat* cameraImage = cvCreateMatHeader(1, buffer->length, CV_8UC1);
-
-         cvSetData(cameraImage, buffer->data, buffer->length);
-         if (pData->images[pData->imageIndex]) {
-           cvReleaseMatHeader(&pData->images[pData->imageIndex]);
-         }
-	 pData->images[pData->imageIndex] = cameraImage;
+	 // Note that we are retaining buffer data for use after we free it
+	 // This is evil but works. If it breaks, just allocate/copy/free an auxiliary buffer
+	 pData->jpgBuffers[pData->imageIndex].pData = buffer->data;
+	 pData->jpgBuffers[pData->imageIndex].length = buffer->length;
       }
 
       // Now flag if we have completed
@@ -948,20 +949,33 @@ int mainNew(int argc, const char **argv)
 
   int num_iterations =  1000;
   for (frame = 0; frame<=num_iterations; frame++) {
-    if (_state.verbose) {
-      //malloc_stats(); // verify that memory use is stable
-    }
     if (frame > 0) { // Save file
        int fileIndex = frame % IMAGE_COUNT;
        char filename[100];
-       CvMat * cameraImage = _callback_data.images[_callback_data.imageIndex];
-       CvMat * imageToSave = cvDecodeImageM(cameraImage, CV_LOAD_IMAGE_COLOR); // CV_LOAD_IMAGE_GRAYSCALE);
-       sprintf(filename, "camcv%d.bmp", fileIndex);
-       cvSaveImage(filename, imageToSave, 0);
-       cvReleaseMat(&imageToSave);
-       if (_state.verbose) {
-	  PRINT_ELAPSED;
-	  fprintf(stderr, "Saved %s\n", filename);
+       JPG_Buffer *pJPG = &_callback_data.jpgBuffers[_callback_data.imageIndex];
+       if (pJPG->pData) {
+	 sprintf(filename, "camcv%d.jpg", fileIndex);
+	 FILE * fJPG = fopen(filename, "w");
+	 fwrite(pJPG->pData, 1, pJPG->length, fJPG);
+	 fflush(fJPG);
+	 fclose(fJPG);
+	 if (_state.verbose) {
+	   PRINT_ELAPSED;
+	   fprintf(stderr, "%x %dB => %s\n", pJPG->pData, pJPG->length, filename);
+	   //malloc_stats(); // verify that memory use is stable
+	 }
+
+         //CvMat *cameraImage = cvCreateMatHeader(1, pJPG->length, CV_8UC1);
+         //cvSetData(cameraImage, pJPG->pData, pJPG->length);
+	 //CvMat *imageToSave = cvDecodeImageM(cameraImage, CV_LOAD_IMAGE_COLOR); // CV_LOAD_IMAGE_GRAYSCALE);
+	 //sprintf(filename, "bmp/camcv%d.bmp", fileIndex);
+	 //cvSaveImage(filename, imageToSave, 0);
+	 //if (_state.verbose) {
+	    //PRINT_ELAPSED;
+	    //fprintf(stderr, "Saved %s\n", filename);
+	 //}
+	 //cvReleaseMat(&imageToSave);
+	 //cvReleaseMatHeader(&cameraImage);
        }
     }
 
