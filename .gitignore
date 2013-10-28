@@ -28,6 +28,8 @@ a.out
 CMakeFiles
 CMakeCache.txt
 Makefile
-cmake_install.cmake
+*.cmake
+firepistill
 FirePiCam.h
+install_manifest.txt
 

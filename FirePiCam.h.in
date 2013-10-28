@@ -1,0 +1,43 @@
+/*
+FirePiCam.h https://github.com/firepick1/FirePick/wiki
+
+Copyright (C) 2013  Karl Lew, <karl@firepick.org>
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+#ifndef FIREPICAM_H
+#define FIREPICAM_H
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define FirePiCam_VERSION_MAJOR @FirePiCam_VERSION_MAJOR@
+#define FirePiCam_VERSION_MINOR @FirePiCam_VERSION_MINOR@
+
+typedef struct JPG_Buffer {
+  char * pData;
+  int length;
+} JPG_Buffer;
+
+int firepicam_create(int argc, const char **argv);
+int firepicam_destroy(int status);
+int firepicam_acquireImage(JPG_Buffer *pBuffer);
+void firepicam_print_elapsed();
+
+#ifdef __cplusplus
+}
+#endif
+#endif
