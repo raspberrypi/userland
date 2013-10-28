@@ -47,8 +47,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * We use the RaspiCamControl code to handle the specific camera settings.
  */
 
-#define PRINT_ELAPSED fprintf(stderr, "%"PRId64"ms ", (vcos_getmicrosecs64()- usStart)/1000)
-
 // We use some GNU extensions (basename)
 #define _GNU_SOURCE
 
@@ -72,15 +70,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/mmal/util/mmal_default_components.h"
 #include "interface/mmal/util/mmal_connection.h"
 
-
 #include "RaspiCamControl.h"
 #include "RaspiPreview.h"
 #include "RaspiCLI.h"
 
 //#include <cv.h>
-#include <highgui.h>
+//#include <highgui.h>
 //#include <opencv2/video/background_segm.hpp>
 #include <semaphore.h>
+#include "FirePiCam.h"
 
 #define FIREPICAM_WIDTH 800
 #define FIREPICAM_HEIGHT 200
@@ -88,10 +86,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define FIREPICAM_IMAGE_COUNT 3
 #define IMAGE_COUNT 10
 
-typedef struct JPG_Buffer {
-  char * pData;
-  int length;
-} JPG_Buffer;
 
 /// Camera number to use - we only have one camera, indexed from 0.
 #define CAMERA_NUMBER 0
@@ -110,6 +104,7 @@ typedef struct JPG_Buffer {
 #define VIDEO_OUTPUT_BUFFERS_NUM 2
 
 int64_t usStart;
+int64_t usLast;
 
 int mmal_status_to_int(MMAL_STATUS_T status);
 
@@ -417,7 +412,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
    if (pData) {
       if (buffer->length) {
          if (pData->verbose) {
-           PRINT_ELAPSED;
+           firepicam_print_elapsed();
            fprintf(stderr, "%x %x buffer-length: %d\n", buffer, buffer->data, buffer->length);
          }
 
@@ -803,96 +798,83 @@ static void signal_handler(int signal_number)
 RASPISTILL_STATE _state;
 PORT_USERDATA _callback_data;
 
-
-/**
- * main
- */
-int main(int argc, const char **argv)
+int firepicam_create(int argc, const char **argv)
 {
+  MMAL_STATUS_T status = MMAL_SUCCESS;
+  MMAL_PORT_T *camera_preview_port = NULL;
+  MMAL_PORT_T *camera_video_port = NULL;
+  MMAL_PORT_T *camera_still_port = NULL;
+  MMAL_PORT_T *preview_input_port = NULL;
+  MMAL_PORT_T *encoder_input_port = NULL;
+  MMAL_PORT_T *encoder_output_port = NULL;
+
   usStart = vcos_getmicrosecs64();
+  usLast = usStart;
+  bcm_host_init();
 
-  //return mainOld(argc, argv);
-  return mainNew(argc, argv);
-}
+  // Register our application with the logging system
+  vcos_log_register("FirePiCam", VCOS_LOG_CATEGORY);
 
-int mainNew(int argc, const char **argv)
-{
-   MMAL_STATUS_T status = MMAL_SUCCESS;
-   MMAL_PORT_T *camera_preview_port = NULL;
-   MMAL_PORT_T *camera_video_port = NULL;
-   MMAL_PORT_T *camera_still_port = NULL;
-   MMAL_PORT_T *preview_input_port = NULL;
-   MMAL_PORT_T *encoder_input_port = NULL;
-   MMAL_PORT_T *encoder_output_port = NULL;
+  signal(SIGINT, signal_handler);
 
-   bcm_host_init();
+  default_status(&_state);
 
-   // Register our application with the logging system
-   vcos_log_register("RaspiStill", VCOS_LOG_CATEGORY);
+  // Parse the command line and put options in to our status structure
+  if (parse_cmdline(argc, argv, &_state)) {
+    exit(0);
+  }
 
-   signal(SIGINT, signal_handler);
+  if (_state.verbose) {
+    dump_status(&_state);
+  }
 
-   default_status(&_state);
+  // OK, we have a nice set of parameters. Now set up our components
+  // We have three components. Camera, Preview and encoder.
+  // Camera and encoder are different in stills/video, but preview
+  // is the same so handed off to a separate module
 
-   // Parse the command line and put options in to our status structure
-   if (parse_cmdline(argc, argv, &_state)) {
-      exit(0);
-   }
+  if ((status = create_camera_component(&_state)) != MMAL_SUCCESS) {
+    vcos_log_error("%s: Failed to create camera component", __func__);
+    goto error;
+  } else if ((status = raspipreview_create(&_state.preview_parameters)) != MMAL_SUCCESS) {
+    vcos_log_error("%s: Failed to create preview component", __func__);
+    destroy_camera_component(&_state);
+    goto error;
+  } else if ((status = create_encoder_component(&_state)) != MMAL_SUCCESS) {
+    vcos_log_error("%s: Failed to create encode component", __func__);
+    raspipreview_destroy(&_state.preview_parameters);
+    destroy_camera_component(&_state);
+    goto error;
+  } 
 
-   if (_state.verbose) {
-      PRINT_ELAPSED;
-      fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
+  clock_t msElapsed;
 
-      dump_status(&_state);
-   }
+  if (_state.verbose) {
+     firepicam_print_elapsed();
+     fprintf(stderr, "Starting component connection stage\n");
+  }
 
-   // OK, we have a nice set of parameters. Now set up our components
-   // We have three components. Camera, Preview and encoder.
-   // Camera and encoder are different in stills/video, but preview
-   // is the same so handed off to a separate module
+  camera_preview_port = _state.camera_component->output[MMAL_CAMERA_PREVIEW_PORT];
+  camera_video_port   = _state.camera_component->output[MMAL_CAMERA_VIDEO_PORT];
+  camera_still_port   = _state.camera_component->output[MMAL_CAMERA_CAPTURE_PORT];
+  encoder_input_port  = _state.encoder_component->input[0];
+  encoder_output_port = _state.encoder_component->output[0];
 
-   if ((status = create_camera_component(&_state)) != MMAL_SUCCESS) {
-      vcos_log_error("%s: Failed to create camera component", __func__);
-      goto error;
-   } else if ((status = raspipreview_create(&_state.preview_parameters)) != MMAL_SUCCESS) {
-      vcos_log_error("%s: Failed to create preview component", __func__);
-      destroy_camera_component(&_state);
-      goto error;
-   } else if ((status = create_encoder_component(&_state)) != MMAL_SUCCESS) {
-      vcos_log_error("%s: Failed to create encode component", __func__);
-      raspipreview_destroy(&_state.preview_parameters);
-      destroy_camera_component(&_state);
-      goto error;
-   } 
+  // Note we are lucky that the preview and null sink components use the same input port
+  // so we can simple do this without conditionals
+  preview_input_port  = _state.preview_parameters.preview_component->input[0];
 
-      clock_t msElapsed;
-
-      if (_state.verbose) {
-         PRINT_ELAPSED;
-         fprintf(stderr, "Starting component connection stage\n");
-      }
-
-      camera_preview_port = _state.camera_component->output[MMAL_CAMERA_PREVIEW_PORT];
-      camera_video_port   = _state.camera_component->output[MMAL_CAMERA_VIDEO_PORT];
-      camera_still_port   = _state.camera_component->output[MMAL_CAMERA_CAPTURE_PORT];
-      encoder_input_port  = _state.encoder_component->input[0];
-      encoder_output_port = _state.encoder_component->output[0];
-
-      // Note we are lucky that the preview and null sink components use the same input port
-      // so we can simple do this without conditionals
-      preview_input_port  = _state.preview_parameters.preview_component->input[0];
-
-      // Connect camera to preview (which might be a null_sink if no preview required)
-      status = connect_ports(camera_preview_port, preview_input_port, &_state.preview_connection);
-      if (status != MMAL_SUCCESS) {
-        vcos_log_error("%s: Failed to connect camera to preview", __func__);
-      	goto error;
-      }
+  // Connect camera to preview (which might be a null_sink if no preview required)
+  status = connect_ports(camera_preview_port, preview_input_port, &_state.preview_connection);
+  if (status != MMAL_SUCCESS) {
+    vcos_log_error("%s: Failed to connect camera to preview", __func__);
+    goto error;
+  }
 
   VCOS_STATUS_T vcos_status;
 
   if (_state.verbose) {
-    PRINT_ELAPSED;
+    firepicam_print_elapsed();
     fprintf(stderr, "Connecting camera stills port to encoder input port\n");
   }
 
@@ -924,7 +906,7 @@ int mainNew(int argc, const char **argv)
   encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&_callback_data;
   status = mmal_port_enable(encoder_output_port, encoder_buffer_callback);
   if (_state.verbose) {
-    PRINT_ELAPSED;
+    firepicam_print_elapsed();
     fprintf(stderr, "Enabled encoder output port\n");
   }
 
@@ -942,78 +924,32 @@ int mainNew(int argc, const char **argv)
 	goto error;
      } else if (_state.verbose) {
 	mmal_buffer_header_mem_lock(buffer); // permanently freeze data memory address
-	PRINT_ELAPSED;
+	firepicam_print_elapsed();
 	fprintf(stderr, "sent buffer %x to encoder_output_port\n", buffer);
     }
   }
 
-  int num_iterations =  1000;
-  for (frame = 0; frame<=num_iterations; frame++) {
-    if (frame > 0) { // Save file
-       int fileIndex = frame % IMAGE_COUNT;
-       char filename[100];
-       JPG_Buffer *pJPG = &_callback_data.jpgBuffers[_callback_data.imageIndex];
-       if (pJPG->pData) {
-	 sprintf(filename, "camcv%d.jpg", fileIndex);
-	 FILE * fJPG = fopen(filename, "w");
-	 fwrite(pJPG->pData, 1, pJPG->length, fJPG);
-	 fflush(fJPG);
-	 fclose(fJPG);
-	 if (_state.verbose) {
-	   PRINT_ELAPSED;
-	   fprintf(stderr, "%x %dB => %s\n", pJPG->pData, pJPG->length, filename);
-	   //malloc_stats(); // verify that memory use is stable
-	 }
-
-         //CvMat *cameraImage = cvCreateMatHeader(1, pJPG->length, CV_8UC1);
-         //cvSetData(cameraImage, pJPG->pData, pJPG->length);
-	 //CvMat *imageToSave = cvDecodeImageM(cameraImage, CV_LOAD_IMAGE_COLOR); // CV_LOAD_IMAGE_GRAYSCALE);
-	 //sprintf(filename, "bmp/camcv%d.bmp", fileIndex);
-	 //cvSaveImage(filename, imageToSave, 0);
-	 //if (_state.verbose) {
-	    //PRINT_ELAPSED;
-	    //fprintf(stderr, "Saved %s\n", filename);
-	 //}
-	 //cvReleaseMat(&imageToSave);
-	 //cvReleaseMatHeader(&cameraImage);
-       }
-    }
-
-    if (_state.verbose) {
-       PRINT_ELAPSED;
-       fprintf(stderr, "Starting capture %d\n", frame);
-    }
-    acquireImage();
-    if (_state.verbose) {
-      PRINT_ELAPSED;
-      fprintf(stderr, "Finished capture %d\n", frame);
-    }
-
-
-  } // end for (frame)
-
-  // Disable encoder output port
-  status = mmal_port_disable(encoder_output_port);
-
-  vcos_semaphore_delete(&_callback_data.complete_semaphore);
+  return 0;
 
 error:
-
-  return cleanup(status);
+  return firepicam_destroy(status);
 }
 
-int cleanup(int status) {
+int firepicam_destroy(int status) {
   mmal_status_to_int(status);
-
   if (_state.verbose)  {
-     PRINT_ELAPSED;
+     firepicam_print_elapsed();
      fprintf(stderr, "Closing down\n");
   }
 
   // Disable all our ports that are not handled by connections
   MMAL_PORT_T *camera_video_port   = _state.camera_component->output[MMAL_CAMERA_VIDEO_PORT];
   check_disable_port(camera_video_port);
+
+  // Disable encoder output port
+  vcos_semaphore_delete(&_callback_data.complete_semaphore);
   MMAL_PORT_T *encoder_output_port = _state.encoder_component->output[0];
+  status = mmal_port_disable(encoder_output_port);
   check_disable_port(encoder_output_port);
 
   mmal_connection_destroy(_state.preview_connection);
@@ -1034,7 +970,7 @@ int cleanup(int status) {
   destroy_camera_component(&_state);
 
   if (_state.verbose) {
-     PRINT_ELAPSED;
+     firepicam_print_elapsed();
      fprintf(stderr, "Close down completed, all components disconnected, disabled and destroyed\n\n");
   }
 
@@ -1044,7 +980,12 @@ int cleanup(int status) {
   return 0;
 }
 
-int acquireImage() {
+int firepicam_acquireImage(JPG_Buffer *pBuffer) {
+  if (_state.verbose) {
+    firepicam_print_elapsed();
+    fprintf(stderr, "Starting capture\n");
+  }
+
   MMAL_PORT_T *camera_still_port = _state.camera_component->output[MMAL_CAMERA_CAPTURE_PORT];
   _callback_data.imageIndex = (_callback_data.imageIndex + 1) % FIREPICAM_IMAGE_COUNT;
   if (mmal_port_parameter_set_boolean(camera_still_port, MMAL_PARAMETER_CAPTURE, 1) != MMAL_SUCCESS) {
@@ -1056,5 +997,19 @@ int acquireImage() {
   // For some reason using vcos_semaphore_wait_timeout sometimes returns immediately with bad parameter error
   // even though it appears to be all correct, so reverting to untimed one until figure out why its erratic
   vcos_semaphore_wait(&_callback_data.complete_semaphore);
+  (*pBuffer) = _callback_data.jpgBuffers[_callback_data.imageIndex];
+
+  if (_state.verbose) {
+    firepicam_print_elapsed();
+    fprintf(stderr, "Finished capture\n");
+    malloc_stats(); // verify that memory use is stable
+  }
   return 0;
 }
+
+void firepicam_print_elapsed() {
+  int64_t usNow = vcos_getmicrosecs64();
+  fprintf(stderr, "%"PRId64"+%"PRId64"ms ", (usNow-usStart)/1000, (usNow-usLast)/1000);
+  usLast = usNow;
+}
+
