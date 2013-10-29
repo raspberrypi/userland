@@ -30,7 +30,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef __SYMBIAN32__
 typedef uint32_t DISPMANX_RESOURCE_HANDLE_T;
+#ifdef __cplusplus
 namespace BufManX {
+#endif
 #else
 #include "interface/vmcs_host/vc_dispmanx.h"
 #endif
@@ -130,7 +132,9 @@ enum {
 };
 
 #ifdef __SYMBIAN32__
+#ifdef __cplusplus
 } // namespace BufManX
+#endif
 #endif
 
 #endif /* VC_VCHI_BUFMAN_DEFS_H */

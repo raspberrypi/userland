@@ -42,14 +42,18 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ctype.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#ifdef __SYMBIAN32__
+#include <sys/syslimits.h>
+#else
 #include <sys/statfs.h>
+#endif
 #include <fcntl.h>
 #include <errno.h>
 #include <assert.h>
 #include <ctype.h>
 #include <limits.h>
 
-#if !defined(ANDROID) && !defined( __USE_FILE_OFFSET64 )
+#if !defined(__SYMBIAN32__) && !defined(ANDROID) && !defined( __USE_FILE_OFFSET64 )
 #error   "__USE_FILE_OFFSET64 isn't defined"
 #endif
 
@@ -595,6 +599,9 @@ int64_t vc_hostfs_freespace64(const char *inPath)
 {
    char *path = strdup( inPath );
    int64_t ret;
+#ifdef __SYMBIAN32__
+   ret = 1024 * 1024 * 32; // HACK: 32MB
+#else
    struct statfs fsStat;
 
    // Replace all '\' with '/'
@@ -614,6 +621,7 @@ int64_t vc_hostfs_freespace64(const char *inPath)
    DEBUG_MINOR( "vc_hostfs_freespace64 for '%s' returning %lld", path, ret );
 
    free( path );
+#endif
    return ret;
 }
 
@@ -997,6 +1005,9 @@ int64_t vc_hostfs_totalspace64(const char *inPath)
 {
    char *path = strdup( inPath );
    int64_t ret = -1;
+#ifdef __SYMBIAN32__
+   ret = 1024 * 1024 * 128; // HACK: 128MB
+#else
    struct statfs fsStat;
 
    // Replace all '\' with '/'
@@ -1020,6 +1031,7 @@ int64_t vc_hostfs_totalspace64(const char *inPath)
 
    if (path)
       free( path );
+#endif
    return ret;
 }
 

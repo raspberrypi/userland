@@ -33,7 +33,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifdef __SYMBIAN32__
 #include "interface/vmcs_host/vc_vchi_bufman_defs.h"
 typedef uint32_t DISPMANX_RESOURCE_HANDLE_T;
+#ifdef __cplusplus
 namespace BufManX {
+#endif
 #else
 #include "interface/vmcs_host/vc_dispmanx.h"
 #include "interface/vmcs_host/vc_vchi_bufman_defs.h"
@@ -110,7 +112,9 @@ VCHPRE_ void VCHPOST_ vc_bufmanx_push_multi_stream ( BUFMANX_HANDLE_T *xh, const
 VCHPRE_ VC_IMAGE_TYPE_T VCHPOST_ vc_bufmanx_get_vc_image_type(buf_frame_type_t bm_type);
 
 #ifdef __SYMBIAN32__
+#ifdef __cplusplus
 } // namespace BufManX
+#endif
 #endif
 
 #endif /* VC_VCHI_BUFMAN_H */
