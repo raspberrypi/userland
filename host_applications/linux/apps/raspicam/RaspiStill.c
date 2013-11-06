@@ -591,6 +591,11 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          break;
       }
       }
+      if (!valid)
+      {
+      	// no need to check all arg if one is invalid
+         break;
+      }
    }
 
    if (!valid)
