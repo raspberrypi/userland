@@ -24,61 +24,13 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-#ifndef VC_VCHI_DISPMANX_COMMON_H
-#define VC_VCHI_DISPMANX_COMMON_H
 
-typedef enum  {
-   // IMPORTANT - DO NOT ALTER THE ORDER OF COMMANDS IN THIS ENUMERATION
-   // NEW FUNCTIONS SHOULD BE ADDED TO THE END, AND MUST ALSO BE ADDED TO
-   // THE HOST SIDE FUNCTION TABLE IN display_server.c.
-   
-   // No function configured - do not use
-   EDispmanNoFunction = 0,
-   
-   // Dispman pre-configure functions
-   EDispmanGetDevices,
-   EDispmanGetModes,
-   
-   // Dispman resource-related functions
-   EDispmanResourceCreate,
-   EDispmanResourceCreateFromImage,
-   EDispmanResourceDelete,
-   EDispmanResourceGetData,
-   EDispmanResourceGetImage,
-   
-   // Dispman display-related functions
-   EDispmanDisplayOpen,
-   EDispmanDisplayOpenMode,
-   EDispmanDisplayOpenOffscreen,
-   EDispmanDisplayReconfigure,
-   EDispmanDisplaySetDestination,
-   EDispmanDisplaySetBackground,
-   EDispmanDisplayGetInfo,
-   EDispmanDisplayClose,
-   
-   // Dispman update-related functions
-   EDispmanUpdateStart,
-   EDispmanUpdateSubmit,
-   EDispmanUpdateSubmitSync,
-   
-   // Dispman element-related functions
-   EDispmanElementAdd,
-   EDispmanElementModified,
-   EDispmanElementRemove,
-   EDispmanElementChangeSource,
-   EDispmanElementChangeLayer,
-   EDispmanElementChangeAttributes,
+#ifndef MODELS_T
+#define MODELS_T
+typedef struct opqaue_model_s * MODEL_T;
 
-   //More commands go here...
-   EDispmanResourceFill,    //Comes from uideck
-   EDispmanQueryImageFormats,
-   EDispmanBulkWrite,
-   EDispmanBulkRead,
-   EDispmanDisplayOrientation,
-   EDispmanSnapshot,
-   EDispmanSetPalette,
-
-   EDispmanMaxFunction
-} DISPMANX_COMMAND_T;
-
+MODEL_T load_wavefront(const char *modelname, const char *texturename);
+MODEL_T cube_wavefront(void);
+void unload_wavefront(MODEL_T m);
+int draw_wavefront(MODEL_T m, GLuint texture);
 #endif

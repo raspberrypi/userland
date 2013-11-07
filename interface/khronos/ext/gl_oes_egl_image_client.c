@@ -102,7 +102,6 @@ GL_API void GL_APIENTRY glEGLImageTargetTexture2DOES (GLenum target, GLeglImageO
          }
       } else {
 #endif
-         vcos_log_trace("[%s] target 0x%x image %d", __FUNCTION__, target, (uint32_t)image);
          RPC_CALL2(glEGLImageTargetTexture2DOES_impl,
                    thread,
                    GLEGLIMAGETARGETTEXTURE2DOES_ID,

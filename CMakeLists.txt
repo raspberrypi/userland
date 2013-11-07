@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 2.8)
 project(vmcs_host_apps)
 
 set(BUILD_MMAL TRUE)
+set(BUILD_MMAL_COMPONENTS FALSE)
 if (ALL_APPS)
  set(BUILD_MMAL_APPS TRUE)
 else()
@@ -104,10 +105,6 @@ endif()
 
 # add linux apps
 add_subdirectory(host_applications/linux)
-
-# Debug sym for mmal-vc-diag and vcdbg
-#add_subdirectory(host_applications/linux/libs/debug_sym)
-
 
 set(vmcs_host_apps_VERSION_MAJOR 1)
 set(vmcs_host_apps_VERSION_MINOR 0)

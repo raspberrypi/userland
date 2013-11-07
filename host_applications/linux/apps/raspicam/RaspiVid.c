@@ -56,7 +56,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <memory.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.4"
+#define VERSION_STRING "v1.3.6"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -136,6 +136,8 @@ struct RASPIVID_STATE_S
    int bitrate;                        /// Requested bitrate
    int framerate;                      /// Requested frame rate (fps)
    int intraperiod;                    /// Intra-refresh period (key frame rate)
+   int quantisationParameter;          /// Quantisation parameter - quality. Set bitrate 0 and set this for variable bitrate
+   int bInlineHeaders;                  /// Insert inline headers to stream (SPS, PPS)
    char *filename;                     /// filename of output file
    int verbose;                        /// !0 if want detailed run information
    int demoMode;                       /// Run app in demo mode
@@ -204,6 +206,8 @@ static void display_valid_parameters(char *app_name);
 #define CommandSignal       13
 #define CommandKeypress     14
 #define CommandInitialState 15
+#define CommandQP           16
+#define CommandInlineHeaders 17
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -223,6 +227,8 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandSignal,   "-signal",    "s",  "Cycle between capture and pause on Signal", 0},
    { CommandKeypress, "-keypress",  "k",  "Cycle between capture and pause on ENTER", 0},
    { CommandInitialState,"-initial","i",  "Initial state. Use 'record' or 'pause'. Default 'record'", 1},
+   { CommandQP,       "-qp",        "qp", "Quantisation parameter. Use approximately 10-40. Default 0 (off)", 1},
+   { CommandInlineHeaders,"-inline","ih", "Insert inline headers (SPS, PPS) to stream", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -268,6 +274,7 @@ static void default_status(RASPIVID_STATE *state)
    state->bitrate = 17000000; // This is a decent default bitrate for 1080p
    state->framerate = VIDEO_FRAME_RATE_NUM;
    state->intraperiod = 0;    // Not set
+   state->quantisationParameter = 25;
    state->demoMode = 0;
    state->demoInterval = 250; // ms
    state->immutableInput = 1;
@@ -277,6 +284,7 @@ static void default_status(RASPIVID_STATE *state)
    state->offTime = 5000;
 
    state->bCapturing = 0;
+   state->bInlineHeaders = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -304,6 +312,7 @@ static void dump_status(RASPIVID_STATE *state)
    fprintf(stderr, "Width %d, Height %d, filename %s\n", state->width, state->height, state->filename);
    fprintf(stderr, "bitrate %d, framerate %d, time delay %d\n", state->bitrate, state->framerate, state->timeout);
    fprintf(stderr, "H264 Profile %s\n", raspicli_unmap_xref(state->profile, profile_map, profile_map_size));
+   fprintf(stderr, "H264 Quantisation level %d, Inline headers %s\n", state->quantisationParameter, state->bInlineHeaders ? "Yes" : "No");
    fprintf(stderr, "Wait method : ");
    for (i=0;i<wait_method_description_size;i++)
    {
@@ -476,6 +485,15 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          break;
       }
 
+      case CommandQP: // quantisation parameter
+      {
+         if (sscanf(argv[i + 1], "%u", &state->quantisationParameter) == 1)
+            i++;
+         else
+            valid = 0;
+         break;
+      }
+
       case CommandProfile: // H264 profile
       {
          state->profile = raspicli_map_xref(argv[i + 1], profile_map, profile_map_size);
@@ -484,6 +502,12 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
             state->profile = MMAL_VIDEO_PROFILE_H264_HIGH;
 
          i++;
+         break;
+      }
+
+      case CommandInlineHeaders: // H264 inline headers
+      {
+         state->bInlineHeaders = 1;
          break;
       }
 
@@ -590,6 +614,8 @@ static void display_valid_parameters(char *app_name)
    {
       fprintf(stderr, ",%s", profile_map[i].mode);
    }
+
+   fprintf(stderr, "\n");
 
    // Help for preview options
    raspipreview_display_help();
@@ -955,7 +981,25 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
          vcos_log_error("Unable to set intraperiod");
          goto error;
       }
+   }
 
+   if (state->quantisationParameter)
+   {
+      MMAL_PARAMETER_UINT32_T param = {{ MMAL_PARAMETER_VIDEO_ENCODE_INITIAL_QUANT, sizeof(param)}, state->quantisationParameter};
+      status = mmal_port_parameter_set(encoder_output, &param.hdr);
+      if (status != MMAL_SUCCESS)
+      {
+         vcos_log_error("Unable to set QP");
+         goto error;
+      }
+
+      MMAL_PARAMETER_UINT32_T param2 = {{ MMAL_PARAMETER_VIDEO_ENCODE_QP_P, sizeof(param)}, state->quantisationParameter+6};
+      status = mmal_port_parameter_set(encoder_output, &param2.hdr);
+      if (status != MMAL_SUCCESS)
+      {
+         vcos_log_error("Unable to set QP");
+         goto error;
+      }
    }
 
    {
@@ -974,21 +1018,18 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
       }
    }
 
-
    if (mmal_port_parameter_set_boolean(encoder_input, MMAL_PARAMETER_VIDEO_IMMUTABLE_INPUT, state->immutableInput) != MMAL_SUCCESS)
    {
       vcos_log_error("Unable to set immutable input flag");
       // Continue rather than abort..
    }
 
-#if 0
-   //set INLINE HEADER flag to generate SPS and PPS for every IDR
-   status = mmal_port_parameter_set_boolean(encoder_output, MMAL_PARAMETER_VIDEO_ENCODE_INLINE_HEADER, MMAL_TRUE);
-   if(status != MMAL_SUCCESS)
+   //set INLINE HEADER flag to generate SPS and PPS for every IDR if requested
+   if (mmal_port_parameter_set_boolean(encoder_output, MMAL_PARAMETER_VIDEO_ENCODE_INLINE_HEADER, state->bInlineHeaders) != MMAL_SUCCESS)
    {
       vcos_log_error("failed to set INLINE HEADER FLAG parameters");
+      // Continue rather than abort..
    }
-#endif
 
    //  Enable component
    status = mmal_component_enable(encoder);
@@ -1018,6 +1059,8 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
    error:
    if (encoder)
       mmal_component_destroy(encoder);
+
+   state->encoder_component = NULL;
 
    return status;
 }
@@ -1323,6 +1366,9 @@ int main(int argc, const char **argv)
 
          // Connect camera to preview
          status = connect_ports(camera_preview_port, preview_input_port, &state.preview_connection);
+
+         if (status != MMAL_SUCCESS)
+            state.preview_connection = NULL;
       }
       else
       {
@@ -1339,6 +1385,7 @@ int main(int argc, const char **argv)
 
          if (status != MMAL_SUCCESS)
          {
+            state.encoder_connection = NULL;
             vcos_log_error("%s: Failed to connect camera video port to encoder input", __func__);
             goto error;
          }
@@ -1479,9 +1526,11 @@ error:
       check_disable_port(camera_still_port);
       check_disable_port(encoder_output_port);
 
-      if (state.preview_parameters.wantPreview )
+      if (state.preview_parameters.wantPreview && state.preview_connection)
          mmal_connection_destroy(state.preview_connection);
-      mmal_connection_destroy(state.encoder_connection);
+
+      if (state.encoder_connection)
+         mmal_connection_destroy(state.encoder_connection);
 
       // Can now close our file. Note disabling ports may flush buffers which causes
       // problems if we have already closed the file!
@@ -1511,4 +1560,3 @@ error:
 
    return exit_code;
 }
-
