@@ -76,6 +76,7 @@ typedef enum  {
    EDispmanBulkRead,
    EDispmanDisplayOrientation,
    EDispmanSnapshot,
+   EDispmanSetPalette,
 
    EDispmanMaxFunction
 } DISPMANX_COMMAND_T;

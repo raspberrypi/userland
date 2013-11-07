@@ -984,6 +984,45 @@ VCHPRE_ int VCHPOST_ vc_dispmanx_snapshot( DISPMANX_DISPLAY_HANDLE_T display,
    return success;
 }
 
+/***********************************************************
+ * Name: vc_dispmanx_resource_set_palette
+ *
+ * Arguments:
+ *       DISPMANX_RESOURCE_HANDLE_T res
+ *       void * src_address
+ *       int offset
+ *       int size
+ *
+ * Description: Set the resource palette (for VC_IMAGE_4BPP and VC_IMAGE_8BPP)
+ *              offset should be 0
+ *              size is 16*2 for 4BPP and 256*2 for 8BPP
+ * Returns: 0 or failure
+ *
+ ***********************************************************/
+VCHPRE_ int VCHPOST_ vc_dispmanx_resource_set_palette( DISPMANX_RESOURCE_HANDLE_T handle, 
+                                                      void * src_address, int offset, int size) {
+   //Note that x coordinate of the rect is NOT used
+   //Address of data in host
+   uint8_t *host_start = src_address;
+   int32_t bulk_len = size, success = 0;
+
+   //Now send the bulk transfer across
+   //command parameters: resource size
+   uint32_t param[] = {VC_HTOV32(handle), VC_HTOV32(offset), VC_HTOV32(bulk_len) };
+   success = dispmanx_send_command(  EDispmanSetPalette | DISPMANX_NO_REPLY_MASK, param, sizeof(param));
+   if(success == 0)
+   {
+      lock_obtain();
+      success = vchi_bulk_queue_transmit( dispmanx_client.client_handle[0],
+                                          host_start,
+                                          bulk_len,
+                                          VCHI_FLAGS_BLOCK_UNTIL_DATA_READ,
+                                          NULL );
+      lock_release();
+   }
+   return (int) success;
+}
+
 /*********************************************************************************
  *
  *  Static functions definitions
