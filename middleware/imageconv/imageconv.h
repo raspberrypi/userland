@@ -69,8 +69,7 @@ typedef struct IMAGE_CONVERT_CLASS_T IMAGE_CONVERT_CLASS_T;
  * The initial reference count is 1.
  * @param data     Image data. Not all fields are used by all convert classes. 'data' must be
  *                 filled in for all classes.
- * @param handle   On success, this points to the newly created image handle. The actual type
- *                 depends on the convert class, but is probably a MEM_HANDLE_T in most cases.
+ * @param handle   On success, this points to the newly created image handle.
  * @return 0 on success; -1 on failure.
  */
 typedef int (*IMAGECONV_CREATE)(const IMAGE_CONVERT_CLASS_T *converter,
@@ -103,7 +102,9 @@ typedef int (*IMAGECONV_GET_CONVERTED_SIZE)(
  *
  * May be NULL if the converter does not support or require this.
  */
-typedef void (*IMAGECONV_UNGET_IMAGE)(const IMAGE_CONVERT_CLASS_T *converter, MEM_HANDLE_T handle);
+typedef void (*IMAGECONV_UNGET_IMAGE)(const IMAGE_CONVERT_CLASS_T *converter,
+                                      MEM_HANDLE_T src,
+                                      IMAGECONV_DRIVER_IMAGE_T *image);
 
 /*
  * Add a reference count to an image, preventing it from being returned to its
@@ -111,8 +112,8 @@ typedef void (*IMAGECONV_UNGET_IMAGE)(const IMAGE_CONVERT_CLASS_T *converter, ME
  *
  * May be NULL if the converter does not support or require this.
  */
-typedef void (*IMAGECONV_ACQUIRE_IMAGE)(const IMAGE_CONVERT_CLASS_T *converter,
-                                        IMAGECONV_DRIVER_IMAGE_T *image);
+typedef int (*IMAGECONV_ACQUIRE_IMAGE)(const IMAGE_CONVERT_CLASS_T *converter,
+                                       IMAGECONV_DRIVER_IMAGE_T *image);
 
 /*
  * Remove a reference count to an image, releasing it back to its
@@ -155,6 +156,42 @@ typedef void (*IMAGECONV_SET_SRC_DESC)(const IMAGE_CONVERT_CLASS_T *converter, M
  */
 typedef const char *(*IMAGECONV_GET_SRC_DESC)(const IMAGE_CONVERT_CLASS_T *converter, MEM_HANDLE_T src);
 
+/* Callback made in response to IMAGECONV_NOTIFY
+ *
+ * A status of 0 indicates that a reference to the image can now be acquired
+ * via imageconv_acquire(_image).
+ *
+ * Any other value indicates that the request timed out.
+ */
+typedef void (*IMAGECONV_NOTIFY_CALLBACK)(const IMAGE_CONVERT_CLASS_T *converter,
+                                          IMAGECONV_DRIVER_IMAGE_T *image,
+                                          void *context,
+                                          int status);
+
+/* Request notification when a reference to the image can be acquired.
+ *
+ * May be NULL if the converter does not support or require this.
+ */
+typedef int (*IMAGECONV_NOTIFY)(const IMAGE_CONVERT_CLASS_T *converter,
+                                IMAGECONV_DRIVER_IMAGE_T *image,
+                                uint32_t timeout,
+                                IMAGECONV_NOTIFY_CALLBACK callback,
+                                void *context);
+
+/* Cancel an outstanding IMAGECONV_NOTIFY request.
+*/
+typedef void (*IMAGECONV_CANCEL_NOTIFY)(const IMAGE_CONVERT_CLASS_T *converter,
+                                        IMAGECONV_DRIVER_IMAGE_T *image);
+
+typedef enum IMAGECONV_ID_T {
+    IMAGECONV_ID_MMAL,        /**< MMAL opaque buffer to Khronos */
+    IMAGECONV_ID_KHRONOS,     /**< YV12 to Khronos */
+    IMAGECONV_ID_EGL_VC,      /**< EGL image to VC_IMAGE_T */
+    IMAGECONV_ID_GENERIC,
+    IMAGECONV_ID_KHRONOS_VC,  /**< Khronos to VC_IMAGE_T */
+    IMAGECONV_ID_MAX
+} IMAGECONV_ID_T;
+
 /* Do not call these directly! */
 struct IMAGE_CONVERT_CLASS_T {
     IMAGECONV_CREATE                create;
@@ -169,15 +206,18 @@ struct IMAGE_CONVERT_CLASS_T {
     IMAGECONV_CONVERT               convert;
     IMAGECONV_SET_SRC_DESC          set_src_desc;
     IMAGECONV_GET_SRC_DESC          get_src_desc;
+    IMAGECONV_NOTIFY                notify;
+    IMAGECONV_CANCEL_NOTIFY         cancel_notify;
+    IMAGECONV_ID_T                  id;
 };
 
-typedef enum IMAGECONV_ID_T {
-    IMAGECONV_ID_MMAL,        /**< MMAL opaque buffer to Khronos */
-    IMAGECONV_ID_KHRONOS,     /**< YV12 to Khronos */
-    IMAGECONV_ID_EGL_VC,      /**< EGL image to VC_IMAGE_T */
-    IMAGECONV_ID_GENERIC,
-    IMAGECONV_ID_MAX
-} IMAGECONV_ID_T;
+typedef enum IMAGECONV_ERR_T {
+    IMAGECONV_ERR_NONE = 0,
+    IMAGECONV_ERR_GENERAL = -1,
+    IMAGECONV_ERR_NOT_SUPPORTED = -2,
+    IMAGECONV_ERR_NOT_READY = -3,
+    IMAGECONV_ERR_ALREADY = -4,
+} IMAGECONV_ERR_T;
 
 /** Initialise the library
  */
@@ -189,7 +229,8 @@ void imageconv_init(void);
  * @param converter_id           type of image to support
  * @param converter              function pointers for this image type
  *
- * @return 0 on success or -1 if image type unknown.
+ * @return IMAGECONV_ERR_NONE on success
+ * @return IMAGECONV_ERR_NOT_SUPPORTED if image type unknown.
  */
 int imageconv_get_convert_class(
         IMAGECONV_ID_T converter_id,
@@ -200,21 +241,24 @@ int imageconv_get_convert_class(
  *
  * @param converter_class        type of image to support
  * @param converter              function pointers for this image type
- *
- * @return 0 on success or -1 if image type unknown.
  */
-int imageconv_set_convert_class(IMAGECONV_ID_T converter_id,
+void imageconv_set_convert_class(IMAGECONV_ID_T converter_id,
       const IMAGE_CONVERT_CLASS_T *converter);
 
 /**
  * Create an image.
+ *
  * The initial reference count is 1.
+ *
  * @param converter  Convert class.
  * @param data       Image data. Not all fields are used by all convert classes. 'data' must be
  *                   filled in for all classes.
  * @param handle     On success, this points to the newly created image handle. The actual type
  *                   depends on the convert class, but is probably a MEM_HANDLE_T in most cases.
- * @return 0 on success; -1 on failure.
+ *
+ * @return IMAGECONV_ERR_NOT_SUPPORTED if not implemented by the converter class
+ * @return IMAGECONV_ERR_NONE on success
+ * @return IMAGECONV_ERR_GENERAL on failure
  */
 int imageconv_create(const IMAGE_CONVERT_CLASS_T *converter, const IMAGECONV_IMAGE_DATA_T *data,
                      MEM_HANDLE_T *handle);
@@ -228,13 +272,19 @@ int imageconv_create(const IMAGE_CONVERT_CLASS_T *converter, const IMAGECONV_IMA
  * @param pitch  pitch of image in bytes
  * @param type   type of image
  *
- * @return 0 on success or -1 if image handle is invalid.
+ * @return IMAGECONV_ERR_NOT_SUPPORTED if not implemented by the converter class
+ * @return IMAGECONV_ERR_NONE on success
+ * @return IMAGECONV_ERR_GENERAL if image handle is invalid.
  */
 int imageconv_get_size(const IMAGE_CONVERT_CLASS_T *converter, MEM_HANDLE_T self,
      uint32_t *width, uint32_t *height, uint32_t *pitch, VC_IMAGE_TYPE_T *type);
 
 /** Converts the image writing the result to the memory specified at 
  * dst, dst_offset.
+ *
+ * @return IMAGECONV_ERR_NOT_SUPPORTED if not implemented by the converter class
+ * @return IMAGECONV_ERR_NONE on success
+ * @return IMAGECONV_ERR_GENERAL on failure
  */
 int imageconv_convert(const IMAGE_CONVERT_CLASS_T *converter,
                       MEM_HANDLE_T dest, uint32_t dest_offset,
@@ -249,7 +299,8 @@ int imageconv_convert(const IMAGE_CONVERT_CLASS_T *converter,
  * @param src          MEM_HANDLE_T to image structure
  * @param image        Return image pointer.
  *
- * @return 0 on success or -1 if image handle is invalid.
+ * @return IMAGECONV_ERR_NONE on success
+ * @return IMAGECONV_ERR_GENERAL if image handle is invalid.
  */
 int imageconv_get(const IMAGE_CONVERT_CLASS_T *converter,
                   MEM_HANDLE_T src,
@@ -266,17 +317,22 @@ int imageconv_get(const IMAGE_CONVERT_CLASS_T *converter,
  *                     the image storage is not modified; all other fields
  *                     will be filled in.
  *
- * @return 0 on success, otherwise an error value is returned.
+ * @return IMAGECONV_ERR_NOT_SUPPORTED if not implemented by the converter class
+ * @return IMAGECONV_ERR_NONE on success
+ * @return IMAGECONV_ERR_GENERAL if image handle is invalid.
  */
 int imageconv_get_converted_size(const IMAGE_CONVERT_CLASS_T *converter,
       MEM_HANDLE_T src, VC_IMAGE_TYPE_T type, IMAGECONV_IMAGE_DATA_T *dest_info); 
 
 /** Release an image that was previously taken with imageconv_get().
+ *
  * @param converter    converter functions for this image
  * @param src          MEM_HANDLE_T to image structure
+ * @param image        image obtained from imageconv_get
  */
 void imageconv_unget(const IMAGE_CONVERT_CLASS_T *converter,
-                     MEM_HANDLE_T src);
+                     MEM_HANDLE_T src,
+                     IMAGECONV_DRIVER_IMAGE_T *image);
 
 /** Acquire a lock on an image to prevent it being recycled into its
  * image pool.
@@ -284,7 +340,10 @@ void imageconv_unget(const IMAGE_CONVERT_CLASS_T *converter,
  * @param converter    converter functions for this image
  * @param src          MEM_HANDLE_T to image structure
  *
- * @return 0 on success or -1 if image handle is invalid.
+ * @return IMAGECONV_ERR_NOT_SUPPORTED if not implemented by the converter class
+ * @return IMAGECONV_ERR_NONE on success
+ * @return IMAGECONV_ERR_GENERAL if image handle is invalid
+ * @return IMAGECONV_ERR_NOT_READY if reference cannot be currently acquired
  */
 int imageconv_acquire(const IMAGE_CONVERT_CLASS_T *converter,
                       MEM_HANDLE_T src);
@@ -296,7 +355,10 @@ int imageconv_acquire(const IMAGE_CONVERT_CLASS_T *converter,
  * @param converter    converter functions for this image
  * @param image        image pointer from imageconv_get
  *
- * @return 0 on success or -1 if image handle is invalid.
+ * @return IMAGECONV_ERR_NOT_SUPPORTED if not implemented by the converter class
+ * @return IMAGECONV_ERR_NONE on success
+ * @return IMAGECONV_ERR_GENERAL if image handle is invalid
+ * @return IMAGECONV_ERR_NOT_READY if reference cannot be currently acquired
  */
 int imageconv_acquire_image(const IMAGE_CONVERT_CLASS_T *converter,
                       IMAGECONV_DRIVER_IMAGE_T *image);
@@ -307,7 +369,9 @@ int imageconv_acquire_image(const IMAGE_CONVERT_CLASS_T *converter,
  * @param converter    converter functions for this image
  * @param image        image pointer from imageconv_get
  *
- * @return 0 on success or -1 if image handle is invalid.
+ * @return IMAGECONV_ERR_NOT_SUPPORTED if not implemented by the converter class
+ * @return IMAGECONV_ERR_NONE on success
+ * @return IMAGECONV_ERR_GENERAL if image handle is invalid
  */
 int imageconv_release_image(const IMAGE_CONVERT_CLASS_T *converter,
                       IMAGECONV_DRIVER_IMAGE_T *image);
@@ -344,14 +408,41 @@ void imageconv_set_src_desc_printf(const IMAGE_CONVERT_CLASS_T *converter, MEM_H
  */
 const char *imageconv_get_src_desc(const IMAGE_CONVERT_CLASS_T *converter, MEM_HANDLE_T src);
 
-int imageconv_get_converted(const IMAGE_CONVERT_CLASS_T *converter,
-                  MEM_HANDLE_T src,
-                  VC_IMAGE_TYPE_T type,
-                  IMAGECONV_IMAGE_DATA_T *image,
-                  MEM_HANDLE_T *h);
+/* Request notification when a reference to the image can be acquired.
+ *
+ * If the reference can already be acquired at the time when the request is made,
+ * this is indicated via the return code, and no callback will be made.
+ *
+ * Otherwise the callback is made when the reference can be acquired, or when
+ * the specified time period has elapsed.
+ *
+ * The thread context in which callbacks are executed depends upon the converter
+ * class implementation.  The callback function should therefore do as little
+ * work as possible, deferring to a known thread context for any further
+ * processing.
+ *
+ * @param converter    converter functions for this image
+ * @param image        image pointer
+ * @param timeout      time to wait in milliseconds; 0 means wait indefinitely
+ * @param callback     callback to be invoked when image is valid, or timeout expires
+ *
+ * @return IMAGECONV_ERR_NOT_SUPPORTED if not implemented by the converter class
+ * @return IMAGECONV_ERR_ALREADY if reference can be acquired immediately
+ * @return IMAGECONV_ERR_NONE if reference cannot be acquire immediately; callback will be made
+ */
+int imageconv_notify(const IMAGE_CONVERT_CLASS_T *converter,
+                     IMAGECONV_DRIVER_IMAGE_T *image,
+                     uint32_t timeout,
+                     IMAGECONV_NOTIFY_CALLBACK callback,
+                     void *context);
 
-int imageconv_request_preconvert(const IMAGE_CONVERT_CLASS_T *converter,
-        MEM_HANDLE_T src, VC_IMAGE_TYPE_T type);
+/* Cancel an outstanding IMAGECONV_NOTIFY request.
+ *
+ * @param converter    converter functions for this image
+ * @param image        return image pointer
+ */
+void imageconv_cancel_notify(const IMAGE_CONVERT_CLASS_T *converter,
+                             IMAGECONV_DRIVER_IMAGE_T *image);
 
 #endif
 

@@ -25,41 +25,76 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "interface/khronos/common/khrn_int_common.h"
-#include "interface/khronos/include/EGL/egl.h"
-#include "interface/khronos/include/EGL/eglext.h"
-#include "middleware/khronos/egl/egl_server.h"
-#include "middleware/imageconv/imageconv.h"
+// Spatial coordinates for the cube
 
+static const GLbyte quadx[6*4*3] = {
+   /* FRONT */
+   -10, -10,  10,
+   10, -10,  10,
+   -10,  10,  10,
+   10,  10,  10,
 
-typedef struct EGL_IMAGE_T {
-   uint64_t pid;
+   /* BACK */
+   -10, -10, -10,
+   -10,  10, -10,
+   10, -10, -10,
+   10,  10, -10,
 
-   /*
-    * Handle to a KHRN_IMAGE_T, whose format is required to be something
-    * suitable for texturing directly from. If NULL, then use external.convert
-    * below to make one (in glBindTexture_impl probably).
-    */
-   MEM_HANDLE_T mh_image;
+   /* LEFT */
+   -10, -10,  10,
+   -10,  10,  10,
+   -10, -10, -10,
+   -10,  10, -10,
 
-   bool flip_y;
+   /* RIGHT */
+   10, -10, -10,
+   10,  10, -10,
+   10, -10,  10,
+   10,  10,  10,
 
-   /*
-    * Any kind of "external" image-- i.e. that can't be used directly for
-    * texturing.
-    */
-   struct
-   {
-      /*
-       * Handle to an object that convert knows how to convert into a
-       * KHRN_IMAGE_T suitable for texturing from, e.g. a multimedia image.
-       */
-      MEM_HANDLE_T src;
-      const IMAGE_CONVERT_CLASS_T *convert;
-      uint32_t src_updated;
-      uint32_t src_converted;
-   } external;
+   /* TOP */
+   -10,  10,  10,
+   10,  10,  10,
+   -10,  10, -10,
+   10,  10, -10,
 
-} EGL_IMAGE_T;
+   /* BOTTOM */
+   -10, -10,  10,
+   -10, -10, -10,
+   10, -10,  10,
+   10, -10, -10,
+};
 
-extern void egl_image_term(void *v, uint32_t size);
+/** Texture coordinates for the quad. */
+static const GLfloat texCoords[6 * 4 * 2] = {
+   0.f,  0.f,
+   1.f,  0.f,
+   0.f,  1.f,
+   1.f,  1.f,
+
+   0.f,  0.f,
+   1.f,  0.f,
+   0.f,  1.f,
+   1.f,  1.f,
+
+   0.f,  0.f,
+   1.f,  0.f,
+   0.f,  1.f,
+   1.f,  1.f,
+
+   0.f,  0.f,
+   1.f,  0.f,
+   0.f,  1.f,
+   1.f,  1.f,
+
+   0.f,  0.f,
+   1.f,  0.f,
+   0.f,  1.f,
+   1.f,  1.f,
+
+   0.f,  0.f,
+   1.f,  0.f,
+   0.f,  1.f,
+   1.f,  1.f,
+};
+
