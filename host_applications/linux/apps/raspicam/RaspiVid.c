@@ -56,7 +56,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <memory.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.4"
+#define VERSION_STRING "v1.3.5"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -136,6 +136,7 @@ struct RASPIVID_STATE_S
    int bitrate;                        /// Requested bitrate
    int framerate;                      /// Requested frame rate (fps)
    int intraperiod;                    /// Intra-refresh period (key frame rate)
+   int quantisationParameter;          /// Quantisation parameter - quality. Set bitrate 0 and set this for variable bitrate
    char *filename;                     /// filename of output file
    int verbose;                        /// !0 if want detailed run information
    int demoMode;                       /// Run app in demo mode
@@ -204,6 +205,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandSignal       13
 #define CommandKeypress     14
 #define CommandInitialState 15
+#define CommandQP           16
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -223,6 +225,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandSignal,   "-signal",    "s",  "Cycle between capture and pause on Signal", 0},
    { CommandKeypress, "-keypress",  "k",  "Cycle between capture and pause on ENTER", 0},
    { CommandInitialState,"-initial","i",  "Initial state. Use 'record' or 'pause'. Default 'record'", 1},
+   { CommandQP,      "-qp",         "qp", "Quantisation parameter. Use approximately 10-40. Default 0 (off)", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -268,6 +271,7 @@ static void default_status(RASPIVID_STATE *state)
    state->bitrate = 17000000; // This is a decent default bitrate for 1080p
    state->framerate = VIDEO_FRAME_RATE_NUM;
    state->intraperiod = 0;    // Not set
+   state->quantisationParameter = 25;
    state->demoMode = 0;
    state->demoInterval = 250; // ms
    state->immutableInput = 1;
@@ -470,6 +474,15 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
       case CommandIntraPeriod: // key frame rate
       {
          if (sscanf(argv[i + 1], "%u", &state->intraperiod) == 1)
+            i++;
+         else
+            valid = 0;
+         break;
+      }
+
+      case CommandQP: // quantisation parameter
+      {
+         if (sscanf(argv[i + 1], "%u", &state->quantisationParameter) == 1)
             i++;
          else
             valid = 0;
@@ -955,7 +968,25 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
          vcos_log_error("Unable to set intraperiod");
          goto error;
       }
+   }
 
+   if (state->quantisationParameter)
+   {
+      MMAL_PARAMETER_UINT32_T param = {{ MMAL_PARAMETER_VIDEO_ENCODE_INITIAL_QUANT, sizeof(param)}, state->quantisationParameter};
+      status = mmal_port_parameter_set(encoder_output, &param.hdr);
+      if (status != MMAL_SUCCESS)
+      {
+         vcos_log_error("Unable to set QP");
+         goto error;
+      }
+
+      MMAL_PARAMETER_UINT32_T param2 = {{ MMAL_PARAMETER_VIDEO_ENCODE_QP_P, sizeof(param)}, state->quantisationParameter+6};
+      status = mmal_port_parameter_set(encoder_output, &param2.hdr);
+      if (status != MMAL_SUCCESS)
+      {
+         vcos_log_error("Unable to set QP");
+         goto error;
+      }
    }
 
    {
