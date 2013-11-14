@@ -36,6 +36,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/mmal/mmal_logging.h"
 #include "interface/mmal/util/mmal_util.h"
 #include "interface/mmal/util/mmal_util_params.h"
+#include "interface/mmal/util/mmal_util_rational.h"
+#include "interface/mmal/util/mmal_param_convert.h"
 #include "interface/mmal/util/mmal_default_components.h"
 #include "RaspiCamControl.h"
 #include "RaspiCLI.h"
@@ -150,7 +152,7 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandHFlip,       "-hflip",     "hf", "Set horizontal flip", 0},
    {CommandVFlip,       "-vflip",     "vf", "Set vertical flip", 0},
    {CommandROI,         "-roi",       "roi","Set region of interest (x,y,w,d as normalised coordinates [0.0-1.0])", 1},
-   {CommandShutterSpeed,"-shutter",   "ss", "Set shutter speed in microseconds", 1}
+   {CommandShutterSpeed,"-shutter",   "ss", "Set shutter speed in microseconds or fraction of second (ie 1/60)", 1}
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -450,6 +452,24 @@ static MMAL_PARAM_EXPOSUREMETERINGMODE_T metering_mode_from_string(const char *s
 }
 
 /**
+ * Convert arg string to microseconds for shutter speed
+ * @param str Incoming string (int or fraction) to match
+ * @return microseconds value for shutter speed
+ */
+int shutter_speed_from_string(const char *str)
+{
+   MMAL_STATUS_T ret;
+   MMAL_RATIONAL_T ss;
+   if (strchr(str,'/') == NULL) 	// arg is microseconds (no /)
+	return atoi(str);
+   
+   ret = mmal_parse_rational(&ss, str);
+   if (ret != MMAL_SUCCESS)
+       return -1;
+   return mmal_rational_to_fixed_16_16(mmal_rational_multiply(ss,mmal_rational_from_fixed_16_16(1000000)));
+}
+
+/**
  * Parse a possible command pair - command and parameter
  * @param arg1 Command
  * @param arg2 Parameter (could be NULL)
@@ -574,11 +594,10 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
       break;
    }
 
-   case CommandShutterSpeed : // Shutter speed needs single number parameter
-      sscanf(arg2, "%d", &params->shutter_speed);
+   case CommandShutterSpeed : // Shutter speed needs single parameter
+      params->shutter_speed = shutter_speed_from_string(arg2);
       used = 2;
       break;
-
 
    }
 
