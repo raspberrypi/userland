@@ -308,7 +308,7 @@ void _vcos_log_platform_init(void)
       log_fhandle = fopen(log_fname, "w");
    }
    else
-      log_fhandle = stdout;
+      log_fhandle = stderr;
 }
 
 /* Flags for init/deinit components */
