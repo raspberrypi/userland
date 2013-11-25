@@ -153,6 +153,8 @@ struct RASPIVID_STATE_S
    int segmentSize;                    /// Segment mode In timed cycle mode, the amount of time the capture is off per cycle
    int segmentWrap;                    /// Point at which to wrap segment counter
    int segmentNumber;                  /// Current segment counter. Starts at 1.
+   int splitNow;                       /// Split at next possible i-frame if set to 1.
+   int splitWait;                      /// Switch if user wants splited files 
 
    RASPIPREVIEW_PARAMETERS preview_parameters;   /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -214,6 +216,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandInlineHeaders 17
 #define CommandSegmentFile  18
 #define CommandSegmentWrap  19
+#define CommandSplitWait    20
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -237,6 +240,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandInlineHeaders, "-inline",     "ih", "Insert inline headers (SPS, PPS) to stream", 0},
    { CommandSegmentFile,   "-segment",    "sg", "Segment output file in to multiple files at specified interval <ms>", 1},
    { CommandSegmentWrap,   "-wrap",       "wr", "In segment mode, wrap any numbered filename back to 1 when reach number", 1},
+   { CommandSplitWait,     "-split",      "sp", "In wait mode, create new output file for each start event", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -297,6 +301,8 @@ static void default_status(RASPIVID_STATE *state)
    state->segmentSize = 0;  // 0 = not segmenting the file.
    state->segmentNumber = 1;
    state->segmentWrap = 0; // Point at which to wrap segment number back to 1. 0 = no wrap
+   state->splitNow = 0;
+   state->splitWait = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -590,6 +596,14 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          break;
       }
 
+      case CommandSplitWait: // split files on restart 
+      {
+         // Must enable inline headers for this to work
+         state->bInlineHeaders = 1;
+         state->splitWait = 1;
+         break;
+      }
+
 
       default:
       {
@@ -699,7 +713,7 @@ static FILE *open_filename(RASPIVID_STATE *pState)
    FILE *new_handle = NULL;
    char *tempname = NULL, *filename = NULL;
 
-   if (pState->segmentSize)
+   if (pState->segmentSize || pState->splitWait)
    {
       // Create a new filename string
       asprintf(&tempname, pState->filename, pState->segmentNumber);
@@ -759,14 +773,15 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
       // but also since we have inline headers turned on we need to break when we get one to
       // ensure that the new stream has the header in it. If we break on an I-frame, the
       // SPS/PPS header is actually in the previous chunk.
-      if (pData->pstate->segmentSize &&
-          (buffer->flags & MMAL_BUFFER_HEADER_FLAG_CONFIG) &&
-          current_time > base_time + pData->pstate->segmentSize )
+      if ((buffer->flags & MMAL_BUFFER_HEADER_FLAG_CONFIG) &&
+          ((pData->pstate->segmentSize && current_time > base_time + pData->pstate->segmentSize) ||
+           (pData->pstate->splitWait && pData->pstate->splitNow)))
       {
          FILE *new_handle;
 
          base_time = current_time;
 
+         pData->pstate->splitNow = 0;
          pData->pstate->segmentNumber++;
 
          // Only wrap if we have a wrap point set
@@ -1579,7 +1594,8 @@ int main(int argc, const char **argv)
                         vcos_log_error("Unable to send a buffer to encoder output port (%d)", q);
                   }
                }
-
+               
+               int initialCapturing=state.bCapturing;
                while (running)
                {
                   // Change state
@@ -1598,7 +1614,23 @@ int main(int argc, const char **argv)
                      else
                         fprintf(stderr, "Pausing video capture\n");
                   }
-
+                  
+                  if(state.splitWait)
+                  {
+                     if(state.bCapturing)
+                     {
+                        if (mmal_port_parameter_set_boolean(encoder_output_port, MMAL_PARAMETER_VIDEO_REQUEST_I_FRAME, 1) != MMAL_SUCCESS)
+                        {
+                           vcos_log_error("failed to request I-FRAME");
+                        }
+                     }
+                     else
+                     {
+                        if(!initialCapturing)
+                           state.splitNow=1;   
+                     }
+                     initialCapturing=0;
+                  }
                   running = wait_for_next_change(&state);
                }
 
