@@ -56,7 +56,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <memory.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.6"
+#define VERSION_STRING "v1.3.7"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -150,6 +150,10 @@ struct RASPIVID_STATE_S
    int onTime;                         /// In timed cycle mode, the amount of time the capture is on per cycle
    int offTime;                        /// In timed cycle mode, the amount of time the capture is off per cycle
 
+   int segmentSize;                    /// Segment mode In timed cycle mode, the amount of time the capture is off per cycle
+   int segmentWrap;                    /// Point at which to wrap segment counter
+   int segmentNumber;                  /// Current segment counter. Starts at 1.
+
    RASPIPREVIEW_PARAMETERS preview_parameters;   /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
 
@@ -208,27 +212,31 @@ static void display_valid_parameters(char *app_name);
 #define CommandInitialState 15
 #define CommandQP           16
 #define CommandInlineHeaders 17
+#define CommandSegmentFile  18
+#define CommandSegmentWrap  19
 
 static COMMAND_LIST cmdline_commands[] =
 {
-   { CommandHelp,    "-help",       "?",  "This help information", 0 },
-   { CommandWidth,   "-width",      "w",  "Set image width <size>. Default 1920", 1 },
-   { CommandHeight,  "-height",     "h",  "Set image height <size>. Default 1080", 1 },
-   { CommandBitrate, "-bitrate",    "b",  "Set bitrate. Use bits per second (e.g. 10MBits/s would be -b 10000000)", 1 },
-   { CommandOutput,  "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -')", 1 },
-   { CommandVerbose, "-verbose",    "v",  "Output verbose information during run", 0 },
-   { CommandTimeout, "-timeout",    "t",  "Time (in ms) to capture for. If not specified, set to 5s. Zero to disable", 1 },
-   { CommandDemoMode,"-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 1},
-   { CommandFramerate,"-framerate", "fps","Specify the frames per second to record", 1},
-   { CommandPreviewEnc,"-penc",     "e",  "Display preview image *after* encoding (shows compression artifacts)", 0},
-   { CommandIntraPeriod,"-intra",   "g",  "Specify the intra refresh period (key frame rate/GoP size)", 1},
-   { CommandProfile,  "-profile",   "pf", "Specify H264 profile to use for encoding", 1},
-   { CommandTimed,    "-timed",     "td", "Cycle between capture and pause. -cycle on,off where on is record time and off is pause time in ms", 0},
-   { CommandSignal,   "-signal",    "s",  "Cycle between capture and pause on Signal", 0},
-   { CommandKeypress, "-keypress",  "k",  "Cycle between capture and pause on ENTER", 0},
-   { CommandInitialState,"-initial","i",  "Initial state. Use 'record' or 'pause'. Default 'record'", 1},
-   { CommandQP,       "-qp",        "qp", "Quantisation parameter. Use approximately 10-40. Default 0 (off)", 1},
-   { CommandInlineHeaders,"-inline","ih", "Insert inline headers (SPS, PPS) to stream", 0},
+   { CommandHelp,          "-help",       "?",  "This help information", 0 },
+   { CommandWidth,         "-width",      "w",  "Set image width <size>. Default 1920", 1 },
+   { CommandHeight,        "-height",     "h",  "Set image height <size>. Default 1080", 1 },
+   { CommandBitrate,       "-bitrate",    "b",  "Set bitrate. Use bits per second (e.g. 10MBits/s would be -b 10000000)", 1 },
+   { CommandOutput,        "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -')", 1 },
+   { CommandVerbose,       "-verbose",    "v",  "Output verbose information during run", 0 },
+   { CommandTimeout,       "-timeout",    "t",  "Time (in ms) to capture for. If not specified, set to 5s. Zero to disable", 1 },
+   { CommandDemoMode,      "-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 1},
+   { CommandFramerate,     "-framerate",  "fps","Specify the frames per second to record", 1},
+   { CommandPreviewEnc,    "-penc",       "e",  "Display preview image *after* encoding (shows compression artifacts)", 0},
+   { CommandIntraPeriod,   "-intra",      "g",  "Specify the intra refresh period (key frame rate/GoP size)", 1},
+   { CommandProfile,       "-profile",    "pf", "Specify H264 profile to use for encoding", 1},
+   { CommandTimed,         "-timed",      "td", "Cycle between capture and pause. -cycle on,off where on is record time and off is pause time in ms", 0},
+   { CommandSignal,        "-signal",     "s",  "Cycle between capture and pause on Signal", 0},
+   { CommandKeypress,      "-keypress",   "k",  "Cycle between capture and pause on ENTER", 0},
+   { CommandInitialState,  "-initial",    "i",  "Initial state. Use 'record' or 'pause'. Default 'record'", 1},
+   { CommandQP,            "-qp",         "qp", "Quantisation parameter. Use approximately 10-40. Default 0 (off)", 1},
+   { CommandInlineHeaders, "-inline",     "ih", "Insert inline headers (SPS, PPS) to stream", 0},
+   { CommandSegmentFile,   "-segment",    "sg", "Segment output file in to multiple files at specified interval <ms>", 1},
+   { CommandSegmentWrap,   "-wrap",       "wr", "In segment mode, wrap any numbered filename back to 1 when reach number", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -274,7 +282,7 @@ static void default_status(RASPIVID_STATE *state)
    state->bitrate = 17000000; // This is a decent default bitrate for 1080p
    state->framerate = VIDEO_FRAME_RATE_NUM;
    state->intraperiod = 0;    // Not set
-   state->quantisationParameter = 25;
+   state->quantisationParameter = 0;
    state->demoMode = 0;
    state->demoInterval = 250; // ms
    state->immutableInput = 1;
@@ -285,6 +293,10 @@ static void default_status(RASPIVID_STATE *state)
 
    state->bCapturing = 0;
    state->bInlineHeaders = 0;
+
+   state->segmentSize = 0;  // 0 = not segmenting the file.
+   state->segmentNumber = 1;
+   state->segmentWrap = 0; // Point at which to wrap segment number back to 1. 0 = no wrap
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -313,6 +325,11 @@ static void dump_status(RASPIVID_STATE *state)
    fprintf(stderr, "bitrate %d, framerate %d, time delay %d\n", state->bitrate, state->framerate, state->timeout);
    fprintf(stderr, "H264 Profile %s\n", raspicli_unmap_xref(state->profile, profile_map, profile_map_size));
    fprintf(stderr, "H264 Quantisation level %d, Inline headers %s\n", state->quantisationParameter, state->bInlineHeaders ? "Yes" : "No");
+
+   // Not going to display segment data unless asked for it.
+   if (state->segmentSize)
+      fprintf(stderr, "Segment size %d, segment wrap value %d\n", state->segmentSize, state->segmentWrap);
+
    fprintf(stderr, "Wait method : ");
    for (i=0;i<wait_method_description_size;i++)
    {
@@ -551,6 +568,28 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          break;
       }
 
+      case CommandSegmentFile: // Segment file in to chunks of specified time
+      {
+         if (sscanf(argv[i + 1], "%u", &state->segmentSize) == 1)
+         {
+            // Must enable inline headers for this to work
+            state->bInlineHeaders = 1;
+            i++;
+         }
+         else
+            valid = 0;
+         break;
+      }
+
+      case CommandSegmentWrap: // segment wrap value
+      {
+         if (sscanf(argv[i + 1], "%u", &state->segmentWrap) == 1)
+            i++;
+         else
+            valid = 0;
+         break;
+      }
+
 
       default:
       {
@@ -649,6 +688,45 @@ static void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
    mmal_buffer_header_release(buffer);
 }
 
+
+/**
+ * Open a file based on the settings in state
+ *
+ * @param state Pointer to state
+ */
+static FILE *open_filename(RASPIVID_STATE *pState)
+{
+   FILE *new_handle = NULL;
+   char *tempname = NULL, *filename = NULL;
+
+   if (pState->segmentSize)
+   {
+      // Create a new filename string
+      asprintf(&tempname, pState->filename, pState->segmentNumber);
+      filename = tempname;
+   }
+   else
+   {
+      filename = pState->filename;
+   }
+
+   if (filename)
+      new_handle = fopen(filename, "wb");
+
+   if (pState->verbose)
+   {
+      if (new_handle)
+         fprintf(stderr, "Opening output file \"%s\"\n", filename);
+      else
+         fprintf(stderr, "Failed to open new file \"%s\"\n", filename);
+   }
+
+   if (tempname)
+      free(tempname);
+
+   return new_handle;
+}
+
 /**
  *  buffer header callback function for encoder
  *
@@ -660,6 +738,11 @@ static void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
    MMAL_BUFFER_HEADER_T *new_buffer;
+   static int64_t base_time =  -1;
+
+   // All our segment times based on the receipt of the first encoder callback
+   if (base_time == -1)
+      base_time = vcos_getmicrosecs64()/1000;
 
    // We pass our file handle and other stuff in via the userdata field.
 
@@ -668,8 +751,36 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
    if (pData)
    {
       int bytes_written = buffer->length;
+      int64_t current_time = vcos_getmicrosecs64()/1000;
 
       vcos_assert(pData->file_handle);
+
+      // For segmented record mode, we need to see if we have exceeded our time/size,
+      // but also since we have inline headers turned on we need to break when we get one to
+      // ensure that the new stream has the header in it. If we break on an I-frame, the
+      // SPS/PPS header is actually in the previous chunk.
+      if (pData->pstate->segmentSize &&
+          (buffer->flags & MMAL_BUFFER_HEADER_FLAG_CONFIG) &&
+          current_time > base_time + pData->pstate->segmentSize )
+      {
+         FILE *new_handle;
+
+         base_time = current_time;
+
+         pData->pstate->segmentNumber++;
+
+         // Only wrap if we have a wrap point set
+         if (pData->pstate->segmentWrap && pData->pstate->segmentNumber > pData->pstate->segmentWrap)
+            pData->pstate->segmentNumber = 1;
+
+         new_handle = open_filename(pData->pstate);
+
+         if (new_handle)
+         {
+            fclose(pData->file_handle);
+            pData->file_handle = new_handle;
+         }
+      }
 
       if (buffer->length)
       {
@@ -1287,7 +1398,6 @@ int main(int argc, const char **argv)
    MMAL_PORT_T *preview_input_port = NULL;
    MMAL_PORT_T *encoder_input_port = NULL;
    MMAL_PORT_T *encoder_output_port = NULL;
-   FILE *output_file = NULL;
 
    bcm_host_init();
 
@@ -1390,24 +1500,23 @@ int main(int argc, const char **argv)
             goto error;
          }
 
+         state.callback_data.file_handle = NULL;
+
          if (state.filename)
          {
             if (state.filename[0] == '-')
             {
-               output_file = stdout;
+               state.callback_data.file_handle = stdout;
 
                // Ensure we don't upset the output stream with diagnostics/info
                state.verbose = 0;
             }
             else
             {
-               if (state.verbose)
-                  fprintf(stderr, "Opening output file \"%s\"\n", state.filename);
-
-               output_file = fopen(state.filename, "wb");
+               state.callback_data.file_handle = open_filename(&state);
             }
 
-            if (!output_file)
+            if (!state.callback_data.file_handle)
             {
                // Notify user, carry on but discarding encoded output buffers
                vcos_log_error("%s: Error opening output file: %s\nNo output file will be generated\n", __func__, state.filename);
@@ -1415,7 +1524,6 @@ int main(int argc, const char **argv)
          }
 
          // Set up our userdata - this is passed though to the callback where we need the information.
-         state.callback_data.file_handle = output_file;
          state.callback_data.pstate = &state;
          state.callback_data.abort = 0;
 
@@ -1451,7 +1559,8 @@ int main(int argc, const char **argv)
          else
          {
             // Only encode stuff if we have a filename and it opened
-            if (output_file)
+            // Note we use the copy in the callback, as the call back MIGHT change the file handle
+            if (state.callback_data.file_handle)
             {
                int running = 1;
 
@@ -1534,8 +1643,8 @@ error:
 
       // Can now close our file. Note disabling ports may flush buffers which causes
       // problems if we have already closed the file!
-      if (output_file && output_file != stdout)
-         fclose(output_file);
+      if (state.callback_data.file_handle && state.callback_data.file_handle != stdout)
+         fclose(state.callback_data.file_handle);
 
       /* Disable components */
       if (state.encoder_component)
