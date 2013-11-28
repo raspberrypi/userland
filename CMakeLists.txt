@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 2.8)
 project(vmcs_host_apps)
 
 set(BUILD_MMAL TRUE)
-set(BUILD_MMAL_COMPONENTS FALSE)
 if (ALL_APPS)
  set(BUILD_MMAL_APPS TRUE)
 else()
@@ -69,6 +68,11 @@ endif()
 if(BUILD_MMAL_APPS)
    add_subdirectory(containers)
 endif()
+
+# VidTex supports Android and Linux
+if(BUILD_MMAL_COMPONENTS)
+add_subdirectory(host_applications/android/apps/vidtex)
+endif(BUILD_MMAL_COMPONENTS)
 
 add_subdirectory(middleware/openmaxil)
 

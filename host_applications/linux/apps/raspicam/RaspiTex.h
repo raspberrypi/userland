@@ -29,6 +29,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef RASPITEX_H_
 #define RASPITEX_H_
 
+#include <stdio.h>
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <GLES/gl.h>
@@ -36,10 +37,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/khronos/include/EGL/eglext_brcm.h"
 #include "interface/mmal/mmal.h"
 
+#define RASPITEX_VERSION_MAJOR 1
+#define RASPITEX_VERSION_MINOR 0
+
 typedef enum {
    RASPITEX_SCENE_SQUARE = 0,
    RASPITEX_SCENE_MIRROR,
-   RASPITEX_SCENE_TEAPOT
+   RASPITEX_SCENE_TEAPOT,
+   RASPITEX_SCENE_YUV,
+   RASPITEX_SCENE_SOBEL,
 
 } RASPITEX_SCENE_T;
 
@@ -54,14 +60,32 @@ typedef struct RASPITEX_SCENE_OPS
    /// Creates EGL surface for native window
    int (*gl_init)(struct RASPITEX_STATE *state);
 
-   /// Advance to the next animation step
+   /// Updates the RGBX texture from the next MMAL buffer
+   /// Set to null if this texture type is not required
    int (*update_texture)(struct RASPITEX_STATE *state, EGLClientBuffer mm_buf);
+
+   /// Updates the Y' plane texture from the next MMAL buffer
+   /// Set to null if this texture type is not required
+   int (*update_y_texture)(struct RASPITEX_STATE *state, EGLClientBuffer mm_buf);
+
+   /// Updates the U plane texture from the next MMAL buffer
+   /// Set to null if this texture type is not required
+   int (*update_u_texture)(struct RASPITEX_STATE *state, EGLClientBuffer mm_buf);
+
+   /// Updates the V plane texture from the next MMAL buffer
+   /// Set to null if this texture type is not required
+   int (*update_v_texture)(struct RASPITEX_STATE *state, EGLClientBuffer mm_buf);
 
    /// Advance to the next animation step
    int (*update_model)(struct RASPITEX_STATE *state);
 
    /// Draw the scene - called after update_model
    int (*redraw)(struct RASPITEX_STATE *state);
+
+   /// Allocates a buffer and copies the pixels from the current
+   /// frame-buffer into it.
+   int (*capture)(struct RASPITEX_STATE *state,
+         uint8_t **buffer, size_t *buffer_size);
 
    /// Creates EGL surface for native window
    void (*gl_term)(struct RASPITEX_STATE *state);
@@ -73,17 +97,44 @@ typedef struct RASPITEX_SCENE_OPS
    void (*close)(struct RASPITEX_STATE *state);
 } RASPITEX_SCENE_OPS;
 
+typedef struct RASPITEX_CAPTURE
+{
+   /// Wait for previous capture to complete
+   VCOS_SEMAPHORE_T start_sem;
+
+   /// Posted once the capture is complete
+   VCOS_SEMAPHORE_T completed_sem;
+
+   /// The RGB capture buffer
+   uint8_t *buffer;
+
+   /// Size of the captured buffer in bytes
+   size_t size;
+
+   /// Frame-buffer capture has been requested. Could use
+   /// a queue instead here to allow multiple capture requests.
+   int request;
+} RASPITEX_CAPTURE;
+
 /**
  * Contains the internal state and configuration for the GL rendered
  * preview window.
  */
 typedef struct RASPITEX_STATE
 {
+   int version_major;                  /// For binary compatibility
+   int version_minor;                  /// Incremented for new features
    MMAL_PORT_T *preview_port;          /// Source port for preview opaque buffers
    MMAL_POOL_T *preview_pool;          /// Pool for storing opaque buffer handles
    MMAL_QUEUE_T *preview_queue;        /// Queue preview buffers to display in order
    VCOS_THREAD_T preview_thread;       /// Preview worker / GL rendering thread
    uint32_t preview_stop;              /// If zero the worker can continue
+
+   /* Copy of preview window params */
+   int32_t preview_x;                  /// x-offset of preview window
+   int32_t preview_y;                  /// y-offset of preview window
+   int32_t preview_width;              /// preview y-plane width in pixels
+   int32_t preview_height;             /// preview y-plane height in pixels
 
    /* Display rectangle for the native window */
    int32_t x;                          /// x-offset in pixels
@@ -102,15 +153,26 @@ typedef struct RASPITEX_STATE
    EGLDisplay display;                 /// The current EGL display
    EGLSurface surface;                 /// The current EGL surface
    EGLContext context;                 /// The current EGL context
+   const EGLint *egl_config_attribs;   /// GL scenes preferred EGL configuration
 
-   GLuint texture;                     /// Texture name for the preview texture
-   EGLImageKHR preview_egl_image;      /// The current preview EGL image
-   MMAL_BUFFER_HEADER_T *preview_buf;  /// MMAL buffer currently bound to texture
+   GLuint texture;                     /// Name for the preview texture
+   EGLImageKHR egl_image;              /// The current preview EGL image
+
+   GLuint y_texture;                   /// The Y plane texture
+   EGLImageKHR y_egl_image;            /// EGL image for Y plane texture
+   GLuint u_texture;                   /// The U plane texture
+   EGLImageKHR u_egl_image;            /// EGL image for U plane texture
+   GLuint v_texture;                   /// The V plane texture
+   EGLImageKHR v_egl_image;            /// EGL image for V plane texture
+
+   MMAL_BUFFER_HEADER_T *preview_buf;  /// MMAL buffer currently bound to texture(s)
 
    RASPITEX_SCENE_T scene_id;          /// Id of the scene to load
    RASPITEX_SCENE_OPS ops;             /// The interface for the current scene
    void *scene_state;                  /// Pointer to scene specific data
    int verbose;                        /// Log FPS
+
+   RASPITEX_CAPTURE capture;           /// Frame-buffer capture state
 
 } RASPITEX_STATE;
 
@@ -124,5 +186,6 @@ int raspitex_configure_preview_port(RASPITEX_STATE *state,
 void raspitex_display_help();
 int raspitex_parse_cmdline(RASPITEX_STATE *state,
       const char *arg1, const char *arg2);
+int raspitex_capture(RASPITEX_STATE *state, FILE* output_file);
 
 #endif /* RASPITEX_H_ */

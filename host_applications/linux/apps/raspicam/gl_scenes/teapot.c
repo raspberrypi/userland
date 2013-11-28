@@ -305,11 +305,19 @@ end:
    return rc;
 }
 
-static void teapot_gl_term(RASPITEX_STATE *state)
+static void teapot_gl_term(RASPITEX_STATE *raspitex_state)
 {
-   raspitexutil_gl_term(state);
-   free(state->scene_state);
-   state->scene_state = NULL;
+   vcos_log_trace("%s:", VCOS_FUNCTION);
+
+   TEAPOT_STATE_T *state = raspitex_state->scene_state;
+   if (state)
+   {
+      if (state->model)
+         unload_wavefront(state->model);
+      raspitexutil_gl_term(raspitex_state);
+      free(raspitex_state->scene_state);
+      raspitex_state->scene_state = NULL;
+   }
 }
 
 int teapot_open(RASPITEX_STATE *raspitex_state)
@@ -318,6 +326,7 @@ int teapot_open(RASPITEX_STATE *raspitex_state)
    raspitex_state->ops.update_model = teapot_update_model;
    raspitex_state->ops.redraw = teapot_redraw;
    raspitex_state->ops.gl_term = teapot_gl_term;
+   raspitex_state->ops.update_texture = raspitexutil_update_texture;
    return 0;
 }
 

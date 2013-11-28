@@ -246,6 +246,8 @@ extern "C" {
    case VC_IMAGE_TF_PAL4:     \
    case VC_IMAGE_TF_ETC1:     \
    case VC_IMAGE_TF_Y8:       \
+   case VC_IMAGE_TF_U8:       \
+   case VC_IMAGE_TF_V8:       \
    case VC_IMAGE_TF_A8:       \
    case VC_IMAGE_TF_SHORT:    \
    case VC_IMAGE_TF_1BPP

@@ -42,10 +42,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/mmal/mmal_buffer.h"
 #include "interface/mmal/util/mmal_util.h"
 #include "interface/mmal/util/mmal_util_params.h"
+#include "tga.h"
 
-#include "mirror.h"
-#include "square.h"
-#include "teapot.h"
+#include "gl_scenes/mirror.h"
+#include "gl_scenes/sobel.h"
+#include "gl_scenes/square.h"
+#include "gl_scenes/teapot.h"
+#include "gl_scenes/yuv.h"
 
 /**
  * \file RaspiTex.c
@@ -94,7 +97,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 static COMMAND_LIST cmdline_commands[] =
 {
-   { CommandGLScene, "-glscene",  "gs",  "GL scene square,teapot,mirror", 1 },
+   { CommandGLScene, "-glscene",  "gs",  "GL scene square,teapot,mirror,yuv,sobel", 1 },
    { CommandGLWin,   "-glwin",    "gw",  "GL window settings <'x,y,w,h'>", 1 },
 };
 
@@ -152,6 +155,12 @@ int raspitex_parse_cmdline(RASPITEX_STATE *state,
             state->scene_id = RASPITEX_SCENE_TEAPOT;
          else if (strcmp(arg2, "mirror") == 0)
             state->scene_id = RASPITEX_SCENE_MIRROR;
+         else if (strcmp(arg2, "yuv") == 0)
+            state->scene_id = RASPITEX_SCENE_YUV;
+         else if (strcmp(arg2, "sobel") == 0)
+            state->scene_id = RASPITEX_SCENE_SOBEL;
+         else
+            vcos_log_error("Unknown scene %s", arg2);
 
          used = 2;
          break;
@@ -196,6 +205,51 @@ static void update_fps()
 }
 
 /**
+ * Captures the frame-buffer if requested.
+ * @param state RASPITEX STATE
+ * @return Zero if successful.
+ */
+static void raspitex_do_capture(RASPITEX_STATE *state)
+{
+   uint8_t *buffer = NULL;
+   size_t size = 0;
+
+   if (state->capture.request)
+   {
+      if (state->ops.capture(state, &buffer, &size) == 0)
+      {
+         /* Pass ownership of buffer to main thread via capture state */
+         state->capture.buffer = buffer;
+         state->capture.size = size;
+      }
+      else
+      {
+         state->capture.buffer = NULL; // Null indicates an error
+         state->capture.size = 0;
+      }
+
+      state->capture.request = 0; // Always clear request and post sem
+      vcos_semaphore_post(&state->capture.completed_sem);
+   }
+}
+
+/**
+ * Checks if there is at least one valid EGL image.
+ * @param state RASPITEX STATE
+ * @return Zero if successful.
+ */
+static int check_egl_image(RASPITEX_STATE *state)
+{
+   if (state->egl_image == EGL_NO_IMAGE_KHR &&
+         state->y_egl_image == EGL_NO_IMAGE_KHR &&
+         state->u_egl_image == EGL_NO_IMAGE_KHR &&
+         state->v_egl_image == EGL_NO_IMAGE_KHR)
+      return -1;
+   else
+      return 0;
+}
+
+/**
  * Draws the next preview frame. If a new preview buffer is available then the
  * preview texture is updated first.
  *
@@ -217,15 +271,48 @@ static int raspitex_draw(RASPITEX_STATE *state, MMAL_BUFFER_HEADER_T *buf)
    if (buf)
    {
       /* Update the texture to the new viewfinder image which should */
-      rc = state->ops.update_texture(state, (EGLClientBuffer) buf->data);
-      if (rc != 0)
+      if (state->ops.update_texture)
       {
-         vcos_log_error("%s: Failed to update texture", VCOS_FUNCTION);
-         goto end;
+         rc = state->ops.update_texture(state, (EGLClientBuffer) buf->data);
+         if (rc != 0)
+         {
+            vcos_log_error("%s: Failed to update RGBX texture %d",
+                  VCOS_FUNCTION, rc);
+            goto end;
+         }
       }
 
-      /* Now return the PREVIOUS MMAL buffer header back to the camera preview.
-       */
+      if (state->ops.update_y_texture)
+      {
+         rc = state->ops.update_y_texture(state, (EGLClientBuffer) buf->data);
+         if (rc != 0)
+         {
+            vcos_log_error("%s: Failed to update Y' plane texture %d", VCOS_FUNCTION, rc);
+            goto end;
+         }
+      }
+
+      if (state->ops.update_u_texture)
+      {
+         rc = state->ops.update_u_texture(state, (EGLClientBuffer) buf->data);
+         if (rc != 0)
+         {
+            vcos_log_error("%s: Failed to update U plane texture %d", VCOS_FUNCTION, rc);
+            goto end;
+         }
+      }
+
+      if (state->ops.update_v_texture)
+      {
+         rc = state->ops.update_v_texture(state, (EGLClientBuffer) buf->data);
+         if (rc != 0)
+         {
+            vcos_log_error("%s: Failed to update V texture %d", VCOS_FUNCTION, rc);
+            goto end;
+         }
+      }
+
+      /* Now return the PREVIOUS MMAL buffer header back to the camera preview. */
       if (state->preview_buf)
          mmal_buffer_header_release(state->preview_buf);
 
@@ -233,7 +320,7 @@ static int raspitex_draw(RASPITEX_STATE *state, MMAL_BUFFER_HEADER_T *buf)
    }
 
    /*  Do the drawing */
-   if (state->preview_egl_image != EGL_NO_IMAGE_KHR)
+   if (check_egl_image(state) == 0)
    {
       rc = state->ops.update_model(state);
       if (rc != 0)
@@ -243,8 +330,14 @@ static int raspitex_draw(RASPITEX_STATE *state, MMAL_BUFFER_HEADER_T *buf)
       if (rc != 0)
          goto end;
 
+      raspitex_do_capture(state);
+
       eglSwapBuffers(state->display, state->surface);
       update_fps();
+   }
+   else
+   {
+      // vcos_log_trace("%s: No preview image", VCOS_FUNCTION);
    }
 
 end:
@@ -354,13 +447,13 @@ static void preview_output_cb(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf)
 
    if (buf->length == 0)
    {
-      vcos_log_info("%s: zero-length buffer => EOS", port->name);
+      vcos_log_trace("%s: zero-length buffer => EOS", port->name);
       state->preview_stop = 1;
       mmal_buffer_header_release(buf);
    }
    else if (buf->data == NULL)
    {
-      vcos_log_info("%s: zero buffer handle", port->name);
+      vcos_log_trace("%s: zero buffer handle", port->name);
       mmal_buffer_header_release(buf);
    }
    else
@@ -450,13 +543,13 @@ end:
    return (status == MMAL_SUCCESS ? 0 : -1);
 }
 
-
 /* Initialises GL preview state and creates the dispmanx native window.
  * @param state Pointer to the GL preview state.
  * @return Zero if successful.
  */
 int raspitex_init(RASPITEX_STATE *state)
 {
+   VCOS_STATUS_T status;
    int rc;
    vcos_init();
 
@@ -464,6 +557,16 @@ int raspitex_init(RASPITEX_STATE *state)
    vcos_log_set_level(VCOS_LOG_CATEGORY,
          state->verbose ? VCOS_LOG_INFO : VCOS_LOG_WARN);
    vcos_log_trace("%s", VCOS_FUNCTION);
+
+   status = vcos_semaphore_create(&state->capture.start_sem,
+         "glcap_start_sem", 1);
+   if (status != VCOS_SUCCESS)
+      goto error;
+
+   status = vcos_semaphore_create(&state->capture.completed_sem,
+         "glcap_completed_sem", 0);
+   if (status != VCOS_SUCCESS)
+      goto error;
 
    switch (state->scene_id)
    {
@@ -476,14 +579,24 @@ int raspitex_init(RASPITEX_STATE *state)
       case RASPITEX_SCENE_TEAPOT:
          rc = teapot_open(state);
          break;
+      case RASPITEX_SCENE_YUV:
+         rc = yuv_open(state);
+         break;
+      case RASPITEX_SCENE_SOBEL:
+         rc = sobel_open(state);
+         break;
       default:
          rc = -1;
          break;
    }
    if (rc != 0)
-      return rc;
+      goto error;
 
-   return rc;
+   return 0;
+
+error:
+   vcos_log_error("%s: failed", VCOS_FUNCTION);
+   return -1;
 }
 
 /* Destroys the pools of buffers used by the GL renderer.
@@ -503,8 +616,15 @@ void raspitex_destroy(RASPITEX_STATE *state)
       mmal_queue_destroy(state->preview_queue);
       state->preview_queue = NULL;
    }
-   state->ops.destroy_native_window(state);
-   state->ops.close(state);
+
+   if (state->ops.destroy_native_window)
+      state->ops.destroy_native_window(state);
+
+   if (state->ops.close)
+      state->ops.close(state);
+
+   vcos_semaphore_delete(&state->capture.start_sem);
+   vcos_semaphore_delete(&state->capture.completed_sem);
 }
 
 /* Initialise the GL / window state to sensible defaults.
@@ -516,10 +636,15 @@ void raspitex_destroy(RASPITEX_STATE *state)
 void raspitex_set_defaults(RASPITEX_STATE *state)
 {
    memset(state, 0, sizeof(*state));
+   state->version_major = RASPITEX_VERSION_MAJOR;
+   state->version_minor = RASPITEX_VERSION_MINOR;
    state->display = EGL_NO_DISPLAY;
    state->surface = EGL_NO_SURFACE;
    state->context = EGL_NO_CONTEXT;
-   state->preview_egl_image = EGL_NO_IMAGE_KHR;
+   state->egl_image = EGL_NO_IMAGE_KHR;
+   state->y_egl_image = EGL_NO_IMAGE_KHR;
+   state->u_egl_image = EGL_NO_IMAGE_KHR;
+   state->v_egl_image = EGL_NO_IMAGE_KHR;
    state->opacity = 255;
    state->width = DEFAULT_WIDTH;
    state->height = DEFAULT_HEIGHT;
@@ -527,9 +652,9 @@ void raspitex_set_defaults(RASPITEX_STATE *state)
 
    state->ops.create_native_window = raspitexutil_create_native_window;
    state->ops.gl_init = raspitexutil_gl_init_1_0;
-   state->ops.update_texture = raspitexutil_update_texture;
    state->ops.update_model = raspitexutil_update_model;
    state->ops.redraw = raspitexutil_redraw;
+   state->ops.capture = raspitexutil_capture_bgra;
    state->ops.gl_term = raspitexutil_gl_term;
    state->ops.destroy_native_window = raspitexutil_destroy_native_window;
    state->ops.close = raspitexutil_close;
@@ -568,4 +693,56 @@ int raspitex_start(RASPITEX_STATE *state)
             VCOS_FUNCTION, status);
 
    return (status == VCOS_SUCCESS ? 0 : -1);
+}
+
+/**
+ * Writes the next GL frame-buffer to a RAW .ppm formatted file
+ * using the specified file-handle.
+ * @param state Pointer to the GL preview state.
+ * @param outpt_file Output file handle for the ppm image.
+ * @return Zero on success.
+ */
+int raspitex_capture(RASPITEX_STATE *state, FILE *output_file)
+{
+   int rc = 0;
+   uint8_t *buffer = NULL;
+   size_t size = 0;
+
+   vcos_log_trace("%s: state %p file %p", VCOS_FUNCTION,
+         state, output_file);
+
+   if (state && output_file)
+   {
+      /* Only request one capture at a time */
+      vcos_semaphore_wait(&state->capture.start_sem);
+      state->capture.request = 1;
+
+      /* Wait for capture to start */
+      vcos_semaphore_wait(&state->capture.completed_sem);
+
+      /* Take ownership of the captured buffer */
+      buffer = state->capture.buffer;
+      size = state->capture.size;
+
+      state->capture.request = 0;
+      state->capture.buffer = 0;
+      state->capture.size = 0;
+
+      /* Allow another capture to be requested */
+      vcos_semaphore_post(&state->capture.start_sem);
+   }
+   if (size == 0 || ! buffer)
+   {
+      vcos_log_error("%s: capture failed", VCOS_FUNCTION);
+      rc = -1;
+      goto end;
+   }
+
+   raspitexutil_brga_to_rgba(buffer, size);
+   rc = write_tga(output_file, state->width, state->height, buffer, size);
+   fflush(output_file);
+
+end:
+   free(buffer);
+   return rc;
 }

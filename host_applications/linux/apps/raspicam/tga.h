@@ -1,5 +1,6 @@
 /*
-Copyright (c) 2012, Broadcom Europe Ltd
+Copyright (c) 2013, Broadcom Europe Ltd
+Copyright (c) 2013, Tim Gover
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -25,44 +26,48 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "interface/khronos/common/khrn_int_common.h"
-#include "interface/khronos/include/EGL/egl.h"
-#include "interface/khronos/include/EGL/eglext.h"
-#include "middleware/khronos/egl/egl_server.h"
-#include "middleware/imageconv/imageconv.h"
-#include "vcinclude/vc_image_types.h"
+#ifndef TGA_H
+#define TGA_H
 
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdint.h>
 
-typedef struct EGL_IMAGE_T {
-   uint64_t pid;
+typedef enum {
+   tga_type_null = 0,
+   tga_type_color_map = 1,
+   tga_type_true_color = 2,
+   tga_type_grayscale = 3,
+   tga_type_rle_color_map = 9,
+   tga_type_rle_true_color = 10,
+   tga_type_rle_grayscale = 11,
 
-   /*
-    * Handle to a KHRN_IMAGE_T, whose format is required to be something
-    * suitable for texturing directly from. If NULL, then use external.convert
-    * below to make one (in glBindTexture_impl probably).
-    */
-   MEM_HANDLE_T mh_image;
+} tga_image_type;
 
-   bool flip_y;
+struct tga_colormap_info {
+   unsigned short offset;
+   unsigned short length;
+   unsigned char bpp;
+};
 
-   /*
-    * Any kind of "external" image-- i.e. that can't be used directly for
-    * texturing.
-    */
-   struct
-   {
-      /*
-       * Handle to an object that convert knows how to convert into a
-       * KHRN_IMAGE_T suitable for texturing from, e.g. a multimedia image.
-       */
-      MEM_HANDLE_T src;
-      const IMAGE_CONVERT_CLASS_T *convert;
-      KHRN_IMAGE_FORMAT_T conv_khrn_format;
-      VC_IMAGE_TYPE_T conv_vc_format;
-      uint32_t src_updated;
-      uint32_t src_converted;
-   } external;
+struct tga_image_info {
+   unsigned short x_origin;
+   unsigned short y_origin;
+   unsigned short width;
+   unsigned short height;
+   unsigned char bpp;
+   unsigned char descriptor;
+};
 
-} EGL_IMAGE_T;
+struct tga_header {
+   unsigned char id_length;
+   unsigned char color_map_type;
+   unsigned char image_type;
+   struct tga_colormap_info colormap_info;
+   struct tga_image_info image_info;
+};
 
-extern void egl_image_term(void *v, uint32_t size);
+int write_tga(FILE* fp, int width, int height, uint8_t *buffer, size_t buffer_size);
+unsigned char *load_tga(const char *filename, struct tga_header *header);
+
+#endif /* TGA_H */

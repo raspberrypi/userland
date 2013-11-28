@@ -116,5 +116,6 @@ int square_open(RASPITEX_STATE *state)
    state->ops.gl_init = square_init;
    state->ops.update_model = square_update_model;
    state->ops.redraw = square_redraw;
+   state->ops.update_texture = raspitexutil_update_texture;
    return 0;
 }

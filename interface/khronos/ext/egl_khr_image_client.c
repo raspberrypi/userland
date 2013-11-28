@@ -81,6 +81,9 @@ EGLAPI EGLImageKHR EGLAPIENTRY eglCreateImageKHR (EGLDisplay dpy, EGLContext ctx
             || target == EGL_IMAGE_BRCM_RAW_PIXELS
 #endif
             || target == EGL_IMAGE_BRCM_MULTIMEDIA
+            || target == EGL_IMAGE_BRCM_MULTIMEDIA_Y
+            || target == EGL_IMAGE_BRCM_MULTIMEDIA_U
+            || target == EGL_IMAGE_BRCM_MULTIMEDIA_V
             || target == EGL_IMAGE_BRCM_DUPLICATE
             ) {
             context = NULL;
@@ -240,6 +243,18 @@ EGLAPI EGLImageKHR EGLAPIENTRY eglCreateImageKHR (EGLDisplay dpy, EGLContext ctx
             } else if (target == EGL_IMAGE_BRCM_MULTIMEDIA) {
                   buf[0] = (uint32_t)buffer;
                   vcos_log_trace("%s: converting buffer handle %u to EGL_IMAGE_BRCM_MULTIMEDIA",
+                        __FUNCTION__, buf[0]);
+            } else if (target == EGL_IMAGE_BRCM_MULTIMEDIA_Y) {
+                  buf[0] = (uint32_t)buffer;
+                  vcos_log_trace("%s: converting buffer handle %u to EGL_IMAGE_BRCM_MULTIMEDIA_Y",
+                        __FUNCTION__, buf[0]);
+            } else if (target == EGL_IMAGE_BRCM_MULTIMEDIA_U) {
+                  buf[0] = (uint32_t)buffer;
+                  vcos_log_trace("%s: converting buffer handle %u to EGL_IMAGE_BRCM_MULTIMEDIA_U",
+                        __FUNCTION__, buf[0]);
+            } else if (target == EGL_IMAGE_BRCM_MULTIMEDIA_V) {
+                  buf[0] = (uint32_t)buffer;
+                  vcos_log_trace("%s: converting buffer handle %u to EGL_IMAGE_BRCM_MULTIMEDIA_V",
                         __FUNCTION__, buf[0]);
 #endif
             } else {
