@@ -521,7 +521,7 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
       break;
 
    case CommandColourFX : // Colour FX - needs string "u:v"
-      sscanf(arg2, "%d:%d", &params->colourEffects.u, &params->colourEffects.u);
+      sscanf(arg2, "%d:%d", &params->colourEffects.u, &params->colourEffects.v);
       params->colourEffects.enable = 1;
       used = 2;
       break;

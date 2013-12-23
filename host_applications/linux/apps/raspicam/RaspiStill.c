@@ -57,7 +57,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <errno.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.5"
+#define VERSION_STRING "v1.3.6"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
