@@ -56,7 +56,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <memory.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.7"
+#define VERSION_STRING "v1.3.8"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
