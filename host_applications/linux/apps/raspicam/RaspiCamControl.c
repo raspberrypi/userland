@@ -1126,10 +1126,16 @@ int raspicamcontrol_set_ROI(MMAL_COMPONENT_T *camera, PARAM_FLOAT_RECT_T rect)
 {
    MMAL_PARAMETER_INPUT_CROP_T crop = {{MMAL_PARAMETER_INPUT_CROP, sizeof(MMAL_PARAMETER_INPUT_CROP_T)}};
 
-   crop.rect.x = (65536 * rect.x);
-   crop.rect.y = (65536 * rect.y);
-   crop.rect.width = (65536 * rect.w);
-   crop.rect.height = (65536 * rect.h);
+#define CROP_MAX (1<<16)
+#define CLAMP_CROP(x) (((x) > CROP_MAX) ? CROP_MAX : (int)(x))
+
+   crop.rect.x = CLAMP_CROP((CROP_MAX * rect.x));
+   crop.rect.y = CLAMP_CROP((CROP_MAX * rect.y));
+   crop.rect.width = CLAMP_CROP((CROP_MAX * rect.w));
+   crop.rect.height = CLAMP_CROP((CROP_MAX * rect.h));
+
+#undef CROP_MAX
+#undef CLAMP_CROP
 
    return mmal_port_parameter_set(camera->control, &crop.hdr);
 }
@@ -1166,7 +1172,7 @@ static int raspicamcontrol_get_mem_gpu(void)
 
 /**
  * Ask GPU about its camera abilities
- * @param supported None-zero if software supports the camera 
+ * @param supported None-zero if software supports the camera
  * @param detected  None-zero if a camera has been detected
  */
 static void raspicamcontrol_get_camera(int *supported, int *detected)
@@ -1183,7 +1189,7 @@ static void raspicamcontrol_get_camera(int *supported, int *detected)
 
 /**
  * Check to see if camera is supported, and we have allocated enough meooryAsk GPU about its camera abilities
- * @param supported None-zero if software supports the camera 
+ * @param supported None-zero if software supports the camera
  * @param detected  None-zero if a camera has been detected
  */
 void raspicamcontrol_check_configuration(int min_gpu_mem)
