@@ -83,6 +83,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MMAL_ENCODING_BGR24            MMAL_FOURCC('B','G','R','3')
 #define MMAL_ENCODING_BGR32            MMAL_FOURCC('B','G','R','4')
 
+
 /** SAND Video (YUVUV128) format, native format understood by VideoCore.
  * This format is *not* opaque - if requested you will receive full frames
  * of YUV_UV video.
