@@ -56,7 +56,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <memory.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.8"
+#define VERSION_STRING "v1.3.9"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -152,7 +152,7 @@ struct RASPIVID_STATE_S
 
    int segmentSize;                    /// Segment mode In timed cycle mode, the amount of time the capture is off per cycle
    int segmentWrap;                    /// Point at which to wrap segment counter
-   int segmentNumber;                  /// Current segment counter. Starts at 1.
+   int segmentNumber;                  /// Current segment counter
    int splitNow;                       /// Split at next possible i-frame if set to 1.
    int splitWait;                      /// Switch if user wants splited files 
 
@@ -216,7 +216,8 @@ static void display_valid_parameters(char *app_name);
 #define CommandInlineHeaders 17
 #define CommandSegmentFile  18
 #define CommandSegmentWrap  19
-#define CommandSplitWait    20
+#define CommandSegmentStart 20
+#define CommandSplitWait    21
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -240,6 +241,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandInlineHeaders, "-inline",     "ih", "Insert inline headers (SPS, PPS) to stream", 0},
    { CommandSegmentFile,   "-segment",    "sg", "Segment output file in to multiple files at specified interval <ms>", 1},
    { CommandSegmentWrap,   "-wrap",       "wr", "In segment mode, wrap any numbered filename back to 1 when reach number", 1},
+   { CommandSegmentStart,  "-start",      "sn", "In segment mode, start with specified segment number", 1},
    { CommandSplitWait,     "-split",      "sp", "In wait mode, create new output file for each start event", 0},
 };
 
@@ -334,7 +336,7 @@ static void dump_status(RASPIVID_STATE *state)
 
    // Not going to display segment data unless asked for it.
    if (state->segmentSize)
-      fprintf(stderr, "Segment size %d, segment wrap value %d\n", state->segmentSize, state->segmentWrap);
+      fprintf(stderr, "Segment size %d, segment wrap value %d, initial segment number %d\n", state->segmentSize, state->segmentWrap, state->segmentNumber);
 
    fprintf(stderr, "Wait method : ");
    for (i=0;i<wait_method_description_size;i++)
@@ -590,6 +592,15 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
       case CommandSegmentWrap: // segment wrap value
       {
          if (sscanf(argv[i + 1], "%u", &state->segmentWrap) == 1)
+            i++;
+         else
+            valid = 0;
+         break;
+      }
+
+      case CommandSegmentStart: // initial segment number
+      {
+         if((sscanf(argv[i + 1], "%u", &state->segmentNumber) == 1) && (!state->segmentWrap || (state->segmentNumber <= state->segmentWrap)))
             i++;
          else
             valid = 0;
