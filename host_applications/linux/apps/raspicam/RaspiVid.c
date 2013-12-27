@@ -133,8 +133,8 @@ typedef struct
    int   iframe_buff[IFRAME_BUFSIZE];          /// buffer of iframe pointers
    int   iframe_buff_wpos;
    int   iframe_buff_rpos;
-   char  header_bytes[28];
-   char  header_wptr;
+   char  header_bytes[29];
+   int  header_wptr;
 } PORT_USERDATA;
 
 /** Structure containing all state information for the current run
@@ -809,14 +809,16 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 
          if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_CONFIG)
          {
-            if(pData->header_wptr > 28)
+            if(pData->header_wptr + buffer->length > sizeof(pData->header_bytes))
             {
                vcos_log_error("Error in header bytes\n");
             }
             else
             {
                // These are the header bytes, save them for final output
+               mmal_buffer_header_mem_lock(buffer);
                memcpy(pData->header_bytes + pData->header_wptr, buffer->data, buffer->length);
+               mmal_buffer_header_mem_unlock(buffer);
                pData->header_wptr += buffer->length;
             }
          }
@@ -851,9 +853,11 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
                )
                   pData->iframe_buff_rpos = (pData->iframe_buff_rpos + 1) % IFRAME_BUFSIZE;
 	       
+               mmal_buffer_header_mem_lock(buffer);
                // We are pushing data into a circular buffer
                memcpy(pData->cb_buff + pData->cb_wptr, buffer->data, copy_to_end);
                memcpy(pData->cb_buff, buffer->data + copy_to_end, copy_to_start);
+               mmal_buffer_header_mem_unlock(buffer);
 
                if((pData->cb_wptr + buffer->length) > pData->cb_len)
                   pData->cb_wrap = 1;
