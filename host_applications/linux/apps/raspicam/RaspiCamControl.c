@@ -139,7 +139,7 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandBrightness,  "-brightness","br", "Set image brightness (0 to 100)",  1},
    {CommandSaturation,  "-saturation","sa", "Set image saturation (-100 to 100)", 1},
    {CommandISO,         "-ISO",       "ISO","Set capture ISO",  1},
-   {CommandVideoStab,   "-vstab",     "vs", "Turn on video stablisation", 0},
+   {CommandVideoStab,   "-vstab",     "vs", "Turn on video stabilisation", 0},
    {CommandEVComp,      "-ev",        "ev", "Set EV compensation",  1},
    {CommandExposure,    "-exposure",  "ex", "Set exposure mode (see Notes)", 1},
    {CommandAWB,         "-awb",       "awb","Set AWB mode (see Notes)", 1},
@@ -521,7 +521,7 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
       break;
 
    case CommandColourFX : // Colour FX - needs string "u:v"
-      sscanf(arg2, "%d:%d", &params->colourEffects.u, &params->colourEffects.u);
+      sscanf(arg2, "%d:%d", &params->colourEffects.u, &params->colourEffects.v);
       params->colourEffects.enable = 1;
       used = 2;
       break;
