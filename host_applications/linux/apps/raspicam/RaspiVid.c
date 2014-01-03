@@ -56,7 +56,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <memory.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.9"
+#define VERSION_STRING "v1.3.10"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -68,6 +68,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/mmal/util/mmal_util_params.h"
 #include "interface/mmal/util/mmal_default_components.h"
 #include "interface/mmal/util/mmal_connection.h"
+#include "interface/mmal/mmal_encodings.h"
 
 #include "RaspiCamControl.h"
 #include "RaspiPreview.h"
@@ -146,6 +147,7 @@ struct RASPIVID_STATE_S
                                        /// the camera output or the encoder output (with compression artifacts)
    int profile;                        /// H264 profile to use for encoding
    int waitMethod;                     /// Method for switching between pause and capture
+   int encoding;                       /// Encoding format to use
 
    int onTime;                         /// In timed cycle mode, the amount of time the capture is on per cycle
    int offTime;                        /// In timed cycle mode, the amount of time the capture is off per cycle
@@ -154,7 +156,7 @@ struct RASPIVID_STATE_S
    int segmentWrap;                    /// Point at which to wrap segment counter
    int segmentNumber;                  /// Current segment counter
    int splitNow;                       /// Split at next possible i-frame if set to 1.
-   int splitWait;                      /// Switch if user wants splited files 
+   int splitWait;                      /// Switch if user wants splited files
 
    RASPIPREVIEW_PARAMETERS preview_parameters;   /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -171,27 +173,6 @@ struct RASPIVID_STATE_S
    int bCapturing;                     /// State of capture/pause
 
 };
-
-
-/// Structure to cross reference H264 profile strings against the MMAL parameter equivalent
-static XREF_T  profile_map[] =
-{
-   {"baseline",     MMAL_VIDEO_PROFILE_H264_BASELINE},
-   {"main",         MMAL_VIDEO_PROFILE_H264_MAIN},
-   {"high",         MMAL_VIDEO_PROFILE_H264_HIGH},
-//   {"constrained",  MMAL_VIDEO_PROFILE_H264_CONSTRAINED_BASELINE} // Does anyone need this?
-};
-
-static int profile_map_size = sizeof(profile_map) / sizeof(profile_map[0]);
-
-static XREF_T  initial_map[] =
-{
-   {"record",     0},
-   {"pause",      1},
-};
-
-static int initial_map_size = sizeof(initial_map) / sizeof(initial_map[0]);
-
 
 static void display_valid_parameters(char *app_name);
 
@@ -218,6 +199,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandSegmentWrap  19
 #define CommandSegmentStart 20
 #define CommandSplitWait    21
+#define CommandEncoding     22
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -243,6 +225,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandSegmentWrap,   "-wrap",       "wr", "In segment mode, wrap any numbered filename back to 1 when reach number", 1},
    { CommandSegmentStart,  "-start",      "sn", "In segment mode, start with specified segment number", 1},
    { CommandSplitWait,     "-split",      "sp", "In wait mode, create new output file for each start event", 0},
+   { CommandEncoding,      "-enc",        "en", "Define encoding to use", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -262,6 +245,33 @@ static struct
 };
 
 static int wait_method_description_size = sizeof(wait_method_description) / sizeof(wait_method_description[0]);
+
+/// Structure to cross reference H264 profile strings against the MMAL parameter equivalent
+static XREF_T  profile_map[] =
+{
+   {"baseline",     MMAL_VIDEO_PROFILE_H264_BASELINE},
+   {"main",         MMAL_VIDEO_PROFILE_H264_MAIN},
+   {"high",         MMAL_VIDEO_PROFILE_H264_HIGH},
+//   {"constrained",  MMAL_VIDEO_PROFILE_H264_CONSTRAINED_BASELINE} // Does anyone need this?
+};
+
+static int profile_map_size = sizeof(profile_map) / sizeof(profile_map[0]);
+
+static XREF_T  initial_map[] =
+{
+   {"record",     0},
+   {"pause",      1},
+};
+
+static int initial_map_size = sizeof(initial_map) / sizeof(initial_map[0]);
+
+static XREF_T  encoding_map[] =
+{
+   {"h264",     MMAL_ENCODING_H264},
+   {"mjpg",     MMAL_ENCODING_MJPEG}
+};
+
+static int encoding_map_size = sizeof(encoding_map) / sizeof(encoding_map[0]);
 
 
 
@@ -296,7 +306,7 @@ static void default_status(RASPIVID_STATE *state)
    state->waitMethod = WAIT_METHOD_NONE;
    state->onTime = 5000;
    state->offTime = 5000;
-
+   state->encoding = MMAL_ENCODING_H264;
    state->bCapturing = 0;
    state->bInlineHeaders = 0;
 
@@ -331,6 +341,7 @@ static void dump_status(RASPIVID_STATE *state)
 
    fprintf(stderr, "Width %d, Height %d, filename %s\n", state->width, state->height, state->filename);
    fprintf(stderr, "bitrate %d, framerate %d, time delay %d\n", state->bitrate, state->framerate, state->timeout);
+   fprintf(stderr, "Encoding format %s\n", raspicli_unmap_xref(state->encoding, encoding_map, encoding_map_size));
    fprintf(stderr, "H264 Profile %s\n", raspicli_unmap_xref(state->profile, profile_map, profile_map_size));
    fprintf(stderr, "H264 Quantisation level %d, Inline headers %s\n", state->quantisationParameter, state->bInlineHeaders ? "Yes" : "No");
 
@@ -530,6 +541,17 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          break;
       }
 
+      case CommandEncoding:
+      {
+         state->encoding = raspicli_map_xref(argv[i + 1], encoding_map, encoding_map_size);
+
+         if( state->encoding == -1)
+            state->encoding = MMAL_ENCODING_H264;
+
+         i++;
+         break;
+      }
+
       case CommandInlineHeaders: // H264 inline headers
       {
          state->bInlineHeaders = 1;
@@ -607,7 +629,7 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          break;
       }
 
-      case CommandSplitWait: // split files on restart 
+      case CommandSplitWait: // split files on restart
       {
          // Must enable inline headers for this to work
          state->bInlineHeaders = 1;
@@ -664,12 +686,20 @@ static void display_valid_parameters(char *app_name)
 {
    int i;
 
-   fprintf(stderr, "Display camera output to display, and optionally saves an H264 capture at requested bitrate\n\n");
+   fprintf(stderr, "Display camera output to display, and optionally saves a video capture at requested bitrate\n\n");
    fprintf(stderr, "\nusage: %s [options]\n\n", app_name);
 
    fprintf(stderr, "Image parameter commands\n\n");
 
    raspicli_display_help(cmdline_commands, cmdline_commands_size);
+
+   // Encoding options
+   fprintf(stderr, "\n\nEncoding format options :\n%s", encoding_map[0].mode );
+
+   for (i=1;i<encoding_map_size;i++)
+   {
+      fprintf(stderr, ",%s", encoding_map[i].mode);
+   }
 
    // Profile options
    fprintf(stderr, "\n\nH264 Profile options :\n%s", profile_map[0].mode );
@@ -1071,8 +1101,7 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
    // We want same format on input and output
    mmal_format_copy(encoder_output->format, encoder_input->format);
 
-   // Only supporting H264 at the moment
-   encoder_output->format->encoding = MMAL_ENCODING_H264;
+   encoder_output->format->encoding = state->encoding;
 
    encoder_output->format->bitrate = state->bitrate;
 
@@ -1095,18 +1124,28 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
       goto error;
    }
 
-
-   // Set the rate control parameter
-   if (0)
+   if (state->encoding == MMAL_ENCODING_H264)
    {
-      MMAL_PARAMETER_VIDEO_RATECONTROL_T param = {{ MMAL_PARAMETER_RATECONTROL, sizeof(param)}, MMAL_VIDEO_RATECONTROL_DEFAULT};
+      MMAL_PARAMETER_VIDEO_PROFILE_T  param;
+      param.hdr.id = MMAL_PARAMETER_PROFILE;
+      param.hdr.size = sizeof(param);
+
+      param.profile[0].profile = state->profile;
+      param.profile[0].level = MMAL_VIDEO_LEVEL_H264_4; // This is the only value supported
+
       status = mmal_port_parameter_set(encoder_output, &param.hdr);
       if (status != MMAL_SUCCESS)
       {
-         vcos_log_error("Unable to set ratecontrol");
+         vcos_log_error("Unable to set H264 profile");
          goto error;
       }
 
+      //set INLINE HEADER flag to generate SPS and PPS for every IDR if requested
+      if (mmal_port_parameter_set_boolean(encoder_output, MMAL_PARAMETER_VIDEO_ENCODE_INLINE_HEADER, state->bInlineHeaders) != MMAL_SUCCESS)
+      {
+         vcos_log_error("failed to set INLINE HEADER FLAG parameters");
+         // Continue rather than abort..
+      }
    }
 
    if (state->intraperiod)
@@ -1139,21 +1178,6 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
       }
    }
 
-   {
-      MMAL_PARAMETER_VIDEO_PROFILE_T  param;
-      param.hdr.id = MMAL_PARAMETER_PROFILE;
-      param.hdr.size = sizeof(param);
-
-      param.profile[0].profile = state->profile;
-      param.profile[0].level = MMAL_VIDEO_LEVEL_H264_4; // This is the only value supported
-
-      status = mmal_port_parameter_set(encoder_output, &param.hdr);
-      if (status != MMAL_SUCCESS)
-      {
-         vcos_log_error("Unable to set H264 profile");
-         goto error;
-      }
-   }
 
    if (mmal_port_parameter_set_boolean(encoder_input, MMAL_PARAMETER_VIDEO_IMMUTABLE_INPUT, state->immutableInput) != MMAL_SUCCESS)
    {
@@ -1161,12 +1185,6 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
       // Continue rather than abort..
    }
 
-   //set INLINE HEADER flag to generate SPS and PPS for every IDR if requested
-   if (mmal_port_parameter_set_boolean(encoder_output, MMAL_PARAMETER_VIDEO_ENCODE_INLINE_HEADER, state->bInlineHeaders) != MMAL_SUCCESS)
-   {
-      vcos_log_error("failed to set INLINE HEADER FLAG parameters");
-      // Continue rather than abort..
-   }
 
    //  Enable component
    status = mmal_component_enable(encoder);
@@ -1339,11 +1357,13 @@ static int wait_for_next_change(RASPIVID_STATE *state)
 
    case WAIT_METHOD_FOREVER:
    {
-      // We never return from this. Expect a ctrl-c to exit.
+      int running;
+      // We never return from this, unless we get an abort (out of space?). Expect a ctrl-c to exit otherwise
       while (1)
+      {
          // Have a sleep so we don't hog the CPU.
-         vcos_sleep(10000);
-
+         running = !pause_and_test_abort(state, 10000);
+      }
       return 0;
    }
 
@@ -1605,9 +1625,10 @@ int main(int argc, const char **argv)
                         vcos_log_error("Unable to send a buffer to encoder output port (%d)", q);
                   }
                }
-               
+
                int initialCapturing=state.bCapturing;
-               while (running)
+
+               while (running && state.callback_data.abort == 0)
                {
                   // Change state
 
@@ -1625,7 +1646,7 @@ int main(int argc, const char **argv)
                      else
                         fprintf(stderr, "Pausing video capture\n");
                   }
-                  
+
                   if(state.splitWait)
                   {
                      if(state.bCapturing)
@@ -1638,7 +1659,7 @@ int main(int argc, const char **argv)
                      else
                      {
                         if(!initialCapturing)
-                           state.splitNow=1;   
+                           state.splitNow=1;
                      }
                      initialCapturing=0;
                   }
