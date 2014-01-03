@@ -328,7 +328,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
 
    if (!valid)
    {
-      fprintf(stderr, "Invalid command line option (%s)\n", argv[i]);
+      fprintf(stderr, "Invalid command line option (%s)\n", argv[i-1]);
       return 1;
    }
 
