@@ -124,6 +124,17 @@ typedef struct
    FILE *file_handle;                   /// File handle to write buffer data to.
    RASPIVID_STATE *pstate;              /// pointer to our state in case required in callback
    int abort;                           /// Set to 1 in callback if an error occurs to attempt to abort the capture
+   char *cb_buff;                       /// Circular buffer
+   int   cb_len;                        /// Length of buffer
+   int   cb_wptr;                       /// Current write pointer
+   int   cb_wrap;                       /// Has buffer wrapped at least once?
+   int   cb_data;                       /// Valid bytes in buffer
+#define IFRAME_BUFSIZE (60*1000)
+   int   iframe_buff[IFRAME_BUFSIZE];          /// buffer of iframe pointers
+   int   iframe_buff_wpos;
+   int   iframe_buff_rpos;
+   char  header_bytes[29];
+   int  header_wptr;
 } PORT_USERDATA;
 
 /** Structure containing all state information for the current run
@@ -169,6 +180,7 @@ struct RASPIVID_STATE_S
    PORT_USERDATA callback_data;        /// Used to move data to the encoder callback
 
    int bCapturing;                     /// State of capture/pause
+   int bCircularBuffer;                /// Whether we are writing to a circular buffer
 
 };
 
@@ -218,6 +230,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandSegmentWrap  19
 #define CommandSegmentStart 20
 #define CommandSplitWait    21
+#define CommandCircular     22
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -243,6 +256,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandSegmentWrap,   "-wrap",       "wr", "In segment mode, wrap any numbered filename back to 1 when reach number", 1},
    { CommandSegmentStart,  "-start",      "sn", "In segment mode, start with specified segment number", 1},
    { CommandSplitWait,     "-split",      "sp", "In wait mode, create new output file for each start event", 0},
+   { CommandCircular,      "-circular",   "c",  "Run encoded data through circular buffer until triggered then save", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -597,6 +611,12 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
             valid = 0;
          break;
       }
+      
+      case CommandCircular:
+      {
+         state->bCircularBuffer = 1;
+         break;
+      }
 
       case CommandSegmentStart: // initial segment number
       {
@@ -807,20 +827,92 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
             pData->file_handle = new_handle;
          }
       }
+      else if (pData->cb_buff)
+      {
+         int space_in_buff = pData->cb_len - pData->cb_wptr;
+         int copy_to_end = space_in_buff > buffer->length ? buffer->length : space_in_buff;
+         int copy_to_start = buffer->length - copy_to_end;
 
-      if (buffer->length)
+         if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_CONFIG)
+         {
+            if(pData->header_wptr + buffer->length > sizeof(pData->header_bytes))
+            {
+               vcos_log_error("Error in header bytes\n");
+            }
+            else
+            {
+               // These are the header bytes, save them for final output
+               mmal_buffer_header_mem_lock(buffer);
+               memcpy(pData->header_bytes + pData->header_wptr, buffer->data, buffer->length);
+               mmal_buffer_header_mem_unlock(buffer);
+               pData->header_wptr += buffer->length;
+            }
+         }
+         else
+         {
+            static int frame_start = -1;
+            int i;
+
+            if(frame_start == -1)
+               frame_start = pData->cb_wptr;
+
+            if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_KEYFRAME)
+            {
+               pData->iframe_buff[pData->iframe_buff_wpos] = frame_start;
+               pData->iframe_buff_wpos = (pData->iframe_buff_wpos + 1) % IFRAME_BUFSIZE;
+            }
+
+            if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END)
+               frame_start = -1;
+
+            // If we overtake the iframe rptr then move the rptr along
+            if((pData->iframe_buff_rpos + 1) % IFRAME_BUFSIZE != pData->iframe_buff_wpos)
+               while(
+                  (
+                     pData->cb_wptr <= pData->iframe_buff[pData->iframe_buff_rpos] && 
+                    (pData->cb_wptr + buffer->length) > pData->iframe_buff[pData->iframe_buff_rpos]
+                  ) ||
+                  (
+                    (pData->cb_wptr > pData->iframe_buff[pData->iframe_buff_rpos]) && 
+                    (pData->cb_wptr + buffer->length) > (pData->iframe_buff[pData->iframe_buff_rpos] + pData->cb_len)
+                  )
+               )
+                  pData->iframe_buff_rpos = (pData->iframe_buff_rpos + 1) % IFRAME_BUFSIZE;
+	       
+               mmal_buffer_header_mem_lock(buffer);
+               // We are pushing data into a circular buffer
+               memcpy(pData->cb_buff + pData->cb_wptr, buffer->data, copy_to_end);
+               memcpy(pData->cb_buff, buffer->data + copy_to_end, copy_to_start);
+               mmal_buffer_header_mem_unlock(buffer);
+
+               if((pData->cb_wptr + buffer->length) > pData->cb_len)
+                  pData->cb_wrap = 1;
+                  
+               pData->cb_wptr = (pData->cb_wptr + buffer->length) % pData->cb_len;
+          
+               for(i = pData->iframe_buff_rpos; i != pData->iframe_buff_wpos; i = (i + 1) % IFRAME_BUFSIZE)
+               {
+                  int p = pData->iframe_buff[i];
+                  if(pData->cb_buff[p] != 0 || pData->cb_buff[p+1] != 0 || pData->cb_buff[p+2] != 0 || pData->cb_buff[p+3] != 1)
+                  {
+                     vcos_log_error("Error in iframe list\n");
+                  }
+               }
+            }
+         }
+      else if (buffer->length)
       {
          mmal_buffer_header_mem_lock(buffer);
 
          bytes_written = fwrite(buffer->data, 1, buffer->length, pData->file_handle);
 
          mmal_buffer_header_mem_unlock(buffer);
-      }
 
-      if (bytes_written != buffer->length)
-      {
-         vcos_log_error("Failed to write buffer data (%d from %d)- aborting", bytes_written, buffer->length);
-         pData->abort = 1;
+         if (bytes_written != buffer->length)
+         {
+            vcos_log_error("Failed to write buffer data (%d from %d)- aborting", bytes_written, buffer->length);
+            pData->abort = 1;
+         }
       }
    }
    else
@@ -1548,7 +1640,52 @@ int main(int argc, const char **argv)
                vcos_log_error("%s: Error opening output file: %s\nNo output file will be generated\n", __func__, state.filename);
             }
          }
-
+         
+         if(state.bCircularBuffer)
+         {
+            if(state.bitrate == 0)
+            {
+               vcos_log_error("%s: Error circular buffer requires constant bitrate and small intra period\n", __func__);
+               goto error;
+            }
+            else if(state.timeout == 0)
+            {
+               vcos_log_error("%s: Error, circular buffer size is based on timeout must be greater than zero\n", __func__);
+               goto error;
+            }
+            else if(state.waitMethod != WAIT_METHOD_KEYPRESS && state.waitMethod != WAIT_METHOD_SIGNAL)
+            {
+               vcos_log_error("%s: Error, Circular buffer mode requires either keypress (-k) or signal (-s) triggering\n", __func__);
+               goto error;
+            }
+            else if(!state.callback_data.file_handle)
+            {
+               vcos_log_error("%s: Error require output file (or stdout) for Circular buffer mode\n", __func__);
+               goto error;
+            }
+            else
+            {
+               int count = state.bitrate * (state.timeout / 1000) / 8;
+               
+               state.callback_data.cb_buff = (char *) malloc(count);
+               if(state.callback_data.cb_buff == NULL)
+               {
+                  vcos_log_error("%s: Unable to allocate circular buffer for %d seconds at %.1f Mbits\n", __func__, state.timeout / 1000, (double)state.bitrate/1000000.0);
+                  goto error;
+               }
+               else
+               {
+                  state.callback_data.cb_len = count;
+                  state.callback_data.cb_wptr = 0;
+                  state.callback_data.cb_wrap = 0;
+                  state.callback_data.cb_data = 0;
+                  state.callback_data.iframe_buff_wpos = 0;
+                  state.callback_data.iframe_buff_rpos = 0;
+                  state.callback_data.header_wptr = 0;
+               }
+            }
+         }
+         
          // Set up our userdata - this is passed though to the callback where we need the information.
          state.callback_data.pstate = &state;
          state.callback_data.abort = 0;
@@ -1618,6 +1755,12 @@ int main(int argc, const char **argv)
                      // How to handle?
                   }
 
+                  // In circular buffer mode, exit and save the buffer (make sure we do this after having paused the capture
+                  if(state.bCircularBuffer && !state.bCapturing)
+                  {
+                     break;
+                  }
+
                   if (state.verbose)
                   {
                      if (state.bCapturing)
@@ -1665,6 +1808,25 @@ int main(int argc, const char **argv)
       {
          mmal_status_to_int(status);
          vcos_log_error("%s: Failed to connect camera to preview", __func__);
+      }
+
+      if(state.bCircularBuffer)
+      {
+         int copy_from_end, copy_from_start;
+
+         copy_from_end = state.callback_data.cb_len - state.callback_data.iframe_buff[state.callback_data.iframe_buff_rpos];
+         copy_from_start = state.callback_data.cb_len - copy_from_end;
+         copy_from_start = state.callback_data.cb_wptr < copy_from_start ? state.callback_data.cb_wptr : copy_from_start;
+         if(!state.callback_data.cb_wrap)
+         {
+            copy_from_start = state.callback_data.cb_wptr;
+            copy_from_end = 0;
+         }
+
+         fwrite(state.callback_data.header_bytes, 1, state.callback_data.header_wptr, state.callback_data.file_handle);
+         // Save circular buffer
+         fwrite(state.callback_data.cb_buff + state.callback_data.iframe_buff[state.callback_data.iframe_buff_rpos], 1, copy_from_end, state.callback_data.file_handle);
+         fwrite(state.callback_data.cb_buff, 1, copy_from_start, state.callback_data.file_handle);
       }
 
 error:
