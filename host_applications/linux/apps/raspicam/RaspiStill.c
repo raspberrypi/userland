@@ -1354,7 +1354,7 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
          if (this_delay_ms < 0)
          {
             // We are already past the next exposure time
-            if (-this_delay_ms < -state->timelapse/2)
+            if (-this_delay_ms < state->timelapse/2)
             {
                // Less than a half frame late, take a frame and hope to catch up next time
                next_frame_ms += state->timelapse;
