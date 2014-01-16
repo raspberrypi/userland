@@ -1218,17 +1218,26 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
       status = mmal_port_parameter_set(encoder_output, &param.hdr);
       if (status != MMAL_SUCCESS)
       {
-         vcos_log_error("Unable to set QP");
+         vcos_log_error("Unable to set initial QP");
          goto error;
       }
 
-      MMAL_PARAMETER_UINT32_T param2 = {{ MMAL_PARAMETER_VIDEO_ENCODE_QP_P, sizeof(param)}, state->quantisationParameter+6};
+      MMAL_PARAMETER_UINT32_T param2 = {{ MMAL_PARAMETER_VIDEO_ENCODE_MIN_QUANT, sizeof(param)}, state->quantisationParameter};
       status = mmal_port_parameter_set(encoder_output, &param2.hdr);
       if (status != MMAL_SUCCESS)
       {
-         vcos_log_error("Unable to set QP");
+         vcos_log_error("Unable to set min QP");
          goto error;
       }
+
+      MMAL_PARAMETER_UINT32_T param3 = {{ MMAL_PARAMETER_VIDEO_ENCODE_MAX_QUANT, sizeof(param)}, state->quantisationParameter};
+      status = mmal_port_parameter_set(encoder_output, &param3.hdr);
+      if (status != MMAL_SUCCESS)
+      {
+         vcos_log_error("Unable to set max QP");
+         goto error;
+      }
+
    }
 
    {
