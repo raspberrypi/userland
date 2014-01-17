@@ -25,60 +25,76 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef VC_VCHI_DISPMANX_H
-#define VC_VCHI_DISPMANX_H
+// Spatial coordinates for the cube
 
-#include "interface/peer/vc_vchi_dispmanx_common.h"
+static const GLbyte quadx[6*4*3] = {
+   /* FRONT */
+   -10, -10,  10,
+   10, -10,  10,
+   -10,  10,  10,
+   10,  10,  10,
 
-#define VC_NUM_HOST_RESOURCES 64
-#define DISPMANX_MSGFIFO_SIZE 1024
-#define DISPMANX_CLIENT_NAME MAKE_FOURCC("DISP")
-#define DISPMANX_NOTIFY_NAME MAKE_FOURCC("UPDH")
+   /* BACK */
+   -10, -10, -10,
+   -10,  10, -10,
+   10, -10, -10,
+   10,  10, -10,
 
-//Or with command to indicate we don't need a response
-#define DISPMANX_NO_REPLY_MASK (1<<31)
+   /* LEFT */
+   -10, -10,  10,
+   -10,  10,  10,
+   -10, -10, -10,
+   -10,  10, -10,
 
-typedef struct {
-   char     description[32];
-   uint32_t width;
-   uint32_t height;
-   uint32_t aspect_pixwidth;
-   uint32_t aspect_pixheight;
-   uint32_t fieldrate_num;
-   uint32_t fieldrate_denom;
-   uint32_t fields_per_frame;
-   uint32_t transform;        
-} GET_MODES_DATA_T;
+   /* RIGHT */
+   10, -10, -10,
+   10,  10, -10,
+   10, -10,  10,
+   10,  10,  10,
 
-typedef struct {
-   int32_t  response;
-   uint32_t width;
-   uint32_t height;
-   uint32_t transform;
-   uint32_t input_format;
-} GET_INFO_DATA_T;
+   /* TOP */
+   -10,  10,  10,
+   10,  10,  10,
+   -10,  10, -10,
+   10,  10, -10,
 
-//Attributes changes flag mask
-#define ELEMENT_CHANGE_LAYER          (1<<0)
-#define ELEMENT_CHANGE_OPACITY        (1<<1)
-#define ELEMENT_CHANGE_DEST_RECT      (1<<2)
-#define ELEMENT_CHANGE_SRC_RECT       (1<<3)
-#define ELEMENT_CHANGE_MASK_RESOURCE  (1<<4)
-#define ELEMENT_CHANGE_TRANSFORM      (1<<5)
-
-#ifdef BUILD_WAYLAND
-/* XXX: This should be in a private header that can be included from EGL and vc_* */
-#include <wayland-server.h>
-#include "interface/vmcs_host/wayland-dispmanx-server-protocol.h"
-struct wl_dispmanx_server_buffer {
-	struct wl_resource *resource;
-	struct wl_dispmanx *dispmanx;
-	enum wl_dispmanx_format format;
-	DISPMANX_RESOURCE_HANDLE_T handle;
-	int32_t width;
-	int32_t height;
-	int in_use;
+   /* BOTTOM */
+   -10, -10,  10,
+   -10, -10, -10,
+   10, -10,  10,
+   10, -10, -10,
 };
-#endif
 
-#endif
+/** Texture coordinates for the quad. */
+static const GLfloat texCoords[6 * 4 * 2] = {
+   0.f,  0.f,
+   1.f,  0.f,
+   0.f,  1.f,
+   1.f,  1.f,
+
+   0.f,  0.f,
+   1.f,  0.f,
+   0.f,  1.f,
+   1.f,  1.f,
+
+   0.f,  0.f,
+   1.f,  0.f,
+   0.f,  1.f,
+   1.f,  1.f,
+
+   0.f,  0.f,
+   1.f,  0.f,
+   0.f,  1.f,
+   1.f,  1.f,
+
+   0.f,  0.f,
+   1.f,  0.f,
+   0.f,  1.f,
+   1.f,  1.f,
+
+   0.f,  0.f,
+   1.f,  0.f,
+   0.f,  1.f,
+   1.f,  1.f,
+};
+

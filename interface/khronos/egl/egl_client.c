@@ -153,6 +153,10 @@ by an attribute value"
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef BUILD_WAYLAND
+#include "interface/khronos/wayland-egl/wayland-egl-priv.h"
+#include "interface/khronos/common/linux/khrn_wayland.h"
+#endif
 
 #include "interface/khronos/egl/egl_client_cr.c"
 
@@ -438,6 +442,9 @@ EGLAPI const char EGLAPIENTRY * eglQueryString(EGLDisplay dpy, EGLint name)
 #ifdef EGL_KHR_fence_sync
             "EGL_KHR_fence_sync "
 #endif
+#endif
+#if EGL_WL_bind_wayland_display
+            "EGL_WL_bind_wayland_display "
 #endif
             ;
          break;
@@ -2232,6 +2239,9 @@ EGLAPI EGLBoolean EGLAPIENTRY eglSwapBuffers(EGLDisplay dpy, EGLSurface surf)
    CLIENT_THREAD_STATE_T *thread;
    CLIENT_PROCESS_STATE_T *process;
    EGLBoolean result;
+#ifdef BUILD_WAYLAND
+   struct wl_display *wl_display = khrn_platform_get_wl_display();
+#endif
 
    vcos_log_trace("eglSwapBuffers start. dpy=%d. surf=%d.", (int)dpy, (int)surf);
 
@@ -2302,6 +2312,58 @@ EGLAPI EGLBoolean EGLAPIENTRY eglSwapBuffers(EGLDisplay dpy, EGLSurface surf)
 
                vcos_log_trace("eglSwapBuffers server call");
 
+#ifdef BUILD_WAYLAND
+               if (wl_display) {
+                  struct wl_egl_window *wl_egl_window = surface->wl_egl_window;
+                  struct wl_dispmanx_client_buffer *buffer_temp;
+                  uint32_t configid;
+                  KHRN_IMAGE_FORMAT_T color;
+                  int ret = 0;
+
+                  buffer_temp = surface->front_wl_buffer;
+                  surface->front_wl_buffer = surface->back_wl_buffer;
+                  surface->back_wl_buffer = buffer_temp;
+
+                  configid = egl_config_to_id(surface->config);
+                  color = egl_config_get_color_format(configid);
+
+                  if (surface->back_wl_buffer == NULL)
+                     surface->back_wl_buffer = allocate_wl_buffer(wl_egl_window, color);
+                  else if (surface->back_wl_buffer->width != width ||
+                           surface->back_wl_buffer->height != height) {
+
+                     struct wl_dispmanx_client_buffer *buffer;
+
+                     wl_buffer_destroy(surface->back_wl_buffer->wl_buffer);
+                     free(surface->back_wl_buffer);
+
+                     buffer = allocate_wl_buffer(wl_egl_window, color);
+                     surface->back_wl_buffer = buffer;
+                  }
+
+                  RPC_CALL7(eglIntSwapBuffers_impl,
+                        thread,
+                        EGLINTSWAPBUFFERS_ID_V2,
+                        RPC_UINT(surface->serverbuffer),
+                        RPC_UINT(surface->width),
+                        RPC_UINT(surface->height),
+                        RPC_UINT(surface->internal_handle),
+                        RPC_UINT(surface->swap_behavior == EGL_BUFFER_PRESERVED ? 1 : 0),
+                        RPC_UINT(khrn_platform_get_window_position(surface->win)),
+                        RPC_INT(surface->back_wl_buffer->resource));
+
+                  surface->front_wl_buffer->in_use = 1;
+                  wl_surface_attach(wl_egl_window->wl_surface,
+                                    surface->front_wl_buffer->wl_buffer,
+                                    0, 0);
+                  wl_surface_damage(wl_egl_window->wl_surface, 0, 0,
+                                    surface->width, surface->height);
+                  wl_surface_commit(wl_egl_window->wl_surface);
+
+                  while(ret != -1 && surface->back_wl_buffer->in_use)
+                     ret = wl_display_dispatch_queue(wl_display, process->wl_queue);
+               } else
+#endif
                RPC_CALL6(eglIntSwapBuffers_impl,
                      thread,
                      EGLINTSWAPBUFFERS_ID,

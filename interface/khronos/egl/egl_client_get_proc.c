@@ -254,6 +254,17 @@ EGLAPI void EGLAPIENTRY (* eglGetProcAddress(const char *procname))(void)
       return (void(*)(void))eglQueryGlobalImageBRCM;
 #endif
 
+#ifdef BUILD_WAYLAND
+#if EGL_WL_bind_wayland_display
+   if (!strcmp(procname, "eglBindWaylandDisplayWL"))
+      return (void(*)(void))eglBindWaylandDisplayWL;
+   if (!strcmp(procname, "eglUnbindWaylandDisplayWL"))
+      return (void(*)(void))eglUnbindWaylandDisplayWL;
+   if (!strcmp(procname, "eglQueryWaylandBufferWL"))
+      return (void(*)(void))eglQueryWaylandBufferWL;
+#endif
+#endif
+
    return (void(*)(void)) NULL;
 }
 

@@ -288,6 +288,41 @@ typedef struct {
       type == PIXMAP
    */
    bool server_owned;
+
+#ifdef BUILD_WAYLAND
+   /*
+      wl_egl_window
+
+      Validity:
+      type == WINDOW
+
+      Invariant:
+      wayland EGL window
+   */
+   struct wl_egl_window *wl_egl_window;
+
+   /*
+      front_wl_buffer
+
+      Validity:
+      type == WINDOW
+
+      Invariant:
+      client-side information about the wl_buffer in the front
+   */
+   struct wl_dispmanx_client_buffer *front_wl_buffer;
+
+   /*
+      back_wl_buffer
+
+      Validity:
+      type == WINDOW
+
+      Invariant:
+      client-side information about the wl_buffer in the back
+   */
+   struct wl_dispmanx_client_buffer *back_wl_buffer;
+#endif
 } EGL_SURFACE_T;
 
 extern bool egl_surface_check_attribs(

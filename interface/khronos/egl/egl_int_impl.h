@@ -56,7 +56,8 @@ FN(int, eglIntCreateSurface_impl, (
    uint32_t config_stencil_bits,
    uint32_t sem,
    uint32_t type,
-   uint32_t *results))
+   uint32_t *results,
+   DISPMANX_RESOURCE_HANDLE_T resource_handle))
 
 FN(int, eglIntCreatePbufferFromVGImage_impl, (
    VGImage vg_handle,
@@ -110,7 +111,7 @@ FN(void, eglIntMakeCurrent_impl, (uint32_t pid_0, uint32_t pid_1, uint32_t glver
 FN(int, eglIntFlushAndWait_impl, (uint32_t flushgl, uint32_t flushvg))
 FN(void, eglIntFlush_impl, (uint32_t flushgl, uint32_t flushvg))
 
-FN(void, eglIntSwapBuffers_impl, (EGL_SURFACE_ID_T s, uint32_t width, uint32_t height, uint32_t handle, uint32_t preserve, uint32_t position))
+FN(void, eglIntSwapBuffers_impl, (EGL_SURFACE_ID_T s, uint32_t width, uint32_t height, uint32_t handle, uint32_t preserve, uint32_t position, DISPMANX_RESOURCE_HANDLE_T new_back_buffer))
 FN(void, eglIntSelectMipmap_impl, (EGL_SURFACE_ID_T s, int level))
 
 FN(void, eglIntGetColorData_impl, (EGL_SURFACE_ID_T s, KHRN_IMAGE_FORMAT_T format, uint32_t width, uint32_t height, int32_t stride, uint32_t y_offset, void *data))
