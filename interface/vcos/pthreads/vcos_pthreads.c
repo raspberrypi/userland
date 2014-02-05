@@ -79,12 +79,39 @@ static VCOS_MUTEX_T printf_lock;
  * on non-vcos threads.
  */
 pthread_key_t _vcos_thread_current_key;
+
 static VCOS_UNSIGNED _vcos_thread_current_key_created = 0;
 static VCOS_ONCE_T current_thread_key_once;  /* init just once */
+
+static void vcos_thread_cleanup(VCOS_THREAD_T *thread)
+{
+   vcos_semaphore_delete(&thread->suspend);
+   if (thread->task_timer_created)
+   {
+      vcos_timer_delete(&thread->task_timer);
+   }
+}
+
+static void vcos_dummy_thread_cleanup(void *cxt)
+{
+   VCOS_THREAD_T *thread = cxt;
+   if (thread->dummy)
+   {
+      int i;
+      /* call termination functions */
+      for (i=0; thread->at_exit[i].pfn != NULL; i++)
+      {
+         thread->at_exit[i].pfn(thread->at_exit[i].cxt);
+      }
+      vcos_thread_cleanup(thread);
+      vcos_free(thread);
+   }
+}
+
 static void current_thread_key_init(void)
 {
    vcos_assert(!_vcos_thread_current_key_created);
-   pthread_key_create (&_vcos_thread_current_key, NULL);
+   pthread_key_create (&_vcos_thread_current_key, vcos_dummy_thread_cleanup);
    _vcos_thread_current_key_created = 1;
 }
 
@@ -201,11 +228,7 @@ void vcos_thread_join(VCOS_THREAD_T *thread,
                              void **pData)
 {
    pthread_join(thread->thread, pData);
-   vcos_semaphore_delete(&thread->suspend);
-   if (thread->task_timer_created)
-   {
-      vcos_timer_delete(&thread->task_timer);
-   }
+   vcos_thread_cleanup(thread);
 }
 
 VCOSPRE_ VCOS_STATUS_T VCOSPOST_ vcos_thread_create_classic(VCOS_THREAD_T *thread,
