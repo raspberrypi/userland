@@ -441,7 +441,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
             state->filename = malloc(len + 10); // leave enough space for any timelapse generated changes to filename
             vcos_assert(state->filename);
             if (state->filename)
-               strncpy(state->filename, argv[i + 1], len);
+               strncpy(state->filename, argv[i + 1], len+1);
             i++;
          }
          else
@@ -457,7 +457,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
             state->linkname = malloc(len + 10);
             vcos_assert(state->linkname);
             if (state->linkname)
-               strncpy(state->linkname, argv[i + 1], len);
+               strncpy(state->linkname, argv[i + 1], len+1);
             i++;
          }
          else
