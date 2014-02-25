@@ -88,7 +88,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 // Stills format information
-#define STILLS_FRAME_RATE_NUM 15
+// 0 implies variable
+#define STILLS_FRAME_RATE_NUM 0
 #define STILLS_FRAME_RATE_DEN 1
 
 /// Video render needs at least 2 buffers.
