@@ -31,10 +31,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 /// Layer that preview window should be displayed on
 #define PREVIEW_LAYER      2
-#define PREVIEW_FRAME_RATE_NUM 30
+
+// Frames rates of 0 implies variable, but denominator needs to be 1 to prevent div by 0
+#define PREVIEW_FRAME_RATE_NUM 0
 #define PREVIEW_FRAME_RATE_DEN 1
 
-#define FULL_RES_PREVIEW_FRAME_RATE_NUM 15
+#define FULL_RES_PREVIEW_FRAME_RATE_NUM 0
 #define FULL_RES_PREVIEW_FRAME_RATE_DEN 1
 
 

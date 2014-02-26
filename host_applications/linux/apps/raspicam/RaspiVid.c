@@ -84,6 +84,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MMAL_CAMERA_CAPTURE_PORT 2
 
 // Video format information
+// 0 implies variable
 #define VIDEO_FRAME_RATE_NUM 30
 #define VIDEO_FRAME_RATE_DEN 1
 
@@ -1019,8 +1020,8 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
    format->es->video.crop.y = 0;
    format->es->video.crop.width = state->width;
    format->es->video.crop.height = state->height;
-   format->es->video.frame_rate.num = state->framerate;
-   format->es->video.frame_rate.den = VIDEO_FRAME_RATE_DEN;
+   format->es->video.frame_rate.num = PREVIEW_FRAME_RATE_NUM;
+   format->es->video.frame_rate.den = PREVIEW_FRAME_RATE_DEN;
 
    status = mmal_port_format_commit(preview_port);
 
@@ -1071,7 +1072,7 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
    format->es->video.crop.y = 0;
    format->es->video.crop.width = state->width;
    format->es->video.crop.height = state->height;
-   format->es->video.frame_rate.num = 1;
+   format->es->video.frame_rate.num = 0;
    format->es->video.frame_rate.den = 1;
 
    status = mmal_port_format_commit(still_port);
