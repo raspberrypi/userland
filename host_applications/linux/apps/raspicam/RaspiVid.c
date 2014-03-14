@@ -56,7 +56,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <memory.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.10"
+#define VERSION_STRING "v1.3.11"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -1014,8 +1014,8 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
    format->encoding_variant = MMAL_ENCODING_I420;
 
    format->encoding = MMAL_ENCODING_OPAQUE;
-   format->es->video.width = state->width;
-   format->es->video.height = state->height;
+   format->es->video.width = VCOS_ALIGN_UP(state->width, 32);
+   format->es->video.height = VCOS_ALIGN_UP(state->height, 16);
    format->es->video.crop.x = 0;
    format->es->video.crop.y = 0;
    format->es->video.crop.width = state->width;
@@ -1037,8 +1037,8 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
    format->encoding_variant = MMAL_ENCODING_I420;
 
    format->encoding = MMAL_ENCODING_OPAQUE;
-   format->es->video.width = state->width;
-   format->es->video.height = state->height;
+   format->es->video.width = VCOS_ALIGN_UP(state->width, 32);
+   format->es->video.height = VCOS_ALIGN_UP(state->height, 16);
    format->es->video.crop.x = 0;
    format->es->video.crop.y = 0;
    format->es->video.crop.width = state->width;
@@ -1066,8 +1066,8 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
    format->encoding = MMAL_ENCODING_OPAQUE;
    format->encoding_variant = MMAL_ENCODING_I420;
 
-   format->es->video.width = state->width;
-   format->es->video.height = state->height;
+   format->es->video.width = VCOS_ALIGN_UP(state->width, 32);
+   format->es->video.height = VCOS_ALIGN_UP(state->height, 16);
    format->es->video.crop.x = 0;
    format->es->video.crop.y = 0;
    format->es->video.crop.width = state->width;
