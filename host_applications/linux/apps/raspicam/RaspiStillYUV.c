@@ -55,7 +55,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <memory.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.2"
+#define VERSION_STRING "v1.3.3"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -506,8 +506,8 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
          .max_stills_h = state->height,
          .stills_yuv422 = 0,
          .one_shot_stills = 1,
-         .max_preview_video_w = state->preview_parameters.previewWindow.width,
-         .max_preview_video_h = state->preview_parameters.previewWindow.height,
+         .max_preview_video_w = VCOS_ALIGN_UP(FULL_FOV_PREVIEW_4x3_X, 32),
+         .max_preview_video_h = VCOS_ALIGN_UP(FULL_FOV_PREVIEW_4x3_Y, 16),
          .num_preview_video_frames = 3,
          .stills_capture_circular_buffer_height = 0,
          .fast_preview_resume = 0,
@@ -525,14 +525,15 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
    format->encoding = MMAL_ENCODING_OPAQUE;
    format->encoding_variant = MMAL_ENCODING_I420;
 
-   format->es->video.width = state->preview_parameters.previewWindow.width;
-   format->es->video.height = state->preview_parameters.previewWindow.height;
+   // Use a full FOV 4:3 mode
+   format->es->video.width = VCOS_ALIGN_UP(FULL_FOV_PREVIEW_4x3_X, 32);
+   format->es->video.height = VCOS_ALIGN_UP(FULL_FOV_PREVIEW_4x3_Y, 16);
    format->es->video.crop.x = 0;
    format->es->video.crop.y = 0;
-   format->es->video.crop.width = state->preview_parameters.previewWindow.width;
-   format->es->video.crop.height = state->preview_parameters.previewWindow.height;
-   format->es->video.frame_rate.num = PREVIEW_FRAME_RATE_NUM;
-   format->es->video.frame_rate.den = PREVIEW_FRAME_RATE_DEN;
+   format->es->video.crop.width = FULL_FOV_PREVIEW_4x3_X;
+   format->es->video.crop.height = FULL_FOV_PREVIEW_4x3_Y;
+   format->es->video.frame_rate.num = FULL_FOV_PREVIEW_FRAME_RATE_NUM;
+   format->es->video.frame_rate.den = FULL_FOV_PREVIEW_FRAME_RATE_DEN;
 
    status = mmal_port_format_commit(preview_port);
 
@@ -569,8 +570,8 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
       format->encoding = MMAL_ENCODING_I420;
       format->encoding_variant = MMAL_ENCODING_I420;
    }
-   format->es->video.width = state->width;
-   format->es->video.height = state->height;
+   format->es->video.width = VCOS_ALIGN_UP(state->width, 32);
+   format->es->video.height = VCOS_ALIGN_UP(state->height, 16);;
    format->es->video.crop.x = 0;
    format->es->video.crop.y = 0;
    format->es->video.crop.width = state->width;
