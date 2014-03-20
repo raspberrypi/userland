@@ -447,7 +447,7 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
             state->filename = malloc(len + 1);
             vcos_assert(state->filename);
             if (state->filename)
-               strncpy(state->filename, argv[i + 1], len);
+               strncpy(state->filename, argv[i + 1], len+1);
             i++;
          }
          else
@@ -1179,6 +1179,11 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
    if (encoder_output->buffer_num < encoder_output->buffer_num_min)
       encoder_output->buffer_num = encoder_output->buffer_num_min;
 
+   // We need to set the frame rate on output to 0, to ensure it gets
+   // updated correctly from the input framerate when port connected
+   encoder_output->format->es->video.frame_rate.num = 0;
+   encoder_output->format->es->video.frame_rate.den = 1;
+
    // Commit the port changes to the output port
    status = mmal_port_format_commit(encoder_output);
 
@@ -1187,7 +1192,6 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
       vcos_log_error("Unable to set format on video encoder output port");
       goto error;
    }
-
 
    // Set the rate control parameter
    if (0)
