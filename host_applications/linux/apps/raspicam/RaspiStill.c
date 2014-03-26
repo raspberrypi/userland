@@ -816,8 +816,8 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
          .max_stills_h = state->height,
          .stills_yuv422 = 0,
          .one_shot_stills = 1,
-         .max_preview_video_w = VCOS_ALIGN_UP(FULL_FOV_PREVIEW_4x3_X, 32),
-         .max_preview_video_h = VCOS_ALIGN_UP(FULL_FOV_PREVIEW_4x3_Y, 16),
+         .max_preview_video_w = state->preview_parameters.previewWindow.width,
+         .max_preview_video_h = state->preview_parameters.previewWindow.height,
          .num_preview_video_frames = 3,
          .stills_capture_circular_buffer_height = 0,
          .fast_preview_resume = 0,
@@ -857,14 +857,14 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
    else
    {
       // Use a full FOV 4:3 mode
-      format->es->video.width = VCOS_ALIGN_UP(FULL_FOV_PREVIEW_4x3_X, 32);
-      format->es->video.height = VCOS_ALIGN_UP(FULL_FOV_PREVIEW_4x3_Y, 16);
+      format->es->video.width = VCOS_ALIGN_UP(state->preview_parameters.previewWindow.width, 32);
+      format->es->video.height = VCOS_ALIGN_UP(state->preview_parameters.previewWindow.height, 16);
       format->es->video.crop.x = 0;
       format->es->video.crop.y = 0;
-      format->es->video.crop.width = FULL_FOV_PREVIEW_4x3_X; // Changing these? Also change camera config max settings to match.
-      format->es->video.crop.height = FULL_FOV_PREVIEW_4x3_Y;
-      format->es->video.frame_rate.num = FULL_FOV_PREVIEW_FRAME_RATE_NUM;
-      format->es->video.frame_rate.den = FULL_FOV_PREVIEW_FRAME_RATE_DEN;
+      format->es->video.crop.width = state->preview_parameters.previewWindow.width;
+      format->es->video.crop.height = state->preview_parameters.previewWindow.height;
+      format->es->video.frame_rate.num = PREVIEW_FRAME_RATE_NUM;
+      format->es->video.frame_rate.den = PREVIEW_FRAME_RATE_DEN;
    }
 
    status = mmal_port_format_commit(preview_port);
