@@ -131,6 +131,7 @@ static const int metering_mode_map_size = sizeof(metering_mode_map)/sizeof(meter
 #define CommandVFlip       14
 #define CommandROI         15
 #define CommandShutterSpeed 16
+#define CommandAwbGains    17
 
 static COMMAND_LIST  cmdline_commands[] =
 {
@@ -150,7 +151,8 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandHFlip,       "-hflip",     "hf", "Set horizontal flip", 0},
    {CommandVFlip,       "-vflip",     "vf", "Set vertical flip", 0},
    {CommandROI,         "-roi",       "roi","Set region of interest (x,y,w,d as normalised coordinates [0.0-1.0])", 1},
-   {CommandShutterSpeed,"-shutter",   "ss", "Set shutter speed in microseconds", 1}
+   {CommandShutterSpeed,"-shutter",   "ss", "Set shutter speed in microseconds", 1},
+   {CommandAwbGains,    "-awbgains",  "awbg", "Set AWB gains - AWB mode must be off", 1}
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -575,11 +577,30 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
    }
 
    case CommandShutterSpeed : // Shutter speed needs single number parameter
+   {
       sscanf(arg2, "%d", &params->shutter_speed);
       used = 2;
       break;
+   }
 
+   case CommandAwbGains :
+      {
+      double r,b;
+      int args;
 
+      args = sscanf(arg2, "%lf,%lf", &r,&b);
+
+      if (args != 2 || r > 8.0 || b > 8.0)
+      {
+         return 0;
+      }
+
+      params->awb_gains_r = r;
+      params->awb_gains_b = b;
+
+      used = 2;
+      break;
+      }
    }
 
    return used;
@@ -712,6 +733,8 @@ void raspicamcontrol_set_defaults(RASPICAM_CAMERA_PARAMETERS *params)
    params->roi.x = params->roi.y = 0.0;
    params->roi.w = params->roi.h = 1.0;
    params->shutter_speed = 0;          // 0 = auto
+   params->awb_gains_r = 0;      // Only have any function if AWB OFF is used.
+   params->awb_gains_b = 0;
 }
 
 /**
@@ -765,6 +788,7 @@ int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_
    result += raspicamcontrol_set_exposure_mode(camera, params->exposureMode);
    result += raspicamcontrol_set_metering_mode(camera, params->exposureMeterMode);
    result += raspicamcontrol_set_awb_mode(camera, params->awbMode);
+   result += raspicamcontrol_set_awb_gains(camera, params->awb_gains_r, params->awb_gains_b);
    result += raspicamcontrol_set_imageFX(camera, params->imageEffect);
    result += raspicamcontrol_set_colourFX(camera, &params->colourEffects);
    //result += raspicamcontrol_set_thumbnail_parameters(camera, &params->thumbnailConfig);  TODO Not working for some reason
@@ -1001,6 +1025,22 @@ int raspicamcontrol_set_awb_mode(MMAL_COMPONENT_T *camera, MMAL_PARAM_AWBMODE_T 
    if (!camera)
       return 1;
 
+   return mmal_status_to_int(mmal_port_parameter_set(camera->control, &param.hdr));
+}
+
+int raspicamcontrol_set_awb_gains(MMAL_COMPONENT_T *camera, float r_gain, float b_gain)
+{
+   MMAL_PARAMETER_AWB_GAINS_T param = {{MMAL_PARAMETER_CUSTOM_AWB_GAINS,sizeof(param)}, {0,0}, {0,0}};
+
+   if (!camera)
+      return 1;
+
+   if (!r_gain || !b_gain)
+      return 0;
+
+   param.r_gain.num = (unsigned int)(r_gain * 65536);
+   param.b_gain.num = (unsigned int)(b_gain * 65536);
+   param.r_gain.den = param.b_gain.den = 65536;
    return mmal_status_to_int(mmal_port_parameter_set(camera->control, &param.hdr));
 }
 
