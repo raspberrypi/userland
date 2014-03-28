@@ -56,6 +56,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <unistd.h>
 #include <errno.h>
 #include <sysexits.h>
+#include <libgen.h>
 
 #define VERSION_STRING "v1.3.7"
 
@@ -1528,7 +1529,7 @@ int main(int argc, const char **argv)
    // Do we have any parameters
    if (argc == 1)
    {
-      fprintf(stderr, "\%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
+      fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
 
       display_valid_parameters(basename(argv[0]));
       exit(EX_USAGE);
