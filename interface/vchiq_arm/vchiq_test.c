@@ -716,7 +716,6 @@ vchiq_signal_test(void)
    int fourcc;
 
    static int sizes[] = { 0, 1024, 2048, VCHIQ_MAX_MSG_SIZE };
-   unsigned int i;
 
    fourcc = VCHIQ_MAKE_FOURCC(g_servname[0], g_servname[1], g_servname[2], g_servname[3]);
 
