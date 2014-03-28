@@ -299,7 +299,7 @@ static int vchiq_test(int argc, char **argv)
    {
       static VCOS_THREAD_T server_task;
       void          *pointer = NULL;
-      int stack_size = 4096;
+      int stack_size = 8192;
 
 #if VCOS_CAN_SET_STACK_ADDR
       pointer = malloc(stack_size);
