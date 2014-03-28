@@ -1,5 +1,6 @@
 /*
-Copyright (c) 2012, Broadcom Europe Ltd
+Copyright (c) 2013, Broadcom Europe Ltd
+Copyright (c) 2013, James Hughes
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -25,13 +26,6 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-/*
- * RaspiCLI.h
- *
- *  Created on: 54th March 2013
- *      Author: James Hughes
- */
-
 #ifndef RASPICLI_H_
 #define RASPICLI_H_
 
@@ -44,9 +38,19 @@ typedef struct
    int num_parameters;
 } COMMAND_LIST;
 
+/// Cross reference structure, mode string against mode id
+typedef struct xref_t
+{
+   char *mode;
+   int mmal_mode;
+} XREF_T;
+
 
 void raspicli_display_help(const COMMAND_LIST *commands, const int num_commands);
 int raspicli_get_command_id(const COMMAND_LIST *commands, const int num_commands, const char *arg, int *num_parameters);
+
+int raspicli_map_xref(const char *str, const XREF_T *map, int num_refs);
+const char *raspicli_unmap_xref(const int en, XREF_T *map, int num_refs);
 
 
 #endif

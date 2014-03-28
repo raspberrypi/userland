@@ -14,3 +14,11 @@ add_library (mmal_core SHARED
 target_link_libraries (mmal_core vcos)
 
 install(TARGETS mmal_core DESTINATION lib)
+install(FILES
+   mmal_buffer_private.h
+   mmal_clock_private.h
+   mmal_component_private.h
+   mmal_core_private.h
+   mmal_port_private.h
+   DESTINATION include/interface/mmal/core
+)

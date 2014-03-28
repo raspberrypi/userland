@@ -329,7 +329,7 @@ typedef enum OMX_INDEXTYPE {
     OMX_IndexConfigCameraFlashConfig,       /**<reference: OMX_CONFIG_CAMERAFLASHCONFIGTYPE */
     OMX_IndexConfigCaptureRawImageURI,      /**<reference: OMX_PARAM_CONTENTURITYPE */
     OMX_IndexConfigCameraStripeFuncMinLines, /**<reference: OMX_PARAM_U32TYPE */
-    OMX_IndexConfigCameraAlgorithmVersionDeprecated,   /**<reference: OMX_CONFIG_CAMERAALGORITHMVERSIONTYPE */
+    OMX_IndexConfigCameraAlgorithmVersionDeprecated,   /**<reference: OMX_PARAM_U32TYPE */
     OMX_IndexConfigCameraIsoReferenceValue,  /**<reference: OMX_PARAM_U32TYPE */
     OMX_IndexConfigCameraCaptureAbortsAutoFocus, /**<reference: OMX_CONFIG_BOOLEANTYPE */
     OMX_IndexConfigBrcmClockMissCount,      /**<reference: OMX_PARAM_U32TYPE */
@@ -355,7 +355,7 @@ typedef enum OMX_INDEXTYPE {
     OMX_IndexParamBrcmDisableProprietaryTunnels,   /**< reference: OMX_PARAM_BRCMDISABLEPROPRIETARYTUNNELSTYPE */
     OMX_IndexParamBrcmOutputBufferSize,         /**<  reference: OMX_PARAM_BRCMOUTPUTBUFFERSIZETYPE */
     OMX_IndexParamBrcmRetainMemory,             /**< reference: OMX_PARAM_BRCMRETAINMEMORYTYPE */
-    OMX_IndexConfigCanFocus_Deprecated,                    /**< reference: OMX_CONFIG_CANFOCUSTYPE */
+    OMX_IndexConfigCanFocus_Deprecated,                    /**< reference: OMX_PARAM_U32TYPE */
     OMX_IndexParamBrcmImmutableInput,           /**< reference: OMX_CONFIG_BOOLEANTYPE */
     OMX_IndexParamDynamicParameterFile,        /**< reference: OMX_PARAM_CONTENTURITYPE */
 
@@ -460,8 +460,8 @@ typedef enum OMX_INDEXTYPE {
     OMX_IndexParamRateControlModel,            /**< reference: OMX_PARAM_U32TYPE */
     OMX_IndexParamBrcmExtraBuffers,            /**< reference: OMX_PARAM_U32TYPE */
     OMX_IndexConfigFieldOfView,                /**< reference: OMX_CONFIG_BRCMFOVTYPE */
-    OMX_IndexParamBrcmAlignHoriz,              /**< reference: OMX_CONFIG_U32TYPE */
-    OMX_IndexParamBrcmAlignVert,               /**< reference: OMX_CONFIG_U32TYPE */
+    OMX_IndexParamBrcmAlignHoriz,              /**< reference: OMX_PARAM_U32TYPE */
+    OMX_IndexParamBrcmAlignVert,               /**< reference: OMX_PARAM_U32TYPE */
     OMX_IndexParamColorSpace,                  /**< reference: OMX_PARAM_COLORSPACETYPE */
     OMX_IndexParamBrcmDroppablePFrames,        /**< reference: OMX_CONFIG_BOOLEANTYPE */
     OMX_IndexParamBrcmVideoInitialQuant,       /**< reference: OMX_PARAM_U32TYPE */
@@ -499,9 +499,15 @@ typedef enum OMX_INDEXTYPE {
     OMX_IndexConfigBrcmPowerMonitor,           /**< reference: OMX_CONFIG_BOOLEANTYPE */
     OMX_IndexParamBrcmZeroCopy,                /**< reference: OMX_CONFIG_PORTBOOLEANTYPE */
     OMX_IndexParamBrcmVideoEGLRenderDiscardMode,   /**< reference: OMX_CONFIG_PORTBOOLEANTYPE */
+    OMX_IndexParamBrcmVideoAVC_VCLHRDEnable,    /**< reference: OMX_CONFIG_PORTBOOLEANTYPE*/
+    OMX_IndexParamBrcmVideoAVC_LowDelayHRDEnable, /**< reference: OMX_CONFIG_PORTBOOLEANTYPE*/
+    OMX_IndexParamBrcmVideoCroppingDisable,    /**< reference: OMX_CONFIG_PORTBOOLEANTYPE*/
+    OMX_IndexParamBrcmVideoAVCInlineHeaderEnable, /**< reference: OMX_CONFIG_PORTBOOLEANTYPE*/
 
     // 0x7f0000f0
     OMX_IndexConfigBrcmAudioDownmixCoefficients = 0x7f0000f0, /**< reference: OMX_CONFIG_BRCMAUDIODOWNMIXCOEFFICIENTS */
+    OMX_IndexConfigBrcmAudioDownmixCoefficients8x8,           /**< reference: OMX_CONFIG_BRCMAUDIODOWNMIXCOEFFICIENTS8x8 */
+    OMX_IndexConfigBrcmAudioMaxSample,                        /**< reference: OMX_CONFIG_BRCMAUDIOMAXSAMPLE */
 
     OMX_IndexMax = 0x7FFFFFFF
 } OMX_INDEXTYPE;

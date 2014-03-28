@@ -30,6 +30,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/khronos/include/EGL/eglext.h"
 #include "middleware/khronos/egl/egl_server.h"
 #include "middleware/imageconv/imageconv.h"
+#include "vcinclude/vc_image_types.h"
 
 
 typedef struct EGL_IMAGE_T {
@@ -56,11 +57,10 @@ typedef struct EGL_IMAGE_T {
        */
       MEM_HANDLE_T src;
       const IMAGE_CONVERT_CLASS_T *convert;
+      KHRN_IMAGE_FORMAT_T conv_khrn_format;
+      VC_IMAGE_TYPE_T conv_vc_format;
       uint32_t src_updated;
       uint32_t src_converted;
-
-      /* Indicates whether the external source image has been acquired */
-      IMAGECONV_DRIVER_IMAGE_T *acquired_image;
    } external;
 
 } EGL_IMAGE_T;

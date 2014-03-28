@@ -532,14 +532,14 @@ VCHPRE_ DISPMANX_DISPLAY_HANDLE_T VCHPOST_ vc_dispmanx_display_open_mode( uint32
  *
  * Arguments:
  *       DISPMANX_RESOURCE_HANDLE_T dest
- *       VC_IMAGE_TRANSFORM_T orientation
+ *       DISPMANX_TRANSFORM_T orientation
  *
  * Description:
  *
  * Returns:
  *
  ***********************************************************/
-VCHPRE_ DISPMANX_DISPLAY_HANDLE_T VCHPOST_ vc_dispmanx_display_open_offscreen( DISPMANX_RESOURCE_HANDLE_T dest, VC_IMAGE_TRANSFORM_T orientation ) {
+VCHPRE_ DISPMANX_DISPLAY_HANDLE_T VCHPOST_ vc_dispmanx_display_open_offscreen( DISPMANX_RESOURCE_HANDLE_T dest, DISPMANX_TRANSFORM_T orientation ) {
    uint32_t display_open_param[] = {(uint32_t)VC_HTOV32(dest), (uint32_t)VC_HTOV32(orientation)};
    uint32_t display_handle = dispmanx_get_handle(EDispmanDisplayOpenOffscreen,
                                                  &display_open_param, sizeof(display_open_param));
@@ -633,7 +633,7 @@ vc_dispmanx_display_get_info (DISPMANX_DISPLAY_HANDLE_T display,
    if(success == 0) {
       pinfo->width = VC_VTOH32(info.width);
       pinfo->height = VC_VTOH32(info.height);
-      pinfo->transform = (VC_IMAGE_TRANSFORM_T)VC_VTOH32(info.transform);
+      pinfo->transform = (DISPMANX_TRANSFORM_T)VC_VTOH32(info.transform);
       pinfo->input_format = (DISPLAY_INPUT_FORMAT_T)VC_VTOH32(info.input_format);
    }
 
@@ -738,7 +738,7 @@ VCHPRE_ int VCHPOST_ vc_dispmanx_update_submit_sync( DISPMANX_UPDATE_HANDLE_T up
  *       DISPMANX_FLAGS_T flags
  *       uint8_t opacity
  *       DISPMANX_RESOURCE_HANDLE_T mask
- *       VC_IMAGE_TRANSFORM_T transform
+ *       DISPMANX_TRANSFORM_T transform
  *
  * Description:
  *
@@ -905,7 +905,7 @@ VCHPRE_ int VCHPOST_ vc_dispmanx_element_remove( DISPMANX_UPDATE_HANDLE_T update
  *       const VC_RECT_T *dest rect
  *       const VC_RECT_T *src rect
  *       DISPMANX_RESOURCE_HANDLE_T mask
- *       VC_IMAGE_TRANSFORM_T transform
+ *       VC_DISPMAN_TRANSFORM_T transform
  *
  * Description:
  *
@@ -920,7 +920,7 @@ VCHPRE_ int VCHPOST_ vc_dispmanx_element_change_attributes( DISPMANX_UPDATE_HAND
                                                             const VC_RECT_T *dest_rect,
                                                             const VC_RECT_T *src_rect,
                                                             DISPMANX_RESOURCE_HANDLE_T mask,
-                                                            VC_IMAGE_TRANSFORM_T transform ) {
+                                                            DISPMANX_TRANSFORM_T transform ) {
 
    uint32_t element_param[15] = { (uint32_t) VC_HTOV32(update),
                                   (uint32_t) VC_HTOV32(element),
@@ -962,7 +962,7 @@ VCHPRE_ int VCHPOST_ vc_dispmanx_element_change_attributes( DISPMANX_UPDATE_HAND
  * Arguments:
  *       DISPMANX_DISPLAY_HANDLE_T display
  *       DISPMANX_RESOURCE_HANDLE_T snapshot_resource
- *       VC_IMAGE_TRANSFORM_T transform
+ *       DISPMANX_TRANSFORM_T transform
  *
  * Description: Take a snapshot of a display in its current state
  *
@@ -971,7 +971,7 @@ VCHPRE_ int VCHPOST_ vc_dispmanx_element_change_attributes( DISPMANX_UPDATE_HAND
  ***********************************************************/
 VCHPRE_ int VCHPOST_ vc_dispmanx_snapshot( DISPMANX_DISPLAY_HANDLE_T display,
                                            DISPMANX_RESOURCE_HANDLE_T snapshot_resource,
-                                           VC_IMAGE_TRANSFORM_T transform )
+                                           DISPMANX_TRANSFORM_T transform )
 {
    uint32_t display_snapshot_param[] = {
       VC_HTOV32(display),
@@ -982,6 +982,45 @@ VCHPRE_ int VCHPOST_ vc_dispmanx_snapshot( DISPMANX_DISPLAY_HANDLE_T display,
                                               display_snapshot_param,
                                               sizeof(display_snapshot_param));
    return success;
+}
+
+/***********************************************************
+ * Name: vc_dispmanx_resource_set_palette
+ *
+ * Arguments:
+ *       DISPMANX_RESOURCE_HANDLE_T res
+ *       void * src_address
+ *       int offset
+ *       int size
+ *
+ * Description: Set the resource palette (for VC_IMAGE_4BPP and VC_IMAGE_8BPP)
+ *              offset should be 0
+ *              size is 16*2 for 4BPP and 256*2 for 8BPP
+ * Returns: 0 or failure
+ *
+ ***********************************************************/
+VCHPRE_ int VCHPOST_ vc_dispmanx_resource_set_palette( DISPMANX_RESOURCE_HANDLE_T handle, 
+                                                      void * src_address, int offset, int size) {
+   //Note that x coordinate of the rect is NOT used
+   //Address of data in host
+   uint8_t *host_start = src_address;
+   int32_t bulk_len = size, success = 0;
+
+   //Now send the bulk transfer across
+   //command parameters: resource size
+   uint32_t param[] = {VC_HTOV32(handle), VC_HTOV32(offset), VC_HTOV32(bulk_len) };
+   success = dispmanx_send_command(  EDispmanSetPalette | DISPMANX_NO_REPLY_MASK, param, sizeof(param));
+   if(success == 0)
+   {
+      lock_obtain();
+      success = vchi_bulk_queue_transmit( dispmanx_client.client_handle[0],
+                                          host_start,
+                                          bulk_len,
+                                          VCHI_FLAGS_BLOCK_UNTIL_DATA_READ,
+                                          NULL );
+      lock_release();
+   }
+   return (int) success;
 }
 
 /*********************************************************************************

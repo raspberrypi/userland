@@ -41,7 +41,7 @@ add_definitions(-D_REENTRANT)
 add_definitions(-DUSE_VCHIQ_ARM -DVCHI_BULK_ALIGN=1 -DVCHI_BULK_GRANULARITY=1)
 add_definitions(-DOMX_SKIP64BIT)
 add_definitions(-DEGL_SERVER_DISPMANX)
-add_definitions(-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE)
+add_definitions(-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64)
 
 # do we actually need this?
 add_definitions(-D__VIDEOCORE4__)
@@ -68,6 +68,11 @@ endif()
 if(BUILD_MMAL_APPS)
    add_subdirectory(containers)
 endif()
+
+# VidTex supports Android and Linux
+if(BUILD_MMAL_COMPONENTS)
+add_subdirectory(host_applications/android/apps/vidtex)
+endif(BUILD_MMAL_COMPONENTS)
 
 add_subdirectory(middleware/openmaxil)
 
@@ -107,10 +112,6 @@ endif()
 
 # add linux apps
 add_subdirectory(host_applications/linux)
-
-# Debug sym for mmal-vc-diag and vcdbg
-#add_subdirectory(host_applications/linux/libs/debug_sym)
-
 
 set(vmcs_host_apps_VERSION_MAJOR 1)
 set(vmcs_host_apps_VERSION_MINOR 0)

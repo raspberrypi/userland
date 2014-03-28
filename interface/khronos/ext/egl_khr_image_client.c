@@ -78,9 +78,12 @@ EGLAPI EGLImageKHR EGLAPIENTRY eglCreateImageKHR (EGLDisplay dpy, EGLContext ctx
 #endif
 #if EGL_ANDROID_image_native_buffer
             || target == EGL_NATIVE_BUFFER_ANDROID
-            || target == EGL_IMAGE_BRCM_MULTIMEDIA
             || target == EGL_IMAGE_BRCM_RAW_PIXELS
 #endif
+            || target == EGL_IMAGE_BRCM_MULTIMEDIA
+            || target == EGL_IMAGE_BRCM_MULTIMEDIA_Y
+            || target == EGL_IMAGE_BRCM_MULTIMEDIA_U
+            || target == EGL_IMAGE_BRCM_MULTIMEDIA_V
             || target == EGL_IMAGE_BRCM_DUPLICATE
             ) {
             context = NULL;
@@ -236,6 +239,23 @@ EGLAPI EGLImageKHR EGLAPIENTRY eglCreateImageKHR (EGLDisplay dpy, EGLContext ctx
                   vcos_log_error("%s: unknown gralloc resource type %x", __FUNCTION__, res_type);
                }
 #endif
+#else /* Not Android */
+            } else if (target == EGL_IMAGE_BRCM_MULTIMEDIA) {
+                  buf[0] = (uint32_t)buffer;
+                  vcos_log_trace("%s: converting buffer handle %u to EGL_IMAGE_BRCM_MULTIMEDIA",
+                        __FUNCTION__, buf[0]);
+            } else if (target == EGL_IMAGE_BRCM_MULTIMEDIA_Y) {
+                  buf[0] = (uint32_t)buffer;
+                  vcos_log_trace("%s: converting buffer handle %u to EGL_IMAGE_BRCM_MULTIMEDIA_Y",
+                        __FUNCTION__, buf[0]);
+            } else if (target == EGL_IMAGE_BRCM_MULTIMEDIA_U) {
+                  buf[0] = (uint32_t)buffer;
+                  vcos_log_trace("%s: converting buffer handle %u to EGL_IMAGE_BRCM_MULTIMEDIA_U",
+                        __FUNCTION__, buf[0]);
+            } else if (target == EGL_IMAGE_BRCM_MULTIMEDIA_V) {
+                  buf[0] = (uint32_t)buffer;
+                  vcos_log_trace("%s: converting buffer handle %u to EGL_IMAGE_BRCM_MULTIMEDIA_V",
+                        __FUNCTION__, buf[0]);
 #endif
             } else {
                vcos_log_trace("%s:target type %x buffer %p handled on server", __FUNCTION__, target, buffer);

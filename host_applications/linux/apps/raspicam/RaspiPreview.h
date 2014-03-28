@@ -1,5 +1,6 @@
 /*
-Copyright (c) 2012, Broadcom Europe Ltd
+Copyright (c) 2013, Broadcom Europe Ltd
+Copyright (c) 2013, James Hughes
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -30,19 +31,33 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 /// Layer that preview window should be displayed on
 #define PREVIEW_LAYER      2
-#define PREVIEW_FRAME_RATE_NUM 30
+
+// Frames rates of 0 implies variable, but denominator needs to be 1 to prevent div by 0
+#define PREVIEW_FRAME_RATE_NUM 0
 #define PREVIEW_FRAME_RATE_DEN 1
 
+#define FULL_RES_PREVIEW_FRAME_RATE_NUM 0
+#define FULL_RES_PREVIEW_FRAME_RATE_DEN 1
+
+#define FULL_FOV_PREVIEW_16x9_X 1280
+#define FULL_FOV_PREVIEW_16x9_Y 720
+
+#define FULL_FOV_PREVIEW_4x3_X 1296
+#define FULL_FOV_PREVIEW_4x3_Y 972
+
+#define FULL_FOV_PREVIEW_FRAME_RATE_NUM 0
+#define FULL_FOV_PREVIEW_FRAME_RATE_DEN 1
 
 typedef struct
 {
    int wantPreview;                       /// Display a preview
    int wantFullScreenPreview;             /// 0 is use previewRect, non-zero to use full screen
+   int opacity;                           /// Opacity of window - 0 = transparent, 255 = opaque
    MMAL_RECT_T previewWindow;             /// Destination rectangle for the preview window.
    MMAL_COMPONENT_T *preview_component;   /// Pointer to the created preview display component
 } RASPIPREVIEW_PARAMETERS;
 
-MMAL_COMPONENT_T *raspipreview_create(RASPIPREVIEW_PARAMETERS *state);
+MMAL_STATUS_T raspipreview_create(RASPIPREVIEW_PARAMETERS *state);
 void raspipreview_destroy(RASPIPREVIEW_PARAMETERS *state);
 void raspipreview_set_defaults(RASPIPREVIEW_PARAMETERS *state);
 void raspipreview_dump_parameters(RASPIPREVIEW_PARAMETERS *state);

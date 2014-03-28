@@ -4,6 +4,17 @@ target_link_libraries(mmal_vc_client vchiq_arm vcos)
 if(BUILD_MMAL_APPS)
 add_executable(mmal_vc_diag mmal_vc_diag.c)
 target_link_libraries(mmal_vc_diag mmal mmal_vc_client debug_sym vcos)
+install(TARGETS mmal_vc_diag RUNTIME DESTINATION bin)
 endif(BUILD_MMAL_APPS)
 
 install(TARGETS mmal_vc_client DESTINATION lib)
+install(FILES
+   mmal_vc_api.h
+   mmal_vc_api_drm.h
+   mmal_vc_client_priv.h
+   mmal_vc_msgnames.h
+   mmal_vc_msgs.h
+   mmal_vc_opaque_alloc.h
+   mmal_vc_shm.h
+   DESTINATION include/interface/mmal/vc
+)

@@ -2,10 +2,13 @@
 
 if (DEFINED CMAKE_TOOLCHAIN_FILE)
 else()
-   message(FATAL_ERROR 
+   message(WARNING
 	"  *********************************************************\n"
    	"  *   CMAKE_TOOLCHAIN_FILE not defined                    *\n"
-	"  *   Please DELETE the build directory and re-run with:  *\n"
+	"  *   This is correct for compiling on the Raspberry Pi   *\n"
+	"  *                                                       *\n"
+	"  *   If you are cross-compiling on some other machine    *\n"
+	"  *   then DELETE the build directory and re-run with:    *\n"
 	"  *   -DCMAKE_TOOLCHAIN_FILE=toolchain_file.cmake         *\n"
 	"  *                                                       *\n"
    	"  *   Toolchain files are in makefiles/cmake/toolchains.  *\n"

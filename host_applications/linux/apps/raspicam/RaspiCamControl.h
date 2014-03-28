@@ -1,5 +1,6 @@
 /*
-Copyright (c) 2012, Broadcom Europe Ltd
+Copyright (c) 2013, Broadcom Europe Ltd
+Copyright (c) 2013, James Hughes
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -100,6 +101,14 @@ typedef struct
    int quality;
 } MMAL_PARAM_THUMBNAIL_CONFIG_T;
 
+typedef struct
+{
+   double x;
+   double y;
+   double w;
+   double h;
+} PARAM_FLOAT_RECT_T;
+
 /// struct contain camera settings
 typedef struct
 {
@@ -116,7 +125,15 @@ typedef struct
    MMAL_PARAM_IMAGEFX_T imageEffect;
    MMAL_PARAMETER_IMAGEFX_PARAMETERS_T imageEffectsParameters;
    MMAL_PARAM_COLOURFX_T colourEffects;
+   int rotation;              /// 0-359
+   int hflip;                 /// 0 or 1
+   int vflip;                 /// 0 or 1
+   PARAM_FLOAT_RECT_T  roi;   /// region of interest to use on the sensor. Normalised [0,1] values in the rect
+   int shutter_speed;         /// 0 = auto, otherwise the shutter speed in ms
 } RASPICAM_CAMERA_PARAMETERS;
+
+
+void raspicamcontrol_check_configuration(int min_gpu_mem);
 
 int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char *arg1, const char *arg2);
 void raspicamcontrol_display_help();
@@ -127,6 +144,8 @@ int raspicamcontrol_get_all_parameters(MMAL_COMPONENT_T *camera, RASPICAM_CAMERA
 void raspicamcontrol_dump_parameters(const RASPICAM_CAMERA_PARAMETERS *params);
 
 void raspicamcontrol_set_defaults(RASPICAM_CAMERA_PARAMETERS *params);
+
+void raspicamcontrol_check_configuration(int min_gpu_mem);
 
 // Individual setting functions
 int raspicamcontrol_set_saturation(MMAL_COMPONENT_T *camera, int saturation);
@@ -141,6 +160,10 @@ int raspicamcontrol_set_exposure_mode(MMAL_COMPONENT_T *camera, MMAL_PARAM_EXPOS
 int raspicamcontrol_set_awb_mode(MMAL_COMPONENT_T *camera, MMAL_PARAM_AWBMODE_T awb_mode);
 int raspicamcontrol_set_imageFX(MMAL_COMPONENT_T *camera, MMAL_PARAM_IMAGEFX_T imageFX);
 int raspicamcontrol_set_colourFX(MMAL_COMPONENT_T *camera, const MMAL_PARAM_COLOURFX_T *colourFX);
+int raspicamcontrol_set_rotation(MMAL_COMPONENT_T *camera, int rotation);
+int raspicamcontrol_set_flips(MMAL_COMPONENT_T *camera, int hflip, int vflip);
+int raspicamcontrol_set_ROI(MMAL_COMPONENT_T *camera, PARAM_FLOAT_RECT_T rect);
+int raspicamcontrol_set_shutter_speed(MMAL_COMPONENT_T *camera, int speed_ms);
 
 //Individual getting functions
 int raspicamcontrol_get_saturation(MMAL_COMPONENT_T *camera);

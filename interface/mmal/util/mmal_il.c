@@ -513,6 +513,7 @@ static struct {
    {MMAL_ENCODING_VP8,            OMX_VIDEO_CodingVP8},
    {MMAL_ENCODING_SPARK,          OMX_VIDEO_CodingSorenson},
    {MMAL_ENCODING_THEORA,         OMX_VIDEO_CodingTheora},
+   {MMAL_ENCODING_MJPEG,          OMX_VIDEO_CodingMJPEG},
    {MMAL_ENCODING_UNKNOWN,        OMX_VIDEO_CodingUnused}
 };
 

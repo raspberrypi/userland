@@ -10,7 +10,9 @@ make -C hello_dispmanx clean
 make -C hello_tiger clean
 make -C hello_encode clean
 make -C hello_jpeg clean
+make -C hello_videocube clean
 make -C hello_teapot clean
+make -C hello_fft clean
 
 make -C libs/ilclient
 make -C libs/vgfont
@@ -24,5 +26,7 @@ make -C hello_dispmanx
 make -C hello_tiger
 make -C hello_encode
 make -C hello_jpeg
+make -C hello_videocube
 make -C hello_teapot
+make -C hello_fft
 
