@@ -55,6 +55,7 @@ static VCOS_STATUS_T wfc_client_server_api_send_context(WFC_IPC_MSG_TYPE msg_typ
    return wfc_client_ipc_send(&msg.header, sizeof(msg));
 }
 
+#if 0
 /** Implement "void foo(WFCNativeStreamType stream)" */
 static VCOS_STATUS_T wfc_client_server_api_send_stream(WFC_IPC_MSG_TYPE msg_type, WFCNativeStreamType stream)
 {
@@ -65,6 +66,7 @@ static VCOS_STATUS_T wfc_client_server_api_send_stream(WFC_IPC_MSG_TYPE msg_type
 
    return wfc_client_ipc_send(&msg.header, sizeof(msg));
 }
+#endif
 
 /** Implement "foo(WFCNativeStreamType stream)" where a result is returned.
  * This may either be as a return value, or via a pointer parameter.
