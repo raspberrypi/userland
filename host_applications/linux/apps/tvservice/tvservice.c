@@ -181,6 +181,7 @@ static const char *aspect_ratio_str(HDMI_ASPECT_T aspect_ratio) {
    }
 }
 
+#if 0
 /* Return the string presentation of aspect ratio */
 static const char *aspect_ratio_sd_str(SDTV_ASPECT_T aspect_ratio) {
    switch(aspect_ratio) {
@@ -194,6 +195,7 @@ static const char *aspect_ratio_sd_str(SDTV_ASPECT_T aspect_ratio) {
       return "unknown AR";
    }
 }
+#endif
 
 //Print a string and update the offset into the status buffer
 //Return non-zero if string is truncated, zero otherwise
@@ -505,7 +507,7 @@ static int dump_edid( const char *filename )
    if (fp)
       fclose(fp);
    if(written) {
-      LOG_STD( "Written %d bytes to %s", written, filename);
+      LOG_STD( "Written %zu bytes to %s", written, filename);
    } else {
       LOG_STD( "Nothing written!");
    }
@@ -715,8 +717,8 @@ int main( int argc, char **argv )
    uint32_t         power_on_explicit_mode;
    uint32_t         power_on_explicit_drive = HDMI_MODE_HDMI;
    HDMI_RES_GROUP_T get_modes_group = HDMI_RES_GROUP_INVALID;
-   SDTV_MODE_T sdtvon_mode;
-   SDTV_ASPECT_T sdtvon_aspect;
+   SDTV_MODE_T sdtvon_mode = SDTV_MODE_NTSC;
+   SDTV_ASPECT_T sdtvon_aspect = SDTV_ASPECT_UNKNOWN;
 
    // Initialize VCOS
    vcos_init();
