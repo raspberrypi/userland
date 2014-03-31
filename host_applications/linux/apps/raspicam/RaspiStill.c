@@ -1230,7 +1230,7 @@ MMAL_STATUS_T create_filenames(char** finalName, char** tempName, char * pattern
 {
    *finalName = NULL;
    *tempName = NULL;
-   if (strcmp(pattern, "%datetime", 9)
+   if (strcmp(pattern, "%datetime", 9)==0)
    {
       time_t rawtime;
       struct tm *timeinfo;
@@ -1252,7 +1252,7 @@ MMAL_STATUS_T create_filenames(char** finalName, char** tempName, char * pattern
 
       *pattern = "%d";
    }
-   if (strcmp(pattern, "%timestamp", 10))
+   if (strcmp(pattern, "%timestamp", 10)==0)
    {
       frame = (int)time(NULL);
       *pattern = "%d";
