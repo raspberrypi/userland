@@ -1360,6 +1360,33 @@ MMAL_STATUS_T create_filenames(char** finalName, char** tempName, char * pattern
 {
    *finalName = NULL;
    *tempName = NULL;
+   if (strcmp(pattern, "%datetime", 9)
+   {
+      time_t rawtime;
+      struct tm *timeinfo;
+
+      time(&rawtime);
+      timeinfo = localtime(&rawtime);
+
+      frame = timeinfo->tm_year+1900;
+      frame *= 100;
+      frame += timeinfo->tm_mon+1;
+      frame *= 100;
+      frame += timeinfo->tm_mday;
+      frame *= 100;
+      frame += timeinfo->tm_hour;
+      frame *= 100;
+      frame += timeinfo->tm_min;
+      frame *= 100;
+      frame += timeinfo->tm_sec;
+
+      *pattern = "%d";
+   }
+   if (strcmp(pattern, "%timestamp", 10))
+   {
+      frame = (int)time(NULL);
+      *pattern = "%d";
+   }
    if (0 > asprintf(finalName, pattern, frame) ||
        0 > asprintf(tempName, "%s~", *finalName))
    {
