@@ -134,6 +134,8 @@ typedef struct
    int fullResPreview;                 /// If set, the camera preview port runs at capture resolution. Reduces fps.
    int frameNextMethod;                /// Which method to use to advance to next frame
    int useGL;                          /// Render preview using OpenGL
+   int datetime;                       /// Use DateTime instead of frame#
+   int timestamp;                      /// Use timestamp instead of frame#
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -184,24 +186,26 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 
 static COMMAND_LIST cmdline_commands[] =
 {
-   { CommandHelp,    "-help",       "?",  "This help information", 0 },
-   { CommandWidth,   "-width",      "w",  "Set image width <size>", 1 },
-   { CommandHeight,  "-height",     "h",  "Set image height <size>", 1 },
-   { CommandQuality, "-quality",    "q",  "Set jpeg quality <0 to 100>", 1 },
-   { CommandRaw,     "-raw",        "r",  "Add raw bayer data to jpeg metadata", 0 },
-   { CommandOutput,  "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -'). If not specified, no file is saved", 1 },
-   { CommandLink,    "-latest",     "l",  "Link latest complete image to filename <filename>", 1},
-   { CommandVerbose, "-verbose",    "v",  "Output verbose information during run", 0 },
-   { CommandTimeout, "-timeout",    "t",  "Time (in ms) before takes picture and shuts down (if not specified, set to 5s)", 1 },
-   { CommandThumbnail,"-thumb",     "th", "Set thumbnail parameters (x:y:quality) or none", 1},
-   { CommandDemoMode,"-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 0},
-   { CommandEncoding,"-encoding",   "e",  "Encoding to use for output file (jpg, bmp, gif, png)", 1},
-   { CommandExifTag, "-exif",       "x",  "EXIF tag to apply to captures (format as 'key=value') or none", 1},
-   { CommandTimelapse,"-timelapse", "tl", "Timelapse mode. Takes a picture every <t>ms", 1},
-   { CommandFullResPreview,"-fullpreview","fp", "Run the preview using the still capture resolution (may reduce preview fps)", 0},
-   { CommandKeypress,"-keypress",   "k",  "Wait between captures for a ENTER, X then ENTER to exit", 0},
-   { CommandSignal,  "-signal",     "s",  "Wait between captures for a SIGUSR1 from another process", 0},
-   { CommandGL,      "-gl",         "g",  "Draw preview to texture instead of using video render component", 0},
+   { CommandHelp,           "-help",       "?",  "This help information", 0 },
+   { CommandWidth,          "-width",      "w",  "Set image width <size>", 1 },
+   { CommandHeight,         "-height",     "h",  "Set image height <size>", 1 },
+   { CommandQuality,        "-quality",    "q",  "Set jpeg quality <0 to 100>", 1 },
+   { CommandRaw,            "-raw",        "r",  "Add raw bayer data to jpeg metadata", 0 },
+   { CommandOutput,         "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -'). If not specified, no file is saved", 1 },
+   { CommandLink,           "-latest",     "l",  "Link latest complete image to filename <filename>", 1},
+   { CommandVerbose,        "-verbose",    "v",  "Output verbose information during run", 0 },
+   { CommandTimeout,        "-timeout",    "t",  "Time (in ms) before takes picture and shuts down (if not specified, set to 5s)", 1 },
+   { CommandThumbnail,      "-thumb",      "th", "Set thumbnail parameters (x:y:quality) or none", 1},
+   { CommandDemoMode,       "-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 0},
+   { CommandEncoding,       "-encoding",   "e",  "Encoding to use for output file (jpg, bmp, gif, png)", 1},
+   { CommandExifTag,        "-exif",       "x",  "EXIF tag to apply to captures (format as 'key=value') or none", 1},
+   { CommandTimelapse,      "-timelapse",  "tl", "Timelapse mode. Takes a picture every <t>ms", 1},
+   { CommandFullResPreview, "-fullpreview","fp", "Run the preview using the still capture resolution (may reduce preview fps)", 0},
+   { CommandKeypress,       "-keypress",   "k",  "Wait between captures for a ENTER, X then ENTER to exit", 0},
+   { CommandSignal,         "-signal",     "s",  "Wait between captures for a SIGUSR1 from another process", 0},
+   { CommandGL,             "-gl",         "g",  "Draw preview to texture instead of using video render component", 0},
+   { CommandDateTime,       "-datetime",   "dt", "Replace frame number in file name with DateTime (YearMonthDayHourMinSec)", 0},
+   { CommandTimestamp,      "-timestamp",  "ts", "Replace frame number in file name with unix timestamp (seconds since 1900)", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -463,6 +467,12 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
       }
       case CommandVerbose: // display lots of data during run
          state->verbose = 1;
+         break;
+      case CommandDateTime: // use datetime
+         state->DateTime = 1;
+         break;
+      case CommandTimestamp: // use timestamp
+         state->timestamp = 1;
          break;
 
       case CommandTimeout: // Time to run viewfinder for before taking picture, in seconds
@@ -1230,7 +1240,7 @@ MMAL_STATUS_T create_filenames(char** finalName, char** tempName, char * pattern
 {
    *finalName = NULL;
    *tempName = NULL;
-   if (strcmp(pattern, "%datetime", 9)==0)
+   if (state->datetime)
    {
       time_t rawtime;
       struct tm *timeinfo;
@@ -1249,13 +1259,10 @@ MMAL_STATUS_T create_filenames(char** finalName, char** tempName, char * pattern
       frame += timeinfo->tm_min;
       frame *= 100;
       frame += timeinfo->tm_sec;
-
-      *pattern = "%d";
    }
-   if (strcmp(pattern, "%timestamp", 10)==0)
+   if (state->timestamp)
    {
       frame = (int)time(NULL);
-      *pattern = "%d";
    }
    if (0 > asprintf(finalName, pattern, frame) ||
        0 > asprintf(tempName, "%s~", *finalName))
