@@ -183,6 +183,8 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandKeypress     15
 #define CommandSignal       16
 #define CommandGL           17
+#define CommandDateTime     18
+#define CommandTimestamp    19
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -280,6 +282,8 @@ static void default_status(RASPISTILL_STATE *state)
    state->fullResPreview = 0;
    state->frameNextMethod = FRAME_NEXT_SINGLE;
    state->useGL = 0;
+   state->datetime = 0;
+   state->timestamp = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -469,7 +473,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          state->verbose = 1;
          break;
       case CommandDateTime: // use datetime
-         state->DateTime = 1;
+         state->datetime = 1;
          break;
       case CommandTimestamp: // use timestamp
          state->timestamp = 1;
@@ -1240,30 +1244,6 @@ MMAL_STATUS_T create_filenames(char** finalName, char** tempName, char * pattern
 {
    *finalName = NULL;
    *tempName = NULL;
-   if (state->datetime)
-   {
-      time_t rawtime;
-      struct tm *timeinfo;
-
-      time(&rawtime);
-      timeinfo = localtime(&rawtime);
-
-      frame = timeinfo->tm_year+1900;
-      frame *= 100;
-      frame += timeinfo->tm_mon+1;
-      frame *= 100;
-      frame += timeinfo->tm_mday;
-      frame *= 100;
-      frame += timeinfo->tm_hour;
-      frame *= 100;
-      frame += timeinfo->tm_min;
-      frame *= 100;
-      frame += timeinfo->tm_sec;
-   }
-   if (state->timestamp)
-   {
-      frame = (int)time(NULL);
-   }
    if (0 > asprintf(finalName, pattern, frame) ||
        0 > asprintf(tempName, "%s~", *finalName))
    {
@@ -1643,8 +1623,33 @@ int main(int argc, const char **argv)
             frame = 0;
 
             while (keep_looping)
-            {
+            {   
             	keep_looping = wait_for_next_frame(&state, &frame);
+
+                if (state.datetime)
+                {
+                   time_t rawtime;
+                   struct tm *timeinfo;
+
+                   time(&rawtime);
+                   timeinfo = localtime(&rawtime);
+
+                   frame = timeinfo->tm_year+1900;
+                   frame *= 100;
+                   frame += timeinfo->tm_mon+1;
+                   frame *= 100;
+                   frame += timeinfo->tm_mday;
+                   frame *= 100;
+                   frame += timeinfo->tm_hour;
+                   frame *= 100;
+                   frame += timeinfo->tm_min;
+                   frame *= 100;
+                   frame += timeinfo->tm_sec;
+                }
+                if (state.timestamp)
+                {
+                   frame = (int)time(NULL);
+                }
 
                // Open the file
                if (state.filename)
