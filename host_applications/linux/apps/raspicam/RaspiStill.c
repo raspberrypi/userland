@@ -1634,9 +1634,7 @@ int main(int argc, const char **argv)
                    time(&rawtime);
                    timeinfo = localtime(&rawtime);
 
-                   frame = timeinfo->tm_year+1900;
-                   frame *= 100;
-                   frame += timeinfo->tm_mon+1;
+                   frame = timeinfo->tm_mon+1;
                    frame *= 100;
                    frame += timeinfo->tm_mday;
                    frame *= 100;
