@@ -494,7 +494,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          state->verbose = 1;
          break;
       case CommandDateTime: // use datetime
-         state->DateTime = 1;
+         state->datetime = 1;
          break;
       case CommandTimestamp: // use timestamp
          state->timestamp = 1;
@@ -1812,8 +1812,33 @@ int main(int argc, const char **argv)
             frame = 0;
 
             while (keep_looping)
-            {
+            {   
             	keep_looping = wait_for_next_frame(&state, &frame);
+
+                if (state.datetime)
+                {
+                   time_t rawtime;
+                   struct tm *timeinfo;
+
+                   time(&rawtime);
+                   timeinfo = localtime(&rawtime);
+
+                   frame = timeinfo->tm_year+1900;
+                   frame *= 100;
+                   frame += timeinfo->tm_mon+1;
+                   frame *= 100;
+                   frame += timeinfo->tm_mday;
+                   frame *= 100;
+                   frame += timeinfo->tm_hour;
+                   frame *= 100;
+                   frame += timeinfo->tm_min;
+                   frame *= 100;
+                   frame += timeinfo->tm_sec;
+                }
+                if (state.timestamp)
+                {
+                   frame = (int)time(NULL);
+                }
 
                // Open the file
                if (state.filename)
