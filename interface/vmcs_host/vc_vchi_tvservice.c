@@ -432,6 +432,42 @@ VCHPRE_ void VCHPOST_ vc_tv_unregister_callback(TVSERVICE_CALLBACK_T callback)
    }
 }
 
+/***********************************************************
+ * Name: vc_tv_unregister_callback_full
+ *
+ * Arguments:
+ *       callback function
+ *       callback function context
+ *
+ * Description: Unregister a previously-registered callback function for TV notifications
+ *
+ * Returns: -
+ *
+ ***********************************************************/
+VCHPRE_ void VCHPOST_ vc_tv_unregister_callback_full(TVSERVICE_CALLBACK_T callback, void *callback_data)
+{
+   vcos_assert(callback != NULL);
+
+   vcos_log_trace("[%s]", VCOS_FUNCTION);
+   if(tvservice_lock_obtain() == 0)
+   {
+      uint32_t done = 0;
+      uint32_t i;
+      for(i = 0; (i < TVSERVICE_MAX_CALLBACKS) && !done; i++)
+      {
+         if(tvservice_client.callbacks[i].notify_fn == callback &&
+            tvservice_client.callbacks[i].notify_data == callback_data)
+         {
+            tvservice_client.callbacks[i].notify_fn = NULL;
+            tvservice_client.callbacks[i].notify_data = NULL;
+            done = 1;
+         } // if
+      } // for
+      vcos_assert(done);
+      tvservice_lock_release();
+   }
+}
+
 /*********************************************************************************
  *
  *  Static functions definitions
