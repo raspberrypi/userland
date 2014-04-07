@@ -136,6 +136,8 @@ typedef struct
    int frameNextMethod;                /// Which method to use to advance to next frame
    int useGL;                          /// Render preview using OpenGL
    int glCapture;                      /// Save the GL frame-buffer instead of camera output
+   int overwriteFrameValue;            /// Use time isntead of frame#
+   int frameFormat;                    /// What format to put into frame?
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -184,6 +186,9 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandSignal       16
 #define CommandGL           17
 #define CommandGLCapture    18
+#define CommandDateTime     19
+#define CommandTimestamp    20
+#define CommandHms          21
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -206,6 +211,9 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandSignal,  "-signal",     "s",  "Wait between captures for a SIGUSR1 from another process", 0},
    { CommandGL,      "-gl",         "g",  "Draw preview to texture instead of using video render component", 0},
    { CommandGLCapture, "-glcapture","gc", "Capture the GL frame-buffer instead of the camera image", 0},
+   { CommandDateTime,  "-datetime",   "dt", "Replace frame number in file name with DateTime (YearMonthDayHourMinSec)", 0},
+   { CommandTimestamp, "-timestamp",  "ts", "Replace frame number in file name with unix timestamp (seconds since 1900)", 0},
+   { CommandHms,       "-hourminsec", "hms","Replace frame number in file name with HourMinuteSecond", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -281,6 +289,8 @@ static void default_status(RASPISTILL_STATE *state)
    state->frameNextMethod = FRAME_NEXT_SINGLE;
    state->useGL = 0;
    state->glCapture = 0;
+   state->overwriteFrameValue = 0;
+   state->frameFormat = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -591,6 +601,21 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
 
       case CommandGLCapture:
          state->glCapture = 1;
+         break;
+
+      case CommandTimestamp: // use timestamp
+         state->overwriteFrameValue = 1;
+         state->frameFormat = 0;
+         break;
+
+      case CommandDateTime: // use datetime
+         state->overwriteFrameValue = 1;
+         state->frameFormat = 1;
+         break;
+
+      case CommandHms: // use timestamp
+         state->overwriteFrameValue = 1;
+         state->frameFormat = 2;
          break;
 
       default:
@@ -1656,6 +1681,49 @@ int main(int argc, const char **argv)
             while (keep_looping)
             {
             	keep_looping = wait_for_next_frame(&state, &frame);
+
+                if (state.overwriteFrameValue)
+                {
+                  switch (state.frameFormat)
+                  {
+                    case 0:{
+                      frame = (int)time(NULL);
+                      break;
+                    }
+                    case 1: {
+                       time_t rawtime;
+                       struct tm *timeinfo;
+
+                       time(&rawtime);
+                       timeinfo = localtime(&rawtime);
+
+                       frame = timeinfo->tm_mon+1;
+                       frame *= 100;
+                       frame += timeinfo->tm_mday;
+                       frame *= 100;
+                       frame += timeinfo->tm_hour;
+                       frame *= 100;
+                       frame += timeinfo->tm_min;
+                       frame *= 100;
+                       frame += timeinfo->tm_sec;
+                       break;
+                    }
+                    case 2: {
+                       time_t rawtime;
+                       struct tm *timeinfo;
+
+                       time(&rawtime);
+                       timeinfo = localtime(&rawtime);
+
+                       frame = timeinfo->tm_hour;
+                       frame *= 100;
+                       frame += timeinfo->tm_min;
+                       frame *= 100;
+                       frame += timeinfo->tm_sec;
+                       break;
+                    }
+                  }
+                }
 
                // Open the file
                if (state.filename)
