@@ -427,11 +427,16 @@ static int get_status( void )
    if( vc_tv_get_display_state( &tvstate ) == 0) {
       //The width/height parameters are in the same position in the union
       //for HDMI and SDTV
+      HDMI_PROPERTY_PARAM_T property;
+      property.property = HDMI_PROPERTY_PIXEL_CLOCK_TYPE;
+      vc_tv_hdmi_get_property(&property);
+      float frame_rate = property.param1 == HDMI_PIXEL_CLOCK_TYPE_NTSC ? tvstate.display.hdmi.frame_rate * (1000.0f/1001.0f) : tvstate.display.hdmi.frame_rate;
+
       if(tvstate.display.hdmi.width && tvstate.display.hdmi.height) {
-         LOG_STD( "state 0x%x [%s], %ux%u @ %uHz, %s", tvstate.state,
+         LOG_STD( "state 0x%x [%s], %ux%u @ %.2fHz, %s", tvstate.state,
                   status_mode(&tvstate),
                   tvstate.display.hdmi.width, tvstate.display.hdmi.height,
-                  tvstate.display.hdmi.frame_rate,
+                  frame_rate,
                   tvstate.display.hdmi.scan_mode ? "interlaced" : "progressive" );
       } else {
          LOG_STD( "state 0x%x [%s]", tvstate.state, status_mode(&tvstate));
