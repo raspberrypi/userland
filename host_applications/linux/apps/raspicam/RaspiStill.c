@@ -479,6 +479,12 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
       case CommandVerbose: // display lots of data during run
          state->verbose = 1;
          break;
+      case CommandDateTime: // use datetime
+         state->datetime = 1;
+         break;
+      case CommandTimestamp: // use timestamp
+         state->timestamp = 1;
+         break;
 
       case CommandTimeout: // Time to run viewfinder for before taking picture, in seconds
       {
@@ -1679,7 +1685,7 @@ int main(int argc, const char **argv)
             frame = 0;
 
             while (keep_looping)
-            {
+            {   
             	keep_looping = wait_for_next_frame(&state, &frame);
 
                 if (state.overwriteFrameValue)
