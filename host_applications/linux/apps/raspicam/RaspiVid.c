@@ -801,34 +801,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 
       vcos_assert(pData->file_handle);
 
-      // For segmented record mode, we need to see if we have exceeded our time/size,
-      // but also since we have inline headers turned on we need to break when we get one to
-      // ensure that the new stream has the header in it. If we break on an I-frame, the
-      // SPS/PPS header is actually in the previous chunk.
-      if ((buffer->flags & MMAL_BUFFER_HEADER_FLAG_CONFIG) &&
-          ((pData->pstate->segmentSize && current_time > base_time + pData->pstate->segmentSize) ||
-           (pData->pstate->splitWait && pData->pstate->splitNow)))
-      {
-         FILE *new_handle;
-
-         base_time = current_time;
-
-         pData->pstate->splitNow = 0;
-         pData->pstate->segmentNumber++;
-
-         // Only wrap if we have a wrap point set
-         if (pData->pstate->segmentWrap && pData->pstate->segmentNumber > pData->pstate->segmentWrap)
-            pData->pstate->segmentNumber = 1;
-
-         new_handle = open_filename(pData->pstate);
-
-         if (new_handle)
-         {
-            fclose(pData->file_handle);
-            pData->file_handle = new_handle;
-         }
-      }
-      else if (pData->cb_buff)
+      if (pData->cb_buff)
       {
          int space_in_buff = pData->cb_len - pData->cb_wptr;
          int copy_to_end = space_in_buff > buffer->length ? buffer->length : space_in_buff;
@@ -868,6 +841,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 
             // If we overtake the iframe rptr then move the rptr along
             if((pData->iframe_buff_rpos + 1) % IFRAME_BUFSIZE != pData->iframe_buff_wpos)
+            {
                while(
                   (
                      pData->cb_wptr <= pData->iframe_buff[pData->iframe_buff_rpos] &&
@@ -879,40 +853,71 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
                   )
                )
                   pData->iframe_buff_rpos = (pData->iframe_buff_rpos + 1) % IFRAME_BUFSIZE;
+            }
 
-               mmal_buffer_header_mem_lock(buffer);
-               // We are pushing data into a circular buffer
-               memcpy(pData->cb_buff + pData->cb_wptr, buffer->data, copy_to_end);
-               memcpy(pData->cb_buff, buffer->data + copy_to_end, copy_to_start);
-               mmal_buffer_header_mem_unlock(buffer);
+            mmal_buffer_header_mem_lock(buffer);
+            // We are pushing data into a circular buffer
+            memcpy(pData->cb_buff + pData->cb_wptr, buffer->data, copy_to_end);
+            memcpy(pData->cb_buff, buffer->data + copy_to_end, copy_to_start);
+            mmal_buffer_header_mem_unlock(buffer);
 
-               if((pData->cb_wptr + buffer->length) > pData->cb_len)
-                  pData->cb_wrap = 1;
+            if((pData->cb_wptr + buffer->length) > pData->cb_len)
+               pData->cb_wrap = 1;
 
-               pData->cb_wptr = (pData->cb_wptr + buffer->length) % pData->cb_len;
+            pData->cb_wptr = (pData->cb_wptr + buffer->length) % pData->cb_len;
 
-               for(i = pData->iframe_buff_rpos; i != pData->iframe_buff_wpos; i = (i + 1) % IFRAME_BUFSIZE)
+            for(i = pData->iframe_buff_rpos; i != pData->iframe_buff_wpos; i = (i + 1) % IFRAME_BUFSIZE)
+            {
+               int p = pData->iframe_buff[i];
+               if(pData->cb_buff[p] != 0 || pData->cb_buff[p+1] != 0 || pData->cb_buff[p+2] != 0 || pData->cb_buff[p+3] != 1)
                {
-                  int p = pData->iframe_buff[i];
-                  if(pData->cb_buff[p] != 0 || pData->cb_buff[p+1] != 0 || pData->cb_buff[p+2] != 0 || pData->cb_buff[p+3] != 1)
-                  {
-                     vcos_log_error("Error in iframe list\n");
-                  }
+                  vcos_log_error("Error in iframe list\n");
                }
             }
          }
-      else if (buffer->length)
+      }
+      else 
       {
-         mmal_buffer_header_mem_lock(buffer);
-
-         bytes_written = fwrite(buffer->data, 1, buffer->length, pData->file_handle);
-
-         mmal_buffer_header_mem_unlock(buffer);
-
-         if (bytes_written != buffer->length)
+         // For segmented record mode, we need to see if we have exceeded our time/size,
+         // but also since we have inline headers turned on we need to break when we get one to
+         // ensure that the new stream has the header in it. If we break on an I-frame, the
+         // SPS/PPS header is actually in the previous chunk.
+         if ((buffer->flags & MMAL_BUFFER_HEADER_FLAG_CONFIG) &&
+             ((pData->pstate->segmentSize && current_time > base_time + pData->pstate->segmentSize) ||
+              (pData->pstate->splitWait && pData->pstate->splitNow)))
          {
-            vcos_log_error("Failed to write buffer data (%d from %d)- aborting", bytes_written, buffer->length);
-            pData->abort = 1;
+            FILE *new_handle;
+
+            base_time = current_time;
+
+            pData->pstate->splitNow = 0;
+            pData->pstate->segmentNumber++;
+
+            // Only wrap if we have a wrap point set
+            if (pData->pstate->segmentWrap && pData->pstate->segmentNumber > pData->pstate->segmentWrap)
+               pData->pstate->segmentNumber = 1;
+
+            new_handle = open_filename(pData->pstate);
+
+            if (new_handle)
+            {
+               fclose(pData->file_handle);
+               pData->file_handle = new_handle;
+            }
+         }
+         if (buffer->length)
+         {
+            mmal_buffer_header_mem_lock(buffer);
+
+            bytes_written = fwrite(buffer->data, 1, buffer->length, pData->file_handle);
+
+            mmal_buffer_header_mem_unlock(buffer);
+
+            if (bytes_written != buffer->length)
+            {
+               vcos_log_error("Failed to write buffer data (%d from %d)- aborting", bytes_written, buffer->length);
+               pData->abort = 1;
+            }
          }
       }
    }
