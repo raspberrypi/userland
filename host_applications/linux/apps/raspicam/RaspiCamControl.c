@@ -43,6 +43,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /// Structure to cross reference exposure strings against the MMAL parameter equivalent
 static XREF_T  exposure_map[] =
 {
+   {"off",           MMAL_PARAM_EXPOSUREMODE_OFF},
    {"auto",          MMAL_PARAM_EXPOSUREMODE_AUTO},
    {"night",         MMAL_PARAM_EXPOSUREMODE_NIGHT},
    {"nightpreview",  MMAL_PARAM_EXPOSUREMODE_NIGHTPREVIEW},
