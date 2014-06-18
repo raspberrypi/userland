@@ -546,9 +546,9 @@ static void tvservice_callback( void *callback_data,
          LOG_INFO( "HDMI cable is unplugged" );
          break;
       }
-      case VC_HDMI_STANDBY:
+      case VC_HDMI_ATTACHED:
       {
-         LOG_INFO( "HDMI in standby mode" );
+         LOG_INFO( "HDMI is attached" );
          break;
       }
       case VC_HDMI_DVI:
@@ -584,6 +584,7 @@ static void tvservice_callback( void *callback_data,
       default:
       {
          // Ignore all other reasons
+         LOG_INFO( "Callback with reason %d", reason );
          break;
       }
    }
