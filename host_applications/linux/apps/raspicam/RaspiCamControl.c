@@ -113,6 +113,16 @@ static XREF_T metering_mode_map[] =
 
 static const int metering_mode_map_size = sizeof(metering_mode_map)/sizeof(metering_mode_map[0]);
 
+static XREF_T drc_mode_map[] =
+{
+   {"off",           MMAL_PARAMETER_DRC_STRENGTH_OFF},
+   {"low",           MMAL_PARAMETER_DRC_STRENGTH_LOW},
+   {"med",           MMAL_PARAMETER_DRC_STRENGTH_MEDIUM},
+   {"high",          MMAL_PARAMETER_DRC_STRENGTH_HIGH}
+};
+
+static const int drc_mode_map_size = sizeof(drc_mode_map)/sizeof(drc_mode_map[0]);
+
 
 #define CommandSharpness   0
 #define CommandContrast    1
@@ -132,6 +142,7 @@ static const int metering_mode_map_size = sizeof(metering_mode_map)/sizeof(meter
 #define CommandROI         15
 #define CommandShutterSpeed 16
 #define CommandAwbGains    17
+#define CommandDRCLevel    18
 
 static COMMAND_LIST  cmdline_commands[] =
 {
@@ -152,7 +163,8 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandVFlip,       "-vflip",     "vf", "Set vertical flip", 0},
    {CommandROI,         "-roi",       "roi","Set region of interest (x,y,w,d as normalised coordinates [0.0-1.0])", 1},
    {CommandShutterSpeed,"-shutter",   "ss", "Set shutter speed in microseconds", 1},
-   {CommandAwbGains,    "-awbgains",  "awbg", "Set AWB gains - AWB mode must be off", 1}
+   {CommandAwbGains,    "-awbgains",  "awbg", "Set AWB gains - AWB mode must be off", 1},
+   {CommandDRCLevel,    "-drc",       "drc", "Set DRC Level", 1}
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -452,6 +464,22 @@ static MMAL_PARAM_EXPOSUREMETERINGMODE_T metering_mode_from_string(const char *s
 }
 
 /**
+ * Convert string to the MMAL parameter for DRC level
+ * @param str Incoming string to match
+ * @return MMAL parameter matching the string, or the AUTO option if no match found
+ */
+static MMAL_PARAMETER_DRC_STRENGTH_T drc_mode_from_string(const char *str)
+{
+   int i = raspicli_map_xref(str, drc_mode_map, drc_mode_map_size);
+
+   if( i != -1)
+      return (MMAL_PARAMETER_DRC_STRENGTH_T)i;
+
+   vcos_log_error("Unknown DRC level: %s", str);
+   return MMAL_PARAMETER_DRC_STRENGTH_OFF;
+}
+
+/**
  * Parse a possible command pair - command and parameter
  * @param arg1 Command
  * @param arg2 Parameter (could be NULL)
@@ -601,6 +629,14 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
       used = 2;
       break;
       }
+
+   case CommandDRCLevel:
+   {
+      params->drc_level = drc_mode_from_string(arg2);
+      used = 2;
+      break;
+   }
+
    }
 
    return used;
@@ -796,6 +832,7 @@ int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_
    result += raspicamcontrol_set_flips(camera, params->hflip, params->vflip);
    result += raspicamcontrol_set_ROI(camera, params->roi);
    result += raspicamcontrol_set_shutter_speed(camera, params->shutter_speed);
+   result += raspicamcontrol_set_DRC(camera, params->drc_level);
 
    return result;
 }
@@ -1188,6 +1225,26 @@ int raspicamcontrol_set_shutter_speed(MMAL_COMPONENT_T *camera, int speed)
    return mmal_status_to_int(mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_SHUTTER_SPEED, speed));
 }
 
+/**
+ * Adjust the Dynamic range compression level
+ * @param camera Pointer to camera component
+ * @param strength Strength of DRC to apply
+ *        MMAL_PARAMETER_DRC_STRENGTH_OFF
+ *        MMAL_PARAMETER_DRC_STRENGTH_LOW
+ *        MMAL_PARAMETER_DRC_STRENGTH_MEDIUM
+ *        MMAL_PARAMETER_DRC_STRENGTH_HIGH
+ *
+ * @return 0 if successful, non-zero if any parameters out of range
+ */
+int raspicamcontrol_set_DRC(MMAL_COMPONENT_T *camera, MMAL_PARAMETER_DRC_STRENGTH_T strength)
+{
+   MMAL_PARAMETER_DRC_T drc = {{MMAL_PARAMETER_DYNAMIC_RANGE_COMPRESSION, sizeof(MMAL_PARAMETER_DRC_T)}, strength};
+
+   if (!camera)
+      return 1;
+
+   return mmal_status_to_int(mmal_port_parameter_set(camera->control, &drc.hdr));
+}
 
 
 /**
