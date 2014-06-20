@@ -681,6 +681,12 @@ void raspicamcontrol_display_help()
       fprintf(stderr, ",%s", metering_mode_map[i].mode);
    }
 
+   fprintf(stderr, "\n\nDynamic Range Compression (DRC) Level options :\n%s", drc_mode_map[0].mode );
+
+   for (i=1;i<drc_mode_map_size;i++)
+   {
+      fprintf(stderr, ",%s", drc_mode_map[i].mode);
+   }
    fprintf(stderr, "\n");
 }
 
@@ -771,6 +777,7 @@ void raspicamcontrol_set_defaults(RASPICAM_CAMERA_PARAMETERS *params)
    params->shutter_speed = 0;          // 0 = auto
    params->awb_gains_r = 0;      // Only have any function if AWB OFF is used.
    params->awb_gains_b = 0;
+   params->drc_level = MMAL_PARAMETER_DRC_STRENGTH_OFF;
 }
 
 /**
