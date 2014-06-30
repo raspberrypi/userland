@@ -308,7 +308,7 @@ static void default_status(RASPIVID_STATE *state)
    state->height = 1080;
    state->bitrate = 17000000; // This is a decent default bitrate for 1080p
    state->framerate = VIDEO_FRAME_RATE_NUM;
-   state->intraperiod = 0;    // Not set
+   state->intraperiod = -1;    // Not set
    state->quantisationParameter = 0;
    state->demoMode = 0;
    state->demoInterval = 250; // ms
@@ -1302,7 +1302,7 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
 
    }
 
-   if (state->intraperiod)
+   if (state->intraperiod != -1)
    {
       MMAL_PARAMETER_UINT32_T param = {{ MMAL_PARAMETER_INTRAPERIOD, sizeof(param)}, state->intraperiod};
       status = mmal_port_parameter_set(encoder_output, &param.hdr);
