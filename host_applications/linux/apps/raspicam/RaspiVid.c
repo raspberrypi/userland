@@ -250,7 +250,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandDemoMode,      "-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 1},
    { CommandFramerate,     "-framerate",  "fps","Specify the frames per second to record", 1},
    { CommandPreviewEnc,    "-penc",       "e",  "Display preview image *after* encoding (shows compression artifacts)", 0},
-   { CommandIntraPeriod,   "-intra",      "g",  "Specify the intra refresh period (key frame rate/GoP size)", 1},
+   { CommandIntraPeriod,   "-intra",      "g",  "Specify the intra refresh period (key frame rate/GoP size). Zero to produce an initial I-frame and then just P-frames.", 1},
    { CommandProfile,       "-profile",    "pf", "Specify H264 profile to use for encoding", 1},
    { CommandTimed,         "-timed",      "td", "Cycle between capture and pause. -cycle on,off where on is record time and off is pause time in ms", 0},
    { CommandSignal,        "-signal",     "s",  "Cycle between capture and pause on Signal", 0},
