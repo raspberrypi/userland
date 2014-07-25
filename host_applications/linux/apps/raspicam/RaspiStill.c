@@ -876,6 +876,18 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
    format->encoding = MMAL_ENCODING_OPAQUE;
    format->encoding_variant = MMAL_ENCODING_I420;
 
+   if(state->camera_parameters.shutter_speed > 6000000)
+   {
+        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+                                                     { 50, 1000 }, {166, 1000}};
+        mmal_port_parameter_set(preview_port, &fps_range.hdr);
+   }
+   else if(state->camera_parameters.shutter_speed > 1000000)
+   {
+        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+                                                     { 166, 1000 }, {999, 1000}};
+        mmal_port_parameter_set(preview_port, &fps_range.hdr);
+   }
    if (state->fullResPreview)
    {
       // In this mode we are forcing the preview to be generated from the full capture resolution.
@@ -925,6 +937,18 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
 
    format = still_port->format;
 
+   if(state->camera_parameters.shutter_speed > 6000000)
+   {
+        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+                                                     { 50, 1000 }, {166, 1000}};
+        mmal_port_parameter_set(still_port, &fps_range.hdr);
+   }
+   else if(state->camera_parameters.shutter_speed > 1000000)
+   {
+        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+                                                     { 167, 1000 }, {999, 1000}};
+        mmal_port_parameter_set(still_port, &fps_range.hdr);
+   }
    // Set our stills format on the stills (for encoder) port
    format->encoding = MMAL_ENCODING_OPAQUE;
    format->es->video.width = VCOS_ALIGN_UP(state->width, 32);
