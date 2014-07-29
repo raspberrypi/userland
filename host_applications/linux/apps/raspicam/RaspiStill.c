@@ -184,7 +184,7 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandGL           17
 #define CommandGLCapture    18
 #define CommandSettings     19
-#define CommandCamSelect    19
+#define CommandCamSelect    20
 
 static COMMAND_LIST cmdline_commands[] =
 {
