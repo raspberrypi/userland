@@ -75,9 +75,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <semaphore.h>
 
-/// Camera number to use - we only have one camera, indexed from 0.
-#define CAMERA_NUMBER 0
-
 // Standard port setting for the camera component
 #define MMAL_CAMERA_PREVIEW_PORT 0
 #define MMAL_CAMERA_VIDEO_PORT 1
@@ -104,6 +101,7 @@ typedef struct
    int verbose;                        /// !0 if want detailed run information
    int timelapse;                      /// Delay between each picture in timelapse mode. If 0, disable timelapse
    int useRGB;                         /// Output RGB data rather than YUV
+   int cameraNum;                      /// Camera number
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -135,6 +133,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandTimeout      5
 #define CommandTimelapse    6
 #define CommandUseRGB       7
+#define CommandCamSelect    8
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -146,6 +145,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandTimeout, "-timeout",    "t",  "Time (in ms) before takes picture and shuts down. If not specified set to 5s", 1 },
    { CommandTimelapse,"-timelapse", "tl", "Timelapse mode. Takes a picture every <t>ms", 1},
    { CommandUseRGB,  "-rgb",        "rgb","Save as RGB data rather than YUV", 0},
+   { CommandCamSelect,"-camselect", "cs", "Select camera <number>. Default 0", 1 },
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -177,6 +177,9 @@ static void default_status(RASPISTILLYUV_STATE *state)
 
    // Set up the camera_parameters to default
    raspicamcontrol_set_defaults(&state->camera_parameters);
+   
+   // Set default camera
+   state->cameraNum = 0;
 }
 
 /**
@@ -300,7 +303,18 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
       case CommandUseRGB: // display lots of data during run
          state->useRGB = 1;
          break;
-
+      
+      case CommandCamSelect:  //Select camera input port
+      {
+         if (sscanf(argv[i + 1], "%u", &state->cameraNum) == 1)
+         {
+            i++;
+         }
+         else
+            valid = 0;
+		  break;
+	  }
+     
       default:
       {
          // Try parsing for any image specific parameters
@@ -478,6 +492,17 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
       goto error;
    }
 
+   MMAL_PARAMETER_INT32_T camera_num =
+      {{MMAL_PARAMETER_CAMERA_NUM, sizeof(camera_num)}, state->cameraNum};
+
+   status = mmal_port_parameter_set(camera->control, &camera_num.hdr);
+   
+   if (status != MMAL_SUCCESS)
+   {
+      vcos_log_error("Could not select camera : error %d", status);
+      goto error;
+   }
+   
    if (!camera->output_num)
    {
       vcos_log_error("Camera doesn't have output ports");

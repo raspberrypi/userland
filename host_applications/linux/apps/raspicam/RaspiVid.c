@@ -75,9 +75,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <semaphore.h>
 
-/// Camera number to use - we only have one camera, indexed from 0.
-#define CAMERA_NUMBER 0
-
 // Standard port setting for the camera component
 #define MMAL_CAMERA_PREVIEW_PORT 0
 #define MMAL_CAMERA_VIDEO_PORT 1
@@ -186,6 +183,8 @@ struct RASPIVID_STATE_S
 
    int inlineMotionVectors;             /// Encoder outputs inline Motion Vectors
    char *imv_filename;                  /// filename of inline Motion Vectors output
+   
+   int cameraNum;                       /// Camera number
 
 };
 
@@ -237,6 +236,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandSplitWait    21
 #define CommandCircular     22
 #define CommandIMV          23
+#define CommandCamSelect    24
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -264,6 +264,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandSplitWait,     "-split",      "sp", "In wait mode, create new output file for each start event", 0},
    { CommandCircular,      "-circular",   "c",  "Run encoded data through circular buffer until triggered then save", 0},
    { CommandIMV,           "-vectors",    "x",  "Output filename <filename> for inline motion vectors", 1 },
+   { CommandCamSelect,     "-camselect",  "cs", "Select camera <number>. Default 0", 1 },
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -328,6 +329,8 @@ static void default_status(RASPIVID_STATE *state)
    state->splitWait = 0;
 
    state->inlineMotionVectors = 0;
+   
+   state->cameraNum = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -660,6 +663,16 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
             valid = 0;
          break;
       }
+      case CommandCamSelect:  //Select camera input port
+      {
+         if (sscanf(argv[i + 1], "%u", &state->cameraNum) == 1)
+         {
+            i++;
+         }
+         else
+            valid = 0;
+		  break;
+	  }
 
       default:
       {
@@ -1059,7 +1072,18 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
       vcos_log_error("Failed to create camera component");
       goto error;
    }
+   
+   MMAL_PARAMETER_INT32_T camera_num =
+      {{MMAL_PARAMETER_CAMERA_NUM, sizeof(camera_num)}, state->cameraNum};
 
+   status = mmal_port_parameter_set(camera->control, &camera_num.hdr);
+   
+   if (status != MMAL_SUCCESS)
+   {
+      vcos_log_error("Could not select camera : error %d", status);
+      goto error;
+   }
+   
    if (!camera->output_num)
    {
       status = MMAL_ENOSYS;
