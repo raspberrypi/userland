@@ -119,6 +119,7 @@ typedef struct
    int frameNextMethod;                /// Which method to use to advance to next frame
    int settings;                       /// Request settings from the camera
    int cameraNum;                      /// Camera number
+   int burstCaptureMode;               /// Enable burst mode
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -156,6 +157,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandKeypress     11
 #define CommandSignal       12
 #define CommandSettings     13
+#define CommandBurstMode    14
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -173,6 +175,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandKeypress,"-keypress",   "k",  "Wait between captures for a ENTER, X then ENTER to exit", 0},
    { CommandSignal,  "-signal",     "s",  "Wait between captures for a SIGUSR1 from another process", 0},
    { CommandSettings, "-settings",  "set","Retrieve camera settings and write to stdout", 0},
+   { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},   
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -220,6 +223,7 @@ static void default_status(RASPISTILLYUV_STATE *state)
    state->fullResPreview = 0;
    state->frameNextMethod = FRAME_NEXT_SINGLE;
    state->settings = 0;
+   state->burstCaptureMode=0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -430,6 +434,10 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
          state->settings = 1;
          break;
 
+      case CommandBurstMode: 
+         state->burstCaptureMode=1;
+         break;
+         
       default:
       {
          // Try parsing for any image specific parameters
@@ -1333,6 +1341,11 @@ int main(int argc, const char **argv)
 
                   if (mmal_port_send_buffer(camera_still_port, buffer)!= MMAL_SUCCESS)
                      vcos_log_error("Unable to send a buffer to camera output port (%d)", q);
+               }
+
+               if (state.burstCaptureMode && frame==1)
+               {
+                  mmal_port_parameter_set_boolean(state.camera_component->control,  MMAL_PARAMETER_CAMERA_BURST_CAPTURE, 1);
                }
 
                if (state.verbose)
