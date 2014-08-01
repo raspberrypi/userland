@@ -207,6 +207,10 @@ Allows the specification of the area of the sensor to be used as the source for 
 
 Set the shutter speed to the specified value (in microseconds). There is currently an upper limit of approximately 330000us (330ms, 0.33s) past which operation is undefined. This is being investigated.
 
+	--camselect,   	-cs	Select <camera number>
+
+Select camera number. Default 0
+
 Application specific settings
 
 raspistill

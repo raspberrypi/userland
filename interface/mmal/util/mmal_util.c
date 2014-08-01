@@ -85,6 +85,11 @@ static struct {
    {MMAL_ENCODING_RGB24, 3, 1},
    {MMAL_ENCODING_BGR16, 2, 1},
    {MMAL_ENCODING_BGR24, 3, 1},
+
+   {MMAL_ENCODING_YUYV,  2, 1},
+   {MMAL_ENCODING_YVYU,  2, 1},
+   {MMAL_ENCODING_UYVY,  2, 1},
+   {MMAL_ENCODING_VYUY,  2, 1},
    /* {MMAL_ENCODING_YUVUV128, 1, 1}, That's a special case which must not be included */
    {MMAL_ENCODING_UNKNOWN, 0, 0}
 };

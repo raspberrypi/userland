@@ -130,6 +130,21 @@ MMAL_BUFFER_HEADER_T *mmal_queue_wait(MMAL_QUEUE_T *queue)
    return mmal_queue_get(queue);
 }
 
+MMAL_BUFFER_HEADER_T *mmal_queue_timedwait(MMAL_QUEUE_T *queue, VCOS_UNSIGNED timeout)
+{
+    int ret = 0;
+    if (!queue)
+        return NULL;
+
+    ret = vcos_semaphore_wait_timeout(&queue->semaphore, timeout);
+
+    if (ret != VCOS_SUCCESS)
+        return NULL;
+
+    vcos_semaphore_post(&queue->semaphore);
+    return mmal_queue_get(queue);
+}
+
 /** Get the number of MMAL_BUFFER_HEADER_T currently in a QUEUE */
 unsigned int mmal_queue_length(MMAL_QUEUE_T *queue)
 {

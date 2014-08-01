@@ -56,7 +56,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sysexits.h>
 #include <libgen.h>
 
-#define VERSION_STRING "v1.3.3"
+#define VERSION_STRING "v1.3.4"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -75,9 +75,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiCLI.h"
 
 #include <semaphore.h>
-
-/// Camera number to use - we only have one camera, indexed from 0.
-#define CAMERA_NUMBER 0
 
 // Standard port setting for the camera component
 #define MMAL_CAMERA_PREVIEW_PORT 0
@@ -105,6 +102,7 @@ typedef struct
    int verbose;                        /// !0 if want detailed run information
    int timelapse;                      /// Delay between each picture in timelapse mode. If 0, disable timelapse
    int useRGB;                         /// Output RGB data rather than YUV
+   int cameraNum;                      /// Camera number
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -136,6 +134,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandTimeout      5
 #define CommandTimelapse    6
 #define CommandUseRGB       7
+#define CommandCamSelect    8
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -147,6 +146,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandTimeout, "-timeout",    "t",  "Time (in ms) before takes picture and shuts down. If not specified set to 5s", 1 },
    { CommandTimelapse,"-timelapse", "tl", "Timelapse mode. Takes a picture every <t>ms", 1},
    { CommandUseRGB,  "-rgb",        "rgb","Save as RGB data rather than YUV", 0},
+   { CommandCamSelect,"-camselect", "cs", "Select camera <number>. Default 0", 1 },
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -178,6 +178,9 @@ static void default_status(RASPISTILLYUV_STATE *state)
 
    // Set up the camera_parameters to default
    raspicamcontrol_set_defaults(&state->camera_parameters);
+   
+   // Set default camera
+   state->cameraNum = 0;
 }
 
 /**
@@ -301,7 +304,18 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
       case CommandUseRGB: // display lots of data during run
          state->useRGB = 1;
          break;
-
+      
+      case CommandCamSelect:  //Select camera input port
+      {
+         if (sscanf(argv[i + 1], "%u", &state->cameraNum) == 1)
+         {
+            i++;
+         }
+         else
+            valid = 0;
+		  break;
+	  }
+     
       default:
       {
          // Try parsing for any image specific parameters
@@ -479,6 +493,17 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
       goto error;
    }
 
+   MMAL_PARAMETER_INT32_T camera_num =
+      {{MMAL_PARAMETER_CAMERA_NUM, sizeof(camera_num)}, state->cameraNum};
+
+   status = mmal_port_parameter_set(camera->control, &camera_num.hdr);
+   
+   if (status != MMAL_SUCCESS)
+   {
+      vcos_log_error("Could not select camera : error %d", status);
+      goto error;
+   }
+   
    if (!camera->output_num)
    {
       vcos_log_error("Camera doesn't have output ports");
@@ -507,8 +532,8 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
          .max_stills_h = state->height,
          .stills_yuv422 = 0,
          .one_shot_stills = 1,
-         .max_preview_video_w = VCOS_ALIGN_UP(FULL_FOV_PREVIEW_4x3_X, 32),
-         .max_preview_video_h = VCOS_ALIGN_UP(FULL_FOV_PREVIEW_4x3_Y, 16),
+         .max_preview_video_w = state->preview_parameters.previewWindow.width,
+         .max_preview_video_h = state->preview_parameters.previewWindow.height,
          .num_preview_video_frames = 3,
          .stills_capture_circular_buffer_height = 0,
          .fast_preview_resume = 0,
@@ -527,14 +552,14 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
    format->encoding_variant = MMAL_ENCODING_I420;
 
    // Use a full FOV 4:3 mode
-   format->es->video.width = VCOS_ALIGN_UP(FULL_FOV_PREVIEW_4x3_X, 32);
-   format->es->video.height = VCOS_ALIGN_UP(FULL_FOV_PREVIEW_4x3_Y, 16);
+   format->es->video.width = VCOS_ALIGN_UP(state->preview_parameters.previewWindow.width, 32);
+   format->es->video.height = VCOS_ALIGN_UP(state->preview_parameters.previewWindow.height, 16);
    format->es->video.crop.x = 0;
    format->es->video.crop.y = 0;
-   format->es->video.crop.width = FULL_FOV_PREVIEW_4x3_X;
-   format->es->video.crop.height = FULL_FOV_PREVIEW_4x3_Y;
-   format->es->video.frame_rate.num = FULL_FOV_PREVIEW_FRAME_RATE_NUM;
-   format->es->video.frame_rate.den = FULL_FOV_PREVIEW_FRAME_RATE_DEN;
+   format->es->video.crop.width = state->preview_parameters.previewWindow.width;
+   format->es->video.crop.height = state->preview_parameters.previewWindow.height;
+   format->es->video.frame_rate.num = PREVIEW_FRAME_RATE_NUM;
+   format->es->video.frame_rate.den = PREVIEW_FRAME_RATE_DEN;
 
    status = mmal_port_format_commit(preview_port);
 

@@ -58,7 +58,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sysexits.h>
 #include <libgen.h>
 
-#define VERSION_STRING "v1.3.7"
+#define VERSION_STRING "v1.3.8"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -78,9 +78,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiTex.h"
 
 #include <semaphore.h>
-
-/// Camera number to use - we only have one camera, indexed from 0.
-#define CAMERA_NUMBER 0
 
 // Standard port setting for the camera component
 #define MMAL_CAMERA_PREVIEW_PORT 0
@@ -137,6 +134,8 @@ typedef struct
    int frameNextMethod;                /// Which method to use to advance to next frame
    int useGL;                          /// Render preview using OpenGL
    int glCapture;                      /// Save the GL frame-buffer instead of camera output
+   int settings;                       /// Request settings from the camera
+   int cameraNum;                      /// Camera number
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -185,6 +184,8 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandSignal       16
 #define CommandGL           17
 #define CommandGLCapture    18
+#define CommandSettings     19
+#define CommandCamSelect    20
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -207,6 +208,8 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandSignal,  "-signal",     "s",  "Wait between captures for a SIGUSR1 from another process", 0},
    { CommandGL,      "-gl",         "g",  "Draw preview to texture instead of using video render component", 0},
    { CommandGLCapture, "-glcapture","gc", "Capture the GL frame-buffer instead of the camera image", 0},
+   { CommandSettings, "-settings",  "set","Retrieve camera settings and write to stdout", 0},
+   { CommandCamSelect, "-camselect","cs", "Select camera <number>. Default 0", 1 },
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -282,6 +285,8 @@ static void default_status(RASPISTILL_STATE *state)
    state->frameNextMethod = FRAME_NEXT_SINGLE;
    state->useGL = 0;
    state->glCapture = 0;
+   state->settings = 0;
+   state->cameraNum = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -594,6 +599,22 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          state->glCapture = 1;
          break;
 
+      case CommandSettings:
+         state->settings = 1;
+         break;
+
+         
+      case CommandCamSelect:  //Select camera input port
+      {
+         if (sscanf(argv[i + 1], "%u", &state->cameraNum) == 1)
+         {
+            i++;
+         }
+         else
+            valid = 0;
+         break;
+      }
+
       default:
       {
          // Try parsing for any image specific parameters
@@ -687,11 +708,25 @@ static void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 {
    if (buffer->cmd == MMAL_EVENT_PARAMETER_CHANGED)
    {
+      MMAL_EVENT_PARAMETER_CHANGED_T *param = (MMAL_EVENT_PARAMETER_CHANGED_T *)buffer->data;
+      switch (param->hdr.id) {
+         case MMAL_PARAMETER_CAMERA_SETTINGS:
+         {
+            MMAL_PARAMETER_CAMERA_SETTINGS_T *settings = (MMAL_PARAMETER_CAMERA_SETTINGS_T*)param;
+            vcos_log_error("Exposure now %u, analog gain %u/%u, digital gain %u/%u",
+			settings->exposure,
+                        settings->analog_gain.num, settings->analog_gain.den,
+                        settings->digital_gain.num, settings->digital_gain.den);
+            vcos_log_error("AWB R=%u/%u, B=%u/%u",
+                        settings->awb_red_gain.num, settings->awb_red_gain.den,
+                        settings->awb_blue_gain.num, settings->awb_blue_gain.den
+                        );
+         }
+         break;
+      }
    }
    else
-   {
       vcos_log_error("Received unexpected camera control callback event, 0x%08x", buffer->cmd);
-   }
 
    mmal_buffer_header_release(buffer);
 }
@@ -788,6 +823,17 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
       goto error;
    }
 
+   MMAL_PARAMETER_INT32_T camera_num =
+      {{MMAL_PARAMETER_CAMERA_NUM, sizeof(camera_num)}, state->cameraNum};
+
+   status = mmal_port_parameter_set(camera->control, &camera_num.hdr);
+
+   if (status != MMAL_SUCCESS)
+   {
+      vcos_log_error("Could not select camera : error %d", status);
+      goto error;
+   }
+
    if (!camera->output_num)
    {
       status = MMAL_ENOSYS;
@@ -798,6 +844,19 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
    preview_port = camera->output[MMAL_CAMERA_PREVIEW_PORT];
    video_port = camera->output[MMAL_CAMERA_VIDEO_PORT];
    still_port = camera->output[MMAL_CAMERA_CAPTURE_PORT];
+
+   if (state->settings)
+   {
+      MMAL_PARAMETER_CHANGE_EVENT_REQUEST_T change_event_request =
+         {{MMAL_PARAMETER_CHANGE_EVENT_REQUEST, sizeof(MMAL_PARAMETER_CHANGE_EVENT_REQUEST_T)},
+          MMAL_PARAMETER_CAMERA_SETTINGS, 1};
+
+      status = mmal_port_parameter_set(camera->control, &change_event_request.hdr);
+      if ( status != MMAL_SUCCESS )
+      {
+         vcos_log_error("No camera settings events");
+      }
+   }
 
    // Enable the camera, and tell it its control callback function
    status = mmal_port_enable(camera->control, camera_control_callback);
@@ -817,8 +876,8 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
          .max_stills_h = state->height,
          .stills_yuv422 = 0,
          .one_shot_stills = 1,
-         .max_preview_video_w = VCOS_ALIGN_UP(FULL_FOV_PREVIEW_4x3_X, 32),
-         .max_preview_video_h = VCOS_ALIGN_UP(FULL_FOV_PREVIEW_4x3_Y, 16),
+         .max_preview_video_w = state->preview_parameters.previewWindow.width,
+         .max_preview_video_h = state->preview_parameters.previewWindow.height,
          .num_preview_video_frames = 3,
          .stills_capture_circular_buffer_height = 0,
          .fast_preview_resume = 0,
@@ -842,6 +901,18 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
    format->encoding = MMAL_ENCODING_OPAQUE;
    format->encoding_variant = MMAL_ENCODING_I420;
 
+   if(state->camera_parameters.shutter_speed > 6000000)
+   {
+        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+                                                     { 50, 1000 }, {166, 1000}};
+        mmal_port_parameter_set(preview_port, &fps_range.hdr);
+   }
+   else if(state->camera_parameters.shutter_speed > 1000000)
+   {
+        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+                                                     { 166, 1000 }, {999, 1000}};
+        mmal_port_parameter_set(preview_port, &fps_range.hdr);
+   }
    if (state->fullResPreview)
    {
       // In this mode we are forcing the preview to be generated from the full capture resolution.
@@ -858,14 +929,14 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
    else
    {
       // Use a full FOV 4:3 mode
-      format->es->video.width = VCOS_ALIGN_UP(FULL_FOV_PREVIEW_4x3_X, 32);
-      format->es->video.height = VCOS_ALIGN_UP(FULL_FOV_PREVIEW_4x3_Y, 16);
+      format->es->video.width = VCOS_ALIGN_UP(state->preview_parameters.previewWindow.width, 32);
+      format->es->video.height = VCOS_ALIGN_UP(state->preview_parameters.previewWindow.height, 16);
       format->es->video.crop.x = 0;
       format->es->video.crop.y = 0;
-      format->es->video.crop.width = FULL_FOV_PREVIEW_4x3_X; // Changing these? Also change camera config max settings to match.
-      format->es->video.crop.height = FULL_FOV_PREVIEW_4x3_Y;
-      format->es->video.frame_rate.num = FULL_FOV_PREVIEW_FRAME_RATE_NUM;
-      format->es->video.frame_rate.den = FULL_FOV_PREVIEW_FRAME_RATE_DEN;
+      format->es->video.crop.width = state->preview_parameters.previewWindow.width;
+      format->es->video.crop.height = state->preview_parameters.previewWindow.height;
+      format->es->video.frame_rate.num = PREVIEW_FRAME_RATE_NUM;
+      format->es->video.frame_rate.den = PREVIEW_FRAME_RATE_DEN;
    }
 
    status = mmal_port_format_commit(preview_port);
@@ -891,6 +962,18 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
 
    format = still_port->format;
 
+   if(state->camera_parameters.shutter_speed > 6000000)
+   {
+        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+                                                     { 50, 1000 }, {166, 1000}};
+        mmal_port_parameter_set(still_port, &fps_range.hdr);
+   }
+   else if(state->camera_parameters.shutter_speed > 1000000)
+   {
+        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+                                                     { 167, 1000 }, {999, 1000}};
+        mmal_port_parameter_set(still_port, &fps_range.hdr);
+   }
    // Set our stills format on the stills (for encoder) port
    format->encoding = MMAL_ENCODING_OPAQUE;
    format->es->video.width = VCOS_ALIGN_UP(state->width, 32);

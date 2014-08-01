@@ -251,6 +251,7 @@ EGLAPI EGLBoolean EGLAPIENTRY eglInitialize(EGLDisplay dpy, EGLint *major, EGLin
    vcos_log_set_level(&egl_client_log_cat, VCOS_LOG_WARN);
    vcos_log_register("egl_client", &egl_client_log_cat);
    vcos_log_info("eglInitialize end. dpy=%d.", (int)dpy);
+   khrn_init_options();
 
    return result;
 }

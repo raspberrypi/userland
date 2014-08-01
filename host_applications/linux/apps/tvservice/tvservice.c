@@ -75,6 +75,7 @@ enum
 {
    OPT_PREFERRED = 'p',
    OPT_EXPLICIT  = 'e',
+   OPT_NTSC      = 't',
    OPT_OFF       = 'o',
    OPT_SDTVON    = 'c',
    OPT_MODES     = 'm',
@@ -96,6 +97,7 @@ static struct option long_opts[] =
    // -------------------  ------------------   ----     ---------------
    { "preferred",          no_argument,         NULL,    OPT_PREFERRED },
    { "explicit",           required_argument,   NULL,    OPT_EXPLICIT },
+   { "ntsc",               no_argument,         NULL,    OPT_NTSC },
    { "off",                no_argument,         NULL,    OPT_OFF },
    { "sdtvon",             required_argument,   NULL,    OPT_SDTVON },
    { "modes",              required_argument,   NULL,    OPT_MODES },
@@ -120,6 +122,7 @@ static void show_usage( void )
    LOG_STD( "  -p, --preferred                   Power on HDMI with preferred settings" );
    LOG_STD( "  -e, --explicit=\"GROUP MODE DRIVE\" Power on HDMI with explicit GROUP (CEA, DMT, CEA_3D_SBS, CEA_3D_TB)\n"
             "                                      MODE (see --modes) and DRIVE (HDMI, DVI)" );
+   LOG_STD( "  -t, --ntsc                        Use NTSC frequency for HDMI mode (e.g. 59.94Hz rather than 60Hz)" );
    LOG_STD( "  -c, --sdtvon=\"MODE ASPECT\"        Power on SDTV with MODE (PAL or NTSC) and ASPECT (4:3 14:9 or 16:9)" );
    LOG_STD( "  -o, --off                         Power off the display" );
    LOG_STD( "  -m, --modes=GROUP                 Get supported modes for GROUP (CEA, DMT)" );
@@ -433,11 +436,16 @@ static int get_status( void )
    if( vc_tv_get_display_state( &tvstate ) == 0) {
       //The width/height parameters are in the same position in the union
       //for HDMI and SDTV
+      HDMI_PROPERTY_PARAM_T property;
+      property.property = HDMI_PROPERTY_PIXEL_CLOCK_TYPE;
+      vc_tv_hdmi_get_property(&property);
+      float frame_rate = property.param1 == HDMI_PIXEL_CLOCK_TYPE_NTSC ? tvstate.display.hdmi.frame_rate * (1000.0f/1001.0f) : tvstate.display.hdmi.frame_rate;
+
       if(tvstate.display.hdmi.width && tvstate.display.hdmi.height) {
-         LOG_STD( "state 0x%x [%s], %ux%u @ %uHz, %s", tvstate.state,
+         LOG_STD( "state 0x%x [%s], %ux%u @ %.2fHz, %s", tvstate.state,
                   status_mode(&tvstate),
                   tvstate.display.hdmi.width, tvstate.display.hdmi.height,
-                  tvstate.display.hdmi.frame_rate,
+                  frame_rate,
                   tvstate.display.hdmi.scan_mode ? "interlaced" : "progressive" );
       } else {
          LOG_STD( "state 0x%x [%s]", tvstate.state, status_mode(&tvstate));
@@ -544,9 +552,9 @@ static void tvservice_callback( void *callback_data,
          LOG_INFO( "HDMI cable is unplugged" );
          break;
       }
-      case VC_HDMI_STANDBY:
+      case VC_HDMI_ATTACHED:
       {
-         LOG_INFO( "HDMI in standby mode" );
+         LOG_INFO( "HDMI is attached" );
          break;
       }
       case VC_HDMI_DVI:
@@ -582,6 +590,7 @@ static void tvservice_callback( void *callback_data,
       default:
       {
          // Ignore all other reasons
+         LOG_INFO( "Callback with reason %d", reason );
          break;
       }
    }
@@ -645,7 +654,7 @@ static int set_property(HDMI_PROPERTY_T prop, uint32_t param1, uint32_t param2)
    property.property = prop;
    property.param1 = param1;
    property.param2 = param2;
-   LOG_STD( "Setting property %d with params %d, %d", prop, param1, param2);
+   //LOG_DBG( "Setting property %d with params %d, %d", prop, param1, param2);
    ret = vc_tv_hdmi_set_property(&property);
    if(ret != 0)
    {
@@ -698,6 +707,7 @@ int main( int argc, char **argv )
    int  opt;
    int  opt_preferred = 0;
    int  opt_explicit = 0;
+   int  opt_ntsc = 0;
    int  opt_sdtvon = 0;
    int  opt_off = 0;
    int  opt_modes = 0;
@@ -803,6 +813,11 @@ int main( int argc, char **argv )
             }
 
             opt_explicit = 1;
+            break;
+         }
+         case OPT_NTSC:
+         {
+            opt_ntsc = 1;
             break;
          }
          case OPT_SDTVON:
@@ -1009,7 +1024,10 @@ int main( int argc, char **argv )
       {
          goto err_stop_service;
       }
-
+      if (set_property( HDMI_PROPERTY_PIXEL_CLOCK_TYPE, opt_ntsc ? HDMI_PIXEL_CLOCK_TYPE_NTSC : HDMI_PIXEL_CLOCK_TYPE_PAL, 0) != 0)
+      {
+         goto err_stop_service;
+      }
       if ( power_on_explicit( power_on_explicit_group,
                               power_on_explicit_mode, power_on_explicit_drive ) != 0 )
       {

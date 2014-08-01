@@ -130,6 +130,9 @@ typedef struct
    int vflip;                 /// 0 or 1
    PARAM_FLOAT_RECT_T  roi;   /// region of interest to use on the sensor. Normalised [0,1] values in the rect
    int shutter_speed;         /// 0 = auto, otherwise the shutter speed in ms
+   float awb_gains_r;         /// AWB red gain
+   float awb_gains_b;         /// AWB blue gain
+   MMAL_PARAMETER_DRC_STRENGTH_T drc_level;  // Strength of Dynamic Range compression to apply
 } RASPICAM_CAMERA_PARAMETERS;
 
 
@@ -158,12 +161,15 @@ int raspicamcontrol_set_video_stabilisation(MMAL_COMPONENT_T *camera, int vstabi
 int raspicamcontrol_set_exposure_compensation(MMAL_COMPONENT_T *camera, int exp_comp);
 int raspicamcontrol_set_exposure_mode(MMAL_COMPONENT_T *camera, MMAL_PARAM_EXPOSUREMODE_T mode);
 int raspicamcontrol_set_awb_mode(MMAL_COMPONENT_T *camera, MMAL_PARAM_AWBMODE_T awb_mode);
+int raspicamcontrol_set_awb_gains(MMAL_COMPONENT_T *camera, float r_gain, float b_gain);
 int raspicamcontrol_set_imageFX(MMAL_COMPONENT_T *camera, MMAL_PARAM_IMAGEFX_T imageFX);
 int raspicamcontrol_set_colourFX(MMAL_COMPONENT_T *camera, const MMAL_PARAM_COLOURFX_T *colourFX);
 int raspicamcontrol_set_rotation(MMAL_COMPONENT_T *camera, int rotation);
 int raspicamcontrol_set_flips(MMAL_COMPONENT_T *camera, int hflip, int vflip);
 int raspicamcontrol_set_ROI(MMAL_COMPONENT_T *camera, PARAM_FLOAT_RECT_T rect);
 int raspicamcontrol_set_shutter_speed(MMAL_COMPONENT_T *camera, int speed_ms);
+int raspicamcontrol_set_DRC(MMAL_COMPONENT_T *camera, MMAL_PARAMETER_DRC_STRENGTH_T strength);
+
 
 //Individual getting functions
 int raspicamcontrol_get_saturation(MMAL_COMPONENT_T *camera);

@@ -220,6 +220,11 @@ typedef struct OMX_DISPLAYRECTTYPE {
 typedef enum OMX_DISPLAYMODETYPE {
    OMX_DISPLAY_MODE_FILL = 0,
    OMX_DISPLAY_MODE_LETTERBOX = 1,
+   // these allow a left eye source->dest to be specified and the right eye mapping will be inferred by symmetry
+   OMX_DISPLAY_MODE_STEREO_LEFT_TO_LEFT = 2,
+   OMX_DISPLAY_MODE_STEREO_TOP_TO_TOP = 3,
+   OMX_DISPLAY_MODE_STEREO_LEFT_TO_TOP = 4,
+   OMX_DISPLAY_MODE_STEREO_TOP_TO_LEFT = 5,
    OMX_DISPLAY_MODE_DUMMY = 0x7FFFFFFF
 } OMX_DISPLAYMODETYPE;
 
@@ -1658,6 +1663,7 @@ typedef struct OMX_CONFIG_U8TYPE {
 typedef struct OMX_CONFIG_CAMERASETTINGSTYPE {
     OMX_U32 nSize;
     OMX_VERSIONTYPE nVersion;
+    OMX_U32 nPortIndex;               /**< port that this structure applies to */
     OMX_U32 nExposure;
     OMX_U32 nAnalogGain;
     OMX_U32 nDigitalGain;
@@ -2328,6 +2334,29 @@ typedef struct OMX_PARAM_BRCMVIDEODECODECONFIGVD3TYPE {
    OMX_VERSIONTYPE nVersion;           /**< OMX specification version information */
    OMX_U8 config[1];                   /**< Configuration data (a VD3_CONFIGURE_T) */
 } OMX_PARAM_BRCMVIDEODECODECONFIGVD3TYPE;
+
+typedef struct OMX_CONFIG_CUSTOMAWBGAINSTYPE {
+   OMX_U32 nSize;                      /**< size of the structure in bytes, including
+                                            configuration data */
+   OMX_VERSIONTYPE nVersion;           /**< OMX specification version information */
+   OMX_U32 xGainR;                     /**< Red gain - 16p16 */
+   OMX_U32 xGainB;                     /**< Blue gain - 16p16 */
+} OMX_CONFIG_CUSTOMAWBGAINSTYPE;
+
+/* OMX_IndexConfigBrcmRenderStats: Query port statistics */
+typedef struct OMX_CONFIG_BRCMRENDERSTATSTYPE {
+   OMX_U32 nSize;
+   OMX_VERSIONTYPE nVersion;
+   OMX_U32 nPortIndex;
+   OMX_BOOL nValid;
+   OMX_U32 nMatch;
+   OMX_U32 nPeriod;
+   OMX_U32 nPhase;
+   OMX_U32 nPixelClockNominal;
+   OMX_U32 nPixelClock;
+   OMX_U32 nHvsStatus;
+   OMX_U32 dummy0[2];
+} OMX_CONFIG_BRCMRENDERSTATSTYPE;
 
 #endif
 /* File EOF */
