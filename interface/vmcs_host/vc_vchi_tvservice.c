@@ -1619,7 +1619,7 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_explicit(HDMI_MODE_T mode, HDMI_RES_GRO
       property.param1 = HDMI_RES_GROUP_CEA;
       property.param2 = 0;
       vc_tv_hdmi_set_property(&property);
-      group == HDMI_RES_GROUP_CEA;
+      group = HDMI_RES_GROUP_CEA;
    }
    return vc_tv_hdmi_power_on_explicit_new(mode, group, code);
 }
