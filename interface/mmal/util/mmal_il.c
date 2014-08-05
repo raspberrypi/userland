@@ -80,6 +80,8 @@ OMX_U32 mmalil_buffer_flags_to_omx(uint32_t flags)
       omx_flags |= OMX_BUFFERFLAG_CAPTURE_PREVIEW;
    if (flags & MMAL_BUFFER_HEADER_FLAG_CORRUPTED)
       omx_flags |= OMX_BUFFERFLAG_DATACORRUPT;
+   if (flags & MMAL_BUFFER_HEADER_FLAG_DECODEONLY)
+      omx_flags |= OMX_BUFFERFLAG_DECODEONLY;
 
    return omx_flags;
 }
@@ -104,6 +106,8 @@ uint32_t mmalil_buffer_flags_to_mmal(OMX_U32 flags)
       mmal_flags |= MMAL_BUFFER_HEADER_FLAGS_SNAPSHOT;
    if (flags & OMX_BUFFERFLAG_DATACORRUPT)
       mmal_flags |= MMAL_BUFFER_HEADER_FLAG_CORRUPTED;
+   if (flags & OMX_BUFFERFLAG_DECODEONLY)
+      mmal_flags |= MMAL_BUFFER_HEADER_FLAG_DECODEONLY;
 
    return mmal_flags;
 }
