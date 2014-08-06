@@ -782,6 +782,8 @@ static MMAL_STATUS_T mmal_vc_component_destroy(MMAL_COMPONENT_T *component)
    if(component->clock_num)
       mmal_ports_free(component->clock, component->clock_num);
 
+   mmal_queue_destroy(component->priv->module->callback_queue);
+
    vcos_free(component->priv->module);
    component->priv->module = NULL;
 
@@ -1354,20 +1356,32 @@ static MMAL_STATUS_T mmal_vc_component_create(const char *name, MMAL_COMPONENT_T
                                         sizeof(MMAL_PORT_MODULE_T));
    if (!component->control)
       goto fail;
-   component->input = mmal_ports_alloc(component, reply.input_num, MMAL_PORT_TYPE_INPUT,
-                                       sizeof(MMAL_PORT_MODULE_T));
-   if (!component->input)
-      goto fail;
+
+   if (reply.input_num)
+   {
+      component->input = mmal_ports_alloc(component, reply.input_num, MMAL_PORT_TYPE_INPUT,
+                                          sizeof(MMAL_PORT_MODULE_T));
+      if (!component->input)
+         goto fail;
+   }
    component->input_num = reply.input_num;
-   component->output = mmal_ports_alloc(component, reply.output_num, MMAL_PORT_TYPE_OUTPUT,
-                                        sizeof(MMAL_PORT_MODULE_T));
-   if (!component->output)
-      goto fail;
+
+   if (reply.output_num)
+   {
+      component->output = mmal_ports_alloc(component, reply.output_num, MMAL_PORT_TYPE_OUTPUT,
+                                           sizeof(MMAL_PORT_MODULE_T));
+      if (!component->output)
+         goto fail;
+   }
    component->output_num = reply.output_num;
-   component->clock = mmal_ports_alloc(component, reply.clock_num, MMAL_PORT_TYPE_CLOCK,
-                                        sizeof(MMAL_PORT_MODULE_T));
-   if (!component->clock)
-      goto fail;
+
+   if (reply.clock_num)
+   {
+      component->clock = mmal_ports_alloc(component, reply.clock_num, MMAL_PORT_TYPE_CLOCK,
+                                           sizeof(MMAL_PORT_MODULE_T));
+      if (!component->clock)
+         goto fail;
+   }
    component->clock_num = reply.clock_num;
 
    /* We want to do the buffer callbacks to the client into a separate thread.
