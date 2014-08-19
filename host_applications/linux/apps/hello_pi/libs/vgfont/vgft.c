@@ -374,6 +374,8 @@ static void line_extents(VGFT_FONT_T *font, VGfloat *x, VGfloat *y, const char *
       }
       FT_Load_Glyph(font->ft_face, glyph_index, FT_LOAD_DEFAULT);
       *x += float_from_26_6(font->ft_face->glyph->advance.x);
+
+      prev_glyph_index = glyph_index;
    }
 }
 
