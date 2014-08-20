@@ -1876,6 +1876,10 @@ int main(int argc, const char **argv)
                   {
                      rename_file(&state, output_file, final_filename, use_filename, frame);
                   }
+                  else
+                  {
+                     fflush(output_file);
+                  }
                   // Disable encoder output port
                   status = mmal_port_disable(encoder_output_port);
                }
