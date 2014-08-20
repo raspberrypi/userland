@@ -1023,6 +1023,36 @@ VCHPRE_ int VCHPOST_ vc_dispmanx_resource_set_palette( DISPMANX_RESOURCE_HANDLE_
    return (int) success;
 }
 
+
+/***********************************************************
+ * Name: vc_dispmanx_vsync_callback
+ *
+ * Arguments:
+ *       DISPMANX_DISPLAY_HANDLE_T display
+ *       DISPMANX_CALLBACK_FUNC_T cb_func
+ *       void *cb_arg
+ *
+ * Description: start sending callbacks on vsync events
+ *              Use a NULL cb_func to stop the callbacks
+ * Returns: 0 or failure
+ *
+ ***********************************************************/
+VCHPRE_ int VCHPOST_ vc_dispmanx_vsync_callback( DISPMANX_DISPLAY_HANDLE_T display, DISPMANX_CALLBACK_FUNC_T cb_func, void *cb_arg )
+{
+  DISPMANX_UPDATE_HANDLE_T update = 0;
+  uint32_t update_param[] = {(uint32_t) VC_HTOV32(display), VC_HTOV32(update), (uint32_t) ((cb_func) ? VC_HTOV32(1) : 0)};
+  int success;
+  //Set the callback
+  dispmanx_client.update_callback = cb_func;
+  dispmanx_client.update_callback_param = cb_arg;
+  dispmanx_client.pending_update_handle = update;
+  vchi_service_use(dispmanx_client.notify_handle[0]); // corresponding release is in dispmanx_notify_func
+  success = (int) dispmanx_send_command( EDispmanVsyncCallback | DISPMANX_NO_REPLY_MASK,
+                                         update_param, sizeof(update_param));
+  return (int) success;
+}
+
+
 /*********************************************************************************
  *
  *  Static functions definitions
