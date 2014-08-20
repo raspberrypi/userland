@@ -1488,3 +1488,18 @@ MMAL_STATUS_T mmal_port_pause(MMAL_PORT_T *port, MMAL_BOOL_T pause)
    UNLOCK_SENDING(port);
    return status;
 }
+
+MMAL_BOOL_T mmal_port_is_connected(MMAL_PORT_T *port)
+{
+   MMAL_PORT_PRIVATE_CORE_T *core;
+   MMAL_PORT_T *connected_port;
+
+   if (!port || !port->priv || !port->priv->core)
+      return MMAL_FALSE;
+
+   core = port->priv->core;
+   LOCK_CONNECTION(port);
+   connected_port = core->connected_port;
+   UNLOCK_CONNECTION(port);
+   return !!connected_port;
+}
