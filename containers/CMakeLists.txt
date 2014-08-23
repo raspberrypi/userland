@@ -55,7 +55,7 @@ endif (DEFINED MSVC)
 set(extra_net_SRCS net_sockets_win32.c net_sockets_win32.h net_sockets_null.c)
 add_custom_target(containers_net_extra ALL
     COMMAND touch ${extra_net_SRCS}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/containers/net)
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/containers/net)
 
 # Packetizers library
 set(packetizers_SRCS ${packetizers_SRCS} ${SOURCE_DIR}/core/packetizers.c)

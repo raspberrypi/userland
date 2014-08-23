@@ -3,8 +3,8 @@
 
 SET(COMPILE_DEFINITIONS -Werror)
 
-include_directories(${CMAKE_SOURCE_DIR}/host_applications/linux/libs/bcm_host/include)
-include_directories(${CMAKE_SOURCE_DIR}/host_applications/linux/apps/raspicam/)
+include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/libs/bcm_host/include)
+include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/apps/raspicam/)
 
 set (GL_SCENE_SOURCES
    gl_scenes/models.c

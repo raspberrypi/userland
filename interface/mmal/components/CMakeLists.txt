@@ -23,7 +23,7 @@ set(extra_components_SRCS avcodec_video_decoder.c avcodec_audio_decoder.c
 
 add_custom_target(mmal_components_extra ALL
     COMMAND touch ${extra_components_SRCS}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/interface/mmal/components)
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/interface/mmal/components)
 
 set(container_libs ${container_libs} containers)
 

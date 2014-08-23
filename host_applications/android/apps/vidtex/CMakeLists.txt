@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 
 SET(COMPILE_DEFINITIONS -Werror -Wall)
-include_directories(${CMAKE_SOURCE_DIR}/host_applications/linux/libs/bcm_host/include)
+include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/libs/bcm_host/include)
 
 set (VIDTEX_SOURCES
    main.cpp

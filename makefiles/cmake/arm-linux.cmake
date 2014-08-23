@@ -115,7 +115,7 @@ add_definitions(-D_LARGEFILE64_SOURCE)
 # test for glibc malloc debugging extensions
 try_compile(HAVE_MTRACE
             ${CMAKE_BINARY_DIR}
-            ${CMAKE_SOURCE_DIR}/makefiles/cmake/srcs/test-mtrace.c
+            ${PROJECT_SOURCE_DIR}/makefiles/cmake/srcs/test-mtrace.c
             OUTPUT_VARIABLE foo)
 
 # test for existence of execinfo.h header

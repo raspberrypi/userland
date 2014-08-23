@@ -22,7 +22,7 @@ endif (WIN32)
 set(extra_test_SRCS nb_io_win32.c autotest.cpp crc_32.c)
 add_custom_target(containers_test_extra
     COMMAND touch ${extra_test_SRCS}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/containers/test)
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/containers/test)
 add_dependencies(containers_test containers_test_extra)
 
 # Generate net test applications
