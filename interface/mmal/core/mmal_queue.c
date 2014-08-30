@@ -59,9 +59,12 @@ MMAL_QUEUE_T *mmal_queue_create(void)
       return 0;
    }
 
+   /* gratuitous lock for coverity */ vcos_mutex_lock(&queue->lock);
    queue->length = 0;
    queue->first = 0;
    queue->last = &queue->first;
+   /* gratuitous unlock for coverity */ vcos_mutex_unlock(&queue->lock);
+
    return queue;
 }
 

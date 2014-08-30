@@ -511,6 +511,12 @@ static void mmal_vc_do_callback(MMAL_COMPONENT_T *component)
    mmal_port_buffer_header_callback(port, buffer);
 }
 
+static void mmal_vc_do_callback_loop(MMAL_COMPONENT_T *component)
+{
+   while (mmal_queue_length(component->priv->module->callback_queue))
+      mmal_vc_do_callback(component);
+}
+
 /** Called back from VCHI(Q) event handler when buffers come back from the copro.
  *
  * The message points to the message sent by videocore, and which should have
@@ -673,6 +679,10 @@ static MMAL_STATUS_T mmal_vc_port_send(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *
       // they need to use the more cumbersome fake-bulk-transfer mechanism
       // to guarantee correct ordering.
       port->priv->module->sent_data_on_port = MMAL_TRUE;
+
+      // Data will be received at the start of the destination buffer, so fixup
+      // the offset in the destination buffer header.
+      msg->buffer_header.offset = 0;
    }
 
    status = mmal_vc_send_message(mmal_vc_get_client(), &msg->header, sizeof(*msg),
@@ -709,7 +719,7 @@ static MMAL_STATUS_T mmal_vc_component_disable(MMAL_COMPONENT_T *component)
       status = reply.status;
    }
 
-   if (status != MMAL_SUCCESS)
+   if (status != MMAL_SUCCESS && status != MMAL_ENOSYS)
    {
       LOG_ERROR("failed to disable component - reason %d", status);
       goto fail;
@@ -740,7 +750,7 @@ static MMAL_STATUS_T mmal_vc_component_enable(MMAL_COMPONENT_T *component)
       status = reply.status;
    }
 
-   if (status != MMAL_SUCCESS)
+   if (status != MMAL_SUCCESS && status != MMAL_ENOSYS)
    {
       LOG_ERROR("failed to enable component: %s", mmal_status_to_string(status));
       return status;
@@ -1109,8 +1119,8 @@ static MMAL_STATUS_T mmal_vc_port_parameter_set(MMAL_PORT_T *port, const MMAL_PA
    }
    if (status != MMAL_SUCCESS)
    {
-      LOG_ERROR("failed to set port parameter %u:%u:%s", msg.component_handle, msg.port_handle,
-                mmal_status_to_string(status));
+      LOG_WARN("failed to set port parameter %u:%u %u:%u %s", msg.component_handle, msg.port_handle,
+            param->id, param->size, mmal_status_to_string(status));
       return status;
    }
 
@@ -1134,20 +1144,22 @@ static MMAL_STATUS_T mmal_vc_port_parameter_get(MMAL_PORT_T *port, MMAL_PARAMETE
    MMAL_PORT_MODULE_T *module = port->priv->module;
    MMAL_STATUS_T status;
    mmal_worker_port_param_get msg;
+   size_t msglen = MMAL_OFFSET(mmal_worker_port_param_get, param) + param->size;
    mmal_worker_port_param_get_reply reply;
    size_t replylen = MMAL_OFFSET(mmal_worker_port_param_get_reply, param) + param->size;
 
    if(param->size > MMAL_WORKER_PORT_PARAMETER_GET_MAX)
    {
-      LOG_ERROR("parameter too large (%u > %u)", param->size, MMAL_WORKER_PORT_PARAMETER_GET_MAX);
+      LOG_ERROR("parameter too large (%u > %u) id %u", param->size,
+            MMAL_WORKER_PORT_PARAMETER_GET_MAX, param->id);
       return MMAL_ENOMEM;
    }
 
    msg.component_handle = module->component_handle;
    msg.port_handle = module->port_handle;
-   msg.param = *param;
+   memcpy(&msg.param, param, param->size);
 
-   status = mmal_vc_sendwait_message(mmal_vc_get_client(), &msg.header, sizeof(msg),
+   status = mmal_vc_sendwait_message(mmal_vc_get_client(), &msg.header, msglen,
                                      MMAL_WORKER_PORT_PARAMETER_GET, &reply, &replylen, MMAL_FALSE);
    if (status == MMAL_SUCCESS)
    {
@@ -1170,7 +1182,8 @@ static MMAL_STATUS_T mmal_vc_port_parameter_get(MMAL_PORT_T *port, MMAL_PARAMETE
 
    if (status != MMAL_SUCCESS && status != MMAL_ENOSPC)
    {
-      LOG_ERROR("failed to get port parameter %u:%u", msg.component_handle, msg.port_handle);
+      LOG_WARN("failed to get port parameter %u:%u %u:%u %s", msg.component_handle, msg.port_handle,
+            param->id, param->size, mmal_status_to_string(status));
       return status;
    }
    
@@ -1389,7 +1402,7 @@ static MMAL_STATUS_T mmal_vc_component_create(const char *name, MMAL_COMPONENT_T
    module->callback_queue = mmal_queue_create();
    if (!module->callback_queue)
       goto fail;
-   status = mmal_component_action_register(component, mmal_vc_do_callback);
+   status = mmal_component_action_register(component, mmal_vc_do_callback_loop);
    if (status != MMAL_SUCCESS)
       goto fail;
 

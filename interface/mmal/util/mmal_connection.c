@@ -48,6 +48,16 @@ static void mmal_connection_bh_in_cb(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *bu
 {
    MMAL_PARAM_UNUSED(port);
    LOG_TRACE("(%s)%p,%p,%p,%i", port->name, port, buffer, buffer->data, (int)buffer->length);
+
+   /* FIXME: Clock ports are bi-directional and a buffer coming from an
+    * "input" clock port can potentially have valid payload data, in
+    * which case it should be queued and not released, however this
+    * callback doesn't have access to the pool queue. */
+   if (port->type == MMAL_PORT_TYPE_CLOCK && buffer->length)
+   {
+      LOG_ERROR("clock ports not supported");
+   }
+
    /* We're done with the buffer, just recycle it */
    mmal_buffer_header_release(buffer);
 }
@@ -191,6 +201,7 @@ MMAL_STATUS_T mmal_connection_create(MMAL_CONNECTION_T **cx,
          LOG_ERROR("failed to propagate buffer requirements");
          goto error;
       }
+      status = MMAL_SUCCESS;
    }
 
    /* Special case for tunnelling */
@@ -226,6 +237,7 @@ MMAL_STATUS_T mmal_connection_create(MMAL_CONNECTION_T **cx,
    return status;
 
  error:
+   /* coverity[var_deref_model] mmal_connection_destroy_internal will check connection->pool correctly */
    mmal_connection_destroy_internal(connection);
    return status == MMAL_SUCCESS ? MMAL_ENOMEM : status;
 }
@@ -268,14 +280,17 @@ MMAL_STATUS_T mmal_connection_enable(MMAL_CONNECTION_T *connection)
    connection->time_enable = vcos_getmicrosecs();
 
    /* Override the buffer values with the recommended ones (the port probably knows best) */
-   if (out->buffer_num_recommended)
-      out->buffer_num = out->buffer_num_recommended;
-   if (out->buffer_size_recommended)
-      out->buffer_size = out->buffer_size_recommended;
-   if (in->buffer_num_recommended)
-      in->buffer_num = in->buffer_num_recommended;
-   if (in->buffer_size_recommended)
-      in->buffer_size = in->buffer_size_recommended;
+   if (!(connection->flags & MMAL_CONNECTION_FLAG_KEEP_BUFFER_REQUIREMENTS))
+   {
+      if (out->buffer_num_recommended)
+         out->buffer_num = out->buffer_num_recommended;
+      if (out->buffer_size_recommended)
+         out->buffer_size = out->buffer_size_recommended;
+      if (in->buffer_num_recommended)
+         in->buffer_num = in->buffer_num_recommended;
+      if (in->buffer_size_recommended)
+         in->buffer_size = in->buffer_size_recommended;
+   }
 
    /* Special case for tunnelling */
    if (connection->flags & MMAL_CONNECTION_FLAG_TUNNELLING)
@@ -468,7 +483,7 @@ MMAL_STATUS_T mmal_connection_event_format_changed(MMAL_CONNECTION_T *connection
     * to the next component (so it gets configured properly) */
    if ((connection->in->capabilities & MMAL_PORT_CAPABILITY_SUPPORTS_EVENT_FORMAT_CHANGE) &&
        event->buffer_size_min <= connection->out->buffer_size &&
-       event->buffer_num_min <= connection->out->buffer_num_min)
+       event->buffer_num_min <= connection->out->buffer_num)
    {
       status = mmal_format_full_copy(connection->out->format, event->format);
       if (status == MMAL_SUCCESS)

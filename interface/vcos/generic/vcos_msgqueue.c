@@ -217,6 +217,10 @@ VCOS_MSG_T *vcos_msg_peek(VCOS_MSGQUEUE_T *queue)
          queue->tail = NULL;
 
       /* keep the semaphore count consistent */
+
+      /* coverity[lock_order]
+       * the semaphore must have a non-zero count so cannot block here.
+       */
       vcos_semaphore_wait(&queue->sem);
    }
 

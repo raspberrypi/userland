@@ -327,6 +327,7 @@ MMAL_PORT_T *mmal_util_get_port(MMAL_COMPONENT_T *comp, MMAL_PORT_TYPE_T type, u
       return NULL;
    }
    if (index < num)
+      /* coverity[ptr_arith] num is 1 here */
       return list[index];
    else
       return NULL;
