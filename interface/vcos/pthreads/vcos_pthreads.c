@@ -33,7 +33,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/time.h>
-#include <sys/param.h>
+#include <linux/param.h>
 
 /* Cygwin doesn't always have prctl.h and it doesn't have PR_SET_NAME */
 #if defined( __linux__ )
