@@ -24,7 +24,7 @@ add_subdirectory(hello_teapot)
 
 if(BUILD_FONT)
 set(VGFONT_SRCS libs/vgfont/font.c libs/vgfont/vgft.c libs/vgfont/graphics.c)
-set_source_files_properties(${VGFONT_SRCS} PROPERTIES COMPILE_DEFINITIONS "_HAVE_TIMER_T")
+set_source_files_properties(${VGFONT_SRCS} PROPERTIES COMPILE_DEFINITIONS)
 add_library(vgfont ${VGFONT_SRCS})
 
 add_subdirectory(hello_font)
