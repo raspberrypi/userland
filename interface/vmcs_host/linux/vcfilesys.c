@@ -916,7 +916,7 @@ int vc_hostfs_set_attr(const char *path, fattributes_t attr)
 
    if (pathbuf)
    {
-      __mode_t mode = 0;
+      mode_t mode = 0;
       struct stat sb;
 
       backslash_to_slash(pathbuf);
