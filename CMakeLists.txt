@@ -3,11 +3,7 @@ cmake_minimum_required(VERSION 2.8)
 project(vmcs_host_apps)
 
 set(BUILD_MMAL TRUE)
-if (ALL_APPS)
- set(BUILD_MMAL_APPS TRUE)
-else()
- set(BUILD_MMAL_APPS FALSE)
-endif()
+set(BUILD_MMAL_APPS TRUE)
 set(vmcs_root ${PROJECT_SOURCE_DIR})
 get_filename_component(VIDEOCORE_ROOT . ABSOLUTE)
 
@@ -64,15 +60,13 @@ add_subdirectory(interface/khronos)
 if(BUILD_MMAL)
    include_directories(interface/mmal)
    add_subdirectory(interface/mmal)
-endif()
-if(BUILD_MMAL_APPS)
    add_subdirectory(containers)
 endif()
 
 # VidTex supports Android and Linux
-if(BUILD_MMAL_COMPONENTS)
+if(BUILD_MMAL_APPS)
 add_subdirectory(host_applications/android/apps/vidtex)
-endif(BUILD_MMAL_COMPONENTS)
+endif(BUILD_MMAL_APPS)
 
 add_subdirectory(middleware/openmaxil)
 
@@ -97,9 +91,6 @@ add_subdirectory(interface/usbdk)
 
 # VMCS Host Applications
 #add_subdirectory(host_applications/framework)
-if(BUILD_MMAL_APPS)
-   add_subdirectory(host_applications/vmcs)
-endif()
 
 # add_subdirectory(interface/vchiq/test/win32)
 
