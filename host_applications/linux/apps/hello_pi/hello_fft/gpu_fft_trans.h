@@ -26,76 +26,20 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __GPU_FFT__
-#define __GPU_FFT__
+#include "gpu_fft.h"
 
-#define GPU_FFT_QPUS 8
-
-#define GPU_FFT_PI 3.14159265358979323846
-
-#define GPU_FFT_FWD 0 // forward FFT
-#define GPU_FFT_REV 1 // inverse FFT
-
-struct GPU_FFT_COMPLEX {
-    float re, im;
-};
-
-struct GPU_FFT_PTR {
-    unsigned vc;
-    union { struct GPU_FFT_COMPLEX *cptr;
-            void                   *vptr;
-            char                   *bptr;
-            float                  *fptr;
-            unsigned               *uptr; } arm;
-};
-
-struct GPU_FFT_BASE {
-    int mb;
-    unsigned handle, size, vc_msg, vc_code, vc_unifs[GPU_FFT_QPUS];
-    volatile unsigned *peri;
-};
-
-struct GPU_FFT {
+struct GPU_FFT_TRANS {
     struct GPU_FFT_BASE base;
-    struct GPU_FFT_COMPLEX *in, *out;
-    int x, y, step;
 };
 
-int gpu_fft_prepare(
-    int mb,         // mailbox file_desc
-    int log2_N,     // log2(FFT_length) = 8...20
-    int direction,  // GPU_FFT_FWD: fft(); GPU_FFT_REV: ifft()
-    int jobs,       // number of transforms in batch
-    struct GPU_FFT **fft);
-
-unsigned gpu_fft_execute(
-    struct GPU_FFT *info);
-
-void gpu_fft_release(
-    struct GPU_FFT *info);
-
-// private
-int           gpu_fft_twiddle_size(int, int *, int *, int *);
-void          gpu_fft_twiddle_data(int, int, float *);
-unsigned int  gpu_fft_shader_size(int);
-unsigned int *gpu_fft_shader_code(int);
-
-// gpu_fft_base:
-
-unsigned gpu_fft_base_exec (
-    struct GPU_FFT_BASE *base,
-    int num_qpus);
-
-int gpu_fft_alloc (
+int gpu_fft_trans_prepare(
     int mb,
-    unsigned size,
-    struct GPU_FFT_PTR *ptr);
+    struct GPU_FFT *src,
+    struct GPU_FFT *dst,
+    struct GPU_FFT_TRANS **out);
 
-void gpu_fft_base_release(
-    struct GPU_FFT_BASE *base);
+unsigned gpu_fft_trans_execute( // src->out ==> T ==> dst->in
+    struct GPU_FFT_TRANS *info);
 
-unsigned gpu_fft_ptr_inc (
-    struct GPU_FFT_PTR *ptr,
-    int bytes);
-
-#endif // __GPU_FFT__
+void gpu_fft_trans_release(
+    struct GPU_FFT_TRANS *info);
