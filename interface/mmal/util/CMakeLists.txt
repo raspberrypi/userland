@@ -1,4 +1,4 @@
-add_library (mmal_util SHARED
+add_library (mmal_util ${LIBRARY_TYPE}
    mmal_il.c
    mmal_util.c
    mmal_connection.c

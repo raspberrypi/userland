@@ -1,3 +1,8 @@
+# We support building both static and shared libraries
+if (NOT DEFINED LIBRARY_TYPE)
+set(LIBRARY_TYPE SHARED)
+endif (NOT DEFINED LIBRARY_TYPE)
+
 add_definitions(-Wall -Werror)
 
 add_library(mmal SHARED util/mmal_util.c)

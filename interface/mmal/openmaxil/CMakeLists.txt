@@ -1,4 +1,4 @@
-add_library (mmal_omx
+add_library (mmal_omx ${LIBRARY_TYPE}
    mmalomx_core.c
    mmalomx_logging.c
    mmalomx_commands.c
@@ -9,7 +9,7 @@ add_library (mmal_omx
    mmalomx_registry.c
 )
 
-add_library (mmal_omxutil
+add_library (mmal_omxutil ${LIBRARY_TYPE}
    mmalomx_util_params.c
    mmalomx_util_params_audio.c
    mmalomx_util_params_video.c

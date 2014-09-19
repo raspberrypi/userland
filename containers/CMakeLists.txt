@@ -53,7 +53,7 @@ else (DEFINED MSVC)
 set(net_SRCS ${net_SRCS} ${SOURCE_DIR}/net/net_sockets_null.c)
 endif (DEFINED MSVC)
 set(extra_net_SRCS net_sockets_win32.c net_sockets_win32.h net_sockets_null.c)
-add_custom_target(containers_net_extra
+add_custom_target(containers_net_extra ALL
     COMMAND touch ${extra_net_SRCS}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/containers/net)
 
@@ -66,7 +66,6 @@ set(packetizers_SRCS ${packetizers_SRCS} ${SOURCE_DIR}/h264/avc1_packetizer.c)
 
 add_library(containers ${LIBRARY_TYPE} ${core_SRCS} ${io_SRCS} ${net_SRCS} ${packetizers_SRCS})
 target_link_libraries(containers vcos)
-add_dependencies(containers containers_net_extra)
 install(TARGETS containers DESTINATION lib)
 
 set(container_readers)
@@ -121,70 +120,5 @@ if (${LIBRARY_TYPE} STREQUAL STATIC)
 target_link_libraries(containers ${container_readers} ${container_writers})
 endif (${LIBRARY_TYPE} STREQUAL STATIC)
 
-# Generate test application
-add_executable(containers_test test/test.c)
-target_link_libraries(containers_test -Wl,--no-whole-archive containers)
-install(TARGETS containers_test DESTINATION bin)
-
-# Generate test application
-add_executable(containers_check_frame_int test/check_frame_int.c)
-target_link_libraries(containers_check_frame_int -Wl,--no-whole-archive containers)
-install(TARGETS containers_check_frame_int DESTINATION bin)
-
-# Generate autotest application
-#add_executable(containers_autotest test/autotest.cpp test/crc_32.c)
-#target_link_libraries(containers_autotest -Wl,--no-whole-archive containers})
-#install(TARGETS containers_autotest DESTINATION bin)
-
-# Helper code to provide non-blocking console input
-if (WIN32)
-set( NB_IO_SOURCE test/nb_io_win32.c )
-elseif (UNIX)
-set( NB_IO_SOURCE test/nb_io_unix.c )
-endif (WIN32)
-set(extra_test_SRCS nb_io_win32.c)
-add_custom_target(containers_test_extra
-    COMMAND touch ${extra_test_SRCS}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/containers/test)
-add_dependencies(containers containers_test_extra)
-
-# Generate net test applications
-add_executable(containers_stream_client test/stream_client.c ${NB_IO_SOURCE})
-target_link_libraries(containers_stream_client containers)
-install(TARGETS containers_stream_client DESTINATION bin)
-
-add_executable(containers_stream_server test/stream_server.c)
-target_link_libraries(containers_stream_server containers)
-install(TARGETS containers_stream_server DESTINATION bin)
-
-add_executable(containers_datagram_sender test/datagram_sender.c)
-target_link_libraries(containers_datagram_sender containers)
-install(TARGETS containers_datagram_sender DESTINATION bin)
-
-add_executable(containers_datagram_receiver test/datagram_receiver.c)
-target_link_libraries(containers_datagram_receiver containers)
-install(TARGETS containers_datagram_receiver DESTINATION bin)
-
-add_executable(containers_rtp_decoder test/rtp_decoder.c ${NB_IO_SOURCE})
-target_link_libraries(containers_rtp_decoder containers)
-install(TARGETS containers_rtp_decoder DESTINATION bin)
-
-# Generate URI test application
-add_executable(containers_test_uri test/test_uri.c)
-target_link_libraries(containers_test_uri containers)
-install(TARGETS containers_test_uri DESTINATION bin)
-
-# Generate URI pipe application
-add_executable(containers_uri_pipe test/uri_pipe.c ${NB_IO_SOURCE})
-target_link_libraries(containers_uri_pipe containers)
-install(TARGETS containers_uri_pipe DESTINATION bin)
-
-# Generate bit stream test application
-add_executable(containers_test_bits test/test_bits.c)
-target_link_libraries(containers_test_bits containers)
-install(TARGETS containers_test_bits DESTINATION bin)
-
-# Generate packet file dump application
-add_executable(containers_dump_pktfile test/dump_pktfile.c)
-install(TARGETS containers_dump_pktfile DESTINATION bin)
-
+# Test apps
+add_subdirectory(test)

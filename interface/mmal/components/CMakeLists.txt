@@ -1,4 +1,4 @@
-add_library(mmal_components SHARED
+add_library(mmal_components ${LIBRARY_TYPE}
 	    container_reader.c
 	    null_sink.c
 	    passthrough.c
@@ -21,10 +21,9 @@ set(extra_components_SRCS avcodec_video_decoder.c avcodec_audio_decoder.c
 #target_link_libraries(mmal_components gdi32 winmm) # For SDL
 #endif (WIN32)
 
-add_custom_target(mmal_components_extra
+add_custom_target(mmal_components_extra ALL
     COMMAND touch ${extra_components_SRCS}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/interface/mmal/components)
-add_dependencies(mmal_components mmal_components_extra)
 
 set(container_libs ${container_libs} containers)
 
