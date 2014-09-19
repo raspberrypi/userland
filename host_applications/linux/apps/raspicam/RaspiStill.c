@@ -136,6 +136,7 @@ typedef struct
    int settings;                       /// Request settings from the camera
    int cameraNum;                      /// Camera number
    int burstCaptureMode;               /// Enable burst mode
+   int sensor_mode;                     /// Sensor mode. 0=auto. Check docs/forum for modes selected by other values.
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -187,6 +188,7 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandSettings     19
 #define CommandCamSelect    20
 #define CommandBurstMode    21
+#define CommandSensorMode   22
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -211,7 +213,8 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandGLCapture, "-glcapture","gc", "Capture the GL frame-buffer instead of the camera image", 0},
    { CommandSettings, "-settings",  "set","Retrieve camera settings and write to stdout", 0},
    { CommandCamSelect, "-camselect","cs", "Select camera <number>. Default 0", 1 },
-   { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},   
+   { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},
+   { CommandSensorMode,"-mode",     "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -290,6 +293,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->settings = 0;
    state->cameraNum = 0;
    state->burstCaptureMode=0;
+   state->sensor_mode = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -622,6 +626,18 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          state->burstCaptureMode=1;
          break;
 
+      case CommandSensorMode:
+      {
+         if (sscanf(argv[i + 1], "%u", &state->sensor_mode) == 1)
+         {
+            i++;
+         }
+         else
+            valid = 0;
+         break;
+      }
+
+
       default:
       {
          // Try parsing for any image specific parameters
@@ -845,6 +861,14 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
    {
       status = MMAL_ENOSYS;
       vcos_log_error("Camera doesn't have output ports");
+      goto error;
+   }
+
+   status = mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_CAMERA_CUSTOM_SENSOR_CONFIG, state->sensor_mode);
+
+   if (status != MMAL_SUCCESS)
+   {
+      vcos_log_error("Could not set sensor mode : error %d", status);
       goto error;
    }
 
