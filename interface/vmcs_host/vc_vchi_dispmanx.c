@@ -146,6 +146,9 @@ void vc_vchi_dispmanx_init (VCHI_INSTANCE_T initialise_instance, VCHI_CONNECTION
    int32_t success;
    uint32_t i;
 
+   if (dispmanx_client.initialised)
+     return;
+
    // record the number of connections
    memset( &dispmanx_client, 0, sizeof(DISPMANX_SERVICE_T) );
    dispmanx_client.num_connections = num_connections;
@@ -228,6 +231,10 @@ VCHPRE_ void VCHPOST_ vc_dispmanx_stop( void ) {
    //TODO: kill the notifier task
    void *dummy;
    uint32_t i;
+
+   if (!dispmanx_client.initialised)
+      return;
+
    lock_obtain();
    for (i=0; i<dispmanx_client.num_connections; i++) {
       int32_t result;
