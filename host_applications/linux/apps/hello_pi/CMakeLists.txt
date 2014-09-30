@@ -1,7 +1,7 @@
 set(BUILD_FONT FALSE)
 
-include_directories(${CMAKE_SOURCE_DIR})
-include_directories(${CMAKE_SOURCE_DIR}/host_applications/linux/libs/bcm_host/include)
+include_directories(${PROJECT_SOURCE_DIR})
+include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/libs/bcm_host/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libs/ilclient)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libs/vgfont)
 
