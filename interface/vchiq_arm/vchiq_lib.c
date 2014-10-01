@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2012, Broadcom Europe Ltd
+Copyright (c) 2012-2014, Broadcom Europe Ltd
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -1322,6 +1322,46 @@ int32_t vchi_service_release( const VCHI_SERVICE_HANDLE_T handle )
       return VCHIQ_ERROR;
 
    RETRY(ret,ioctl(service->fd, VCHIQ_IOC_RELEASE_SERVICE, service->handle));
+   return ret;
+}
+
+/***********************************************************
+ * Name: vchi_service_set_option
+ *
+ * Arguments: const VCHI_SERVICE_HANDLE_T handle
+ *            VCHI_SERVICE_OPTION_T option
+ *            int value
+ *
+ * Description: Routine to set a service control option
+ *
+ * Returns: 0 on success, otherwise a non-zero error code
+ *
+ ***********************************************************/
+int32_t vchi_service_set_option( const VCHI_SERVICE_HANDLE_T handle,
+   VCHI_SERVICE_OPTION_T option, int value)
+{
+   VCHIQ_SET_SERVICE_OPTION_T args;
+   VCHI_SERVICE_T *service = find_service_by_handle(handle);
+   int ret;
+
+   switch (option)
+   {
+   case VCHI_SERVICE_OPTION_TRACE:
+      args.option = VCHIQ_SERVICE_OPTION_TRACE;
+      break;
+   default:
+      service = NULL;
+      break;
+   }
+
+   if (!service)
+      return VCHIQ_ERROR;
+
+   args.handle = service->handle;
+   args.value  = value;
+
+   RETRY(ret, ioctl(service->fd, VCHIQ_IOC_SET_SERVICE_OPTION, &args));
+
    return ret;
 }
 
