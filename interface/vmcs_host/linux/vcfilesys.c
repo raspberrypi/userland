@@ -49,7 +49,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ctype.h>
 #include <limits.h>
 
-#if !defined(ANDROID) && !defined( __USE_FILE_OFFSET64 )
+#if defined(__GLIBC__) && !defined( __USE_FILE_OFFSET64 )
 #error   "__USE_FILE_OFFSET64 isn't defined"
 #endif
 
@@ -916,7 +916,7 @@ int vc_hostfs_set_attr(const char *path, fattributes_t attr)
 
    if (pathbuf)
    {
-      __mode_t mode = 0;
+      mode_t mode = 0;
       struct stat sb;
 
       backslash_to_slash(pathbuf);
