@@ -584,10 +584,10 @@ static MMAL_BOOL_T graph_do_processing(MMAL_GRAPH_PRIVATE_T *graph_private)
          status = mmal_port_send_buffer(connection->out, buffer);
          if (status != MMAL_SUCCESS)
          {
-            LOG_ERROR("mmal_port_send_buffer failed (%i)", status);
+            if (connection->out->is_enabled)
+               LOG_ERROR("mmal_port_send_buffer failed (%i)", status);
             mmal_queue_put_back(connection->pool->queue, buffer);
             run_again = 0;
-            // FIXME: send error ?
             break;
          }
       }
