@@ -304,7 +304,7 @@ MMAL_STATUS_T mmalil_omx_default_channel_mapping(OMX_AUDIO_CHANNELTYPE *channel_
          OMX_AUDIO_ChannelLS, OMX_AUDIO_ChannelRS}
    };
 
-   if (!nchannels || nchannels + 1 >= MMAL_COUNTOF(default_mapping))
+   if (!nchannels || nchannels >= MMAL_COUNTOF(default_mapping))
       return MMAL_EINVAL;
 
    memcpy(channel_mapping, default_mapping[nchannels],
