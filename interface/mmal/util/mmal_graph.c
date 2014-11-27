@@ -55,6 +55,8 @@ typedef struct MMAL_COMPONENT_MODULE_T
    unsigned int input_num;
    MMAL_PORT_T *output[GRAPH_CONNECTIONS_MAX];
    unsigned int output_num;
+   MMAL_PORT_T *clock[GRAPH_CONNECTIONS_MAX];
+   unsigned int clock_num;
 
    MMAL_COMPONENT_T *graph_component;
 
@@ -274,11 +276,27 @@ MMAL_STATUS_T mmal_graph_add_port(MMAL_GRAPH_T *graph, MMAL_PORT_T *port)
 
    LOG_TRACE("graph: %p, port: %s(%p)", graph, port ? port->name: 0, port);
 
-   if (!port || (port->type != MMAL_PORT_TYPE_INPUT && port->type != MMAL_PORT_TYPE_OUTPUT))
+   if (!port)
       return MMAL_EINVAL;
 
-   list = port->type == MMAL_PORT_TYPE_INPUT ? private->input : private->output;
-   list_num = port->type == MMAL_PORT_TYPE_INPUT ? &private->input_num : &private->output_num;
+   switch (port->type)
+   {
+   case MMAL_PORT_TYPE_INPUT:
+      list = private->input;
+      list_num = &private->input_num;
+      break;
+   case MMAL_PORT_TYPE_OUTPUT:
+      list = private->output;
+      list_num = &private->output_num;
+      break;
+   case MMAL_PORT_TYPE_CLOCK:
+      list = private->clock;
+      list_num = &private->clock_num;
+      break;
+   default:
+      return MMAL_EINVAL;
+   }
+
    if (*list_num >= GRAPH_CONNECTIONS_MAX)
    {
       LOG_ERROR("no space for port %s", port->name);
@@ -633,11 +651,24 @@ static MMAL_PORT_T *find_port_from_graph(MMAL_GRAPH_PRIVATE_T *graph, MMAL_PORT_
    MMAL_PORT_T **list;
    unsigned int *list_num;
 
-   if (port->type != MMAL_PORT_TYPE_INPUT && port->type != MMAL_PORT_TYPE_OUTPUT)
+   switch (port->type)
+   {
+   case MMAL_PORT_TYPE_INPUT:
+      list = graph->input;
+      list_num = &graph->input_num;
+      break;
+   case MMAL_PORT_TYPE_OUTPUT:
+      list = graph->output;
+      list_num = &graph->output_num;
+      break;
+   case MMAL_PORT_TYPE_CLOCK:
+      list = graph->clock;
+      list_num = &graph->clock_num;
+      break;
+   default:
       return 0;
+   }
 
-   list = port->type == MMAL_PORT_TYPE_INPUT ? graph->input : graph->output;
-   list_num = port->type == MMAL_PORT_TYPE_INPUT ? &graph->input_num : &graph->output_num;
    if (port->index > *list_num)
       return 0;
 
@@ -647,14 +678,29 @@ static MMAL_PORT_T *find_port_from_graph(MMAL_GRAPH_PRIVATE_T *graph, MMAL_PORT_
 static MMAL_PORT_T *find_port_to_graph(MMAL_GRAPH_PRIVATE_T *graph, MMAL_PORT_T *port)
 {
    MMAL_COMPONENT_T *component = graph->graph_component;
-   MMAL_PORT_T **list;
+   MMAL_PORT_T **list, **component_list;
    unsigned int i, *list_num;
 
-   if (port->type != MMAL_PORT_TYPE_INPUT && port->type != MMAL_PORT_TYPE_OUTPUT)
+   switch (port->type)
+   {
+   case MMAL_PORT_TYPE_INPUT:
+      list = graph->input;
+      list_num = &graph->input_num;
+      component_list = component->input;
+      break;
+   case MMAL_PORT_TYPE_OUTPUT:
+      list = graph->output;
+      list_num = &graph->output_num;
+      component_list = component->output;
+      break;
+   case MMAL_PORT_TYPE_CLOCK:
+      list = graph->clock;
+      list_num = &graph->clock_num;
+      component_list = component->clock;
+      break;
+   default:
       return 0;
-
-   list = port->type == MMAL_PORT_TYPE_INPUT ? graph->input : graph->output;
-   list_num = port->type == MMAL_PORT_TYPE_INPUT ? &graph->input_num : &graph->output_num;
+   }
 
    for (i = 0; i < *list_num; i++)
       if (list[i] == port)
@@ -662,7 +708,7 @@ static MMAL_PORT_T *find_port_to_graph(MMAL_GRAPH_PRIVATE_T *graph, MMAL_PORT_T 
 
    if (i == *list_num)
       return 0;
-   return port->type == MMAL_PORT_TYPE_INPUT ? component->input[i] : component->output[i];
+   return component_list[i];
 }
 
 static MMAL_STATUS_T graph_port_update(MMAL_GRAPH_PRIVATE_T *graph,
@@ -734,6 +780,9 @@ static MMAL_STATUS_T graph_component_destroy(MMAL_COMPONENT_T *component)
 
    if (component->output_num)
       mmal_ports_free(component->output, component->output_num);
+
+   if (component->clock_num)
+      mmal_ports_clock_free(component->clock, component->clock_num);
 
    /* coverity[address_free] Freeing the first item in the structure is safe */
    mmal_graph_destroy(&graph->graph);
@@ -1064,7 +1113,7 @@ static MMAL_STATUS_T graph_port_format_commit_propagate(MMAL_GRAPH_PRIVATE_T *gr
 
    LOG_TRACE("graph: %p, port %s(%p)", graph, port->name, port);
 
-   if (port->type == MMAL_PORT_TYPE_OUTPUT)
+   if (port->type == MMAL_PORT_TYPE_OUTPUT || port->type == MMAL_PORT_TYPE_CLOCK)
       return MMAL_SUCCESS; /* Nothing to do */
 
    /* Loop through all the output ports of the component and if they are not enabled and
@@ -1402,6 +1451,34 @@ static MMAL_STATUS_T mmal_component_create_from_graph(const char *name, MMAL_COM
       if (status != MMAL_SUCCESS)
          goto error;
    }
+   if(graph->clock_num)
+   {
+      component->clock = mmal_ports_clock_alloc(component, graph->clock_num, 0, NULL);
+      if(!component->clock)
+      {
+         status = MMAL_ENOMEM;
+         goto error;
+      }
+   }
+   component->clock_num = graph->clock_num;
+   for(i = 0; i < component->clock_num; i++)
+   {
+      component->clock[i]->priv->pf_enable = graph_port_enable;
+      component->clock[i]->priv->pf_disable = graph_port_disable;
+      component->clock[i]->priv->pf_flush = graph_port_flush;
+      component->clock[i]->priv->pf_send = graph_port_send;
+      component->clock[i]->priv->pf_set_format = graph_port_format_commit;
+      component->clock[i]->priv->pf_parameter_get = graph_port_parameter_get;
+      component->clock[i]->priv->pf_parameter_set = graph_port_parameter_set;
+      component->clock[i]->priv->pf_connect = NULL; /* FIXME: disabled for now */
+      component->clock[i]->priv->pf_payload_alloc = graph_port_payload_alloc;
+      component->clock[i]->priv->pf_payload_free = graph_port_payload_free;
+
+      /* Mirror the port values */
+      status = graph_port_update(graph, component->clock[i], MMAL_TRUE);
+      if (status != MMAL_SUCCESS)
+         goto error;
+   }
 
    status = mmal_component_action_register(component, graph_do_processing_loop);
    if (status != MMAL_SUCCESS)
@@ -1458,6 +1535,10 @@ MMAL_PORT_T *mmal_graph_find_port(MMAL_GRAPH_T *graph,
          else if (type == MMAL_PORT_TYPE_OUTPUT) {
             num = comp->output_num;
             ports = comp->output;
+         }
+         else if (type == MMAL_PORT_TYPE_CLOCK) {
+            num = comp->clock_num;
+            ports = comp->clock;
          }
          else if (type == MMAL_PORT_TYPE_CONTROL) {
             num = 1;

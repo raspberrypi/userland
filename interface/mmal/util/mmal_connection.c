@@ -43,20 +43,34 @@ typedef struct
 
 } MMAL_CONNECTION_PRIVATE_T;
 
+/** Callback from a clock port. Buffer is immediately sent to next component. */
+static void mmal_connection_bh_clock_cb(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
+{
+   MMAL_STATUS_T status = MMAL_SUCCESS;
+   MMAL_CONNECTION_T *connection = (MMAL_CONNECTION_T *)port->userdata;
+   MMAL_PORT_T *other_port = (port == connection->in) ? connection->out : connection->in;
+
+   LOG_TRACE("(%s)%p,%p,%p,%i", port->name, port, buffer, buffer->data, (int)buffer->length);
+
+   if (other_port->is_enabled)
+   {
+      status = mmal_port_send_buffer(other_port, buffer);
+      if (status != MMAL_SUCCESS)
+      {
+         LOG_ERROR("error sending buffer to clock port (%i)", status);
+         mmal_buffer_header_release(buffer);
+      }
+   }
+   else
+   {
+      mmal_buffer_header_release(buffer);
+   }
+}
+
 /** Callback from an input port. Buffer is released. */
 static void mmal_connection_bh_in_cb(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
-   MMAL_PARAM_UNUSED(port);
    LOG_TRACE("(%s)%p,%p,%p,%i", port->name, port, buffer, buffer->data, (int)buffer->length);
-
-   /* FIXME: Clock ports are bi-directional and a buffer coming from an
-    * "input" clock port can potentially have valid payload data, in
-    * which case it should be queued and not released, however this
-    * callback doesn't have access to the pool queue. */
-   if (port->type == MMAL_PORT_TYPE_CLOCK && buffer->length)
-   {
-      LOG_ERROR("clock ports not supported");
-   }
 
    /* We're done with the buffer, just recycle it */
    mmal_buffer_header_release(buffer);
@@ -66,7 +80,7 @@ static void mmal_connection_bh_in_cb(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *bu
 static void mmal_connection_bh_out_cb(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
    MMAL_CONNECTION_T *connection = (MMAL_CONNECTION_T *)port->userdata;
-   MMAL_PARAM_UNUSED(port);
+
    LOG_TRACE("(%s)%p,%p,%p,%i", port->name, port, buffer, buffer->data, (int)buffer->length);
 
    /* Queue the buffer produced by the output port */
@@ -323,7 +337,8 @@ MMAL_STATUS_T mmal_connection_enable(MMAL_CONNECTION_T *connection)
 
    /* Enable output port. The callback specified here is the function which
     * will be called when an empty buffer header comes back to the port. */
-   status = mmal_port_enable(out, mmal_connection_bh_out_cb);
+   status = mmal_port_enable(out, (out->type == MMAL_PORT_TYPE_CLOCK) ?
+                             mmal_connection_bh_clock_cb : mmal_connection_bh_out_cb);
    if(status)
    {
       LOG_ERROR("output port couldn't be enabled");
@@ -332,7 +347,8 @@ MMAL_STATUS_T mmal_connection_enable(MMAL_CONNECTION_T *connection)
 
    /* Enable input port. The callback specified here is the function which
     * will be called when an empty buffer header comes back to the port. */
-   status = mmal_port_enable(in, mmal_connection_bh_in_cb);
+   status = mmal_port_enable(in, (in->type == MMAL_PORT_TYPE_CLOCK) ?
+                             mmal_connection_bh_clock_cb : mmal_connection_bh_in_cb);
    if(status)
    {
       LOG_ERROR("input port couldn't be enabled");
