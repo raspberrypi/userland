@@ -826,6 +826,27 @@ MMAL_STATUS_T mmal_vc_consume_mem(size_t size, uint32_t *handle)
    return status;
 }
 
+MMAL_STATUS_T mmal_vc_compact(MMAL_VC_COMPACT_MODE_T mode, uint32_t *duration)
+{
+   MMAL_STATUS_T status;
+   mmal_worker_compact req;
+   mmal_worker_compact reply;
+   size_t len = sizeof(reply);
+
+   req.mode = (uint32_t)mode;
+   status = mmal_vc_sendwait_message(mmal_vc_get_client(),
+                                     &req.header, sizeof(req),
+                                     MMAL_WORKER_COMPACT,
+                                     &reply, &len, MMAL_FALSE);
+   if (status == MMAL_SUCCESS)
+   {
+      vcos_assert(len == sizeof(reply));
+      status = reply.status;
+      *duration = reply.duration;
+   }
+   return status;
+}
+
 MMAL_STATUS_T mmal_vc_lmk(uint32_t alloc_size)
 {
    MMAL_STATUS_T status;

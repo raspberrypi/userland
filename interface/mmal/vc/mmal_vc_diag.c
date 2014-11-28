@@ -64,6 +64,7 @@ static int do_eventlog(int argc, const char **argv);
 static int do_components(int argc, const char **argv);
 static int do_mmal_stats(int argc, const char **argv);
 static int do_imageconv_stats(int argc, const char **argv);
+static int do_compact(int argc, const char **argv);
 static int do_autosusptest(int argc, const char **argv);
 static int do_camerainfo(int argc, const char **argv);
 static int do_host_log(int argc, const char **argv);
@@ -80,6 +81,7 @@ static struct cmd cmds[] = {
    { "components", do_components, "[update] list components", 0 },
    { "mmal-stats", do_mmal_stats, "list mmal core stats", CONNECT },
    { "ic-stats",   do_imageconv_stats, "[reset] list imageconv stats", CONNECT },
+   { "compact",    do_compact, "trigger memory compaction", CONNECT },
    { "autosusp",   do_autosusptest, "test out auto-suspend/resume", CONNECT },
    { "camerainfo", do_camerainfo, "get camera info", CONNECT },
    { "host_log",   do_host_log, "dumps the MMAL VC log", CONNECT },
@@ -519,8 +521,8 @@ static int do_mmal_stats(int argc, const char **argv)
          MMAL_STATUS_T status = mmal_vc_get_core_stats(&stats,
                                                       &result,
                                                       name, sizeof(name),
-                                                      type, 
-                                                      comp_index, 
+                                                      type,
+                                                      comp_index,
                                                       port_index,
                                                       dir,
                                                       reset);
@@ -658,6 +660,41 @@ fail:
    CloseVideoCoreMemory(vc);
    return -1;
 
+}
+
+static int do_compact(int argc, const char **argv)
+{
+   uint32_t duration;
+
+   if (argc > 2)
+   {
+      if (strcmp(argv[2], "a") == 0)
+      {
+         mmal_vc_compact(MMAL_VC_COMPACT_AGGRESSIVE, &duration);
+         printf("Triggered aggressive compaction on VC - duration %u us.\n", duration);
+      }
+      else if (strcmp(argv[2], "d") == 0)
+      {
+         mmal_vc_compact(MMAL_VC_COMPACT_DISCARD, &duration);
+         printf("Triggered discard compaction on VC - duration %u us.\n", duration);
+      }
+      else if (strcmp(argv[2], "n") == 0)
+      {
+         mmal_vc_compact(MMAL_VC_COMPACT_NORMAL, &duration);
+         printf("Triggered normal compaction on VC - duration %u us.\n", duration);
+      }
+      else
+      {
+         printf("Invalid memory compaction option %s\n.", argv[2]);
+         exit(1);
+      }
+   }
+   else
+   {
+      printf("Invalid memory compaction arguments.  Need to specify 'a', 'n' or 't'.\n");
+      exit(1);
+   }
+   return 0;
 }
 
 /* Autosuspend test. Create a component, but kill process
