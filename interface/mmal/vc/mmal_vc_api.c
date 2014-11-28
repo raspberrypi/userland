@@ -67,6 +67,7 @@ typedef struct MMAL_PORT_MODULE_T
 
    MMAL_BOOL_T is_zero_copy;
    MMAL_BOOL_T zero_copy_workaround;
+   uint32_t opaque_allocs;
 
    MMAL_BOOL_T sent_data_on_port;
 
@@ -621,7 +622,8 @@ static MMAL_STATUS_T mmal_vc_port_send(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *
    length = buffer->length;
 
    if (length <= MMAL_VC_SHORT_DATA && !port->priv->module->is_zero_copy &&
-       port->format->encoding == MMAL_ENCODING_OPAQUE)
+       (port->format->encoding == MMAL_ENCODING_OPAQUE ||
+        port->type == MMAL_PORT_TYPE_CLOCK))
    {
       memcpy(msg->short_data, buffer->data + buffer->offset, buffer->length);
       msg->payload_in_message = length;
@@ -1228,7 +1230,6 @@ static uint8_t *mmal_vc_port_payload_alloc(MMAL_PORT_T *port, uint32_t payload_s
    MMAL_PORT_MODULE_T *module = port->priv->module;
    MMAL_BOOL_T can_deref = MMAL_TRUE;
    char buf[5];
-   MMAL_PARAM_UNUSED(module);
    void *ret;
    (void)buf;
 
@@ -1250,6 +1251,7 @@ static uint8_t *mmal_vc_port_payload_alloc(MMAL_PORT_T *port, uint32_t payload_s
                    port->name, payload_size);
          return NULL;
       }
+      module->opaque_allocs++;
    }
 
    else if (module->is_zero_copy)
@@ -1286,10 +1288,11 @@ static uint8_t *mmal_vc_port_payload_alloc(MMAL_PORT_T *port, uint32_t payload_s
 
 static void mmal_vc_port_payload_free(MMAL_PORT_T *port, uint8_t *payload)
 {
-   MMAL_PARAM_UNUSED(port);
+   MMAL_PORT_MODULE_T *module = port->priv->module;
 
-   if (port->format->encoding == MMAL_ENCODING_OPAQUE)
+   if (module->opaque_allocs)
    {
+      module->opaque_allocs--;
       mmal_vc_opaque_release((MMAL_OPAQUE_IMAGE_HANDLE_T)payload);
       return;
    }
