@@ -314,7 +314,12 @@ static int test_parse_cmdline(int argc, const char **argv)
          switch (argv[i][2])
          {
             case 'p': options.disable_playback = 1; break;
-            case 'v': options.disable_video = 1; break;
+            case 'v':
+               if(argv[i][3] == 'd')
+                  options.disable_video_decode = 1;
+               else
+                  options.disable_video = 1;
+               break;
             case 'a': options.disable_audio = 1; break;
             default: break;
          }
@@ -411,8 +416,27 @@ static int test_parse_cmdline(int argc, const char **argv)
          options.audio_destination = argv[i];
          break;
 
+      case 'r':
+         if (i + 1 >= argc)
+            goto usage;
+         if (argv[i][2] == 'a')
+            options.audio_destination = argv[++i];
+         else if (argv[i][2] == 'v')
+         {
+            /* coverity[secure_coding] Only reading integers, so can't overflow */
+            if (sscanf(argv[++i], "%u", &options.video_destination) != 1)
+               goto usage;
+         }
+         else
+            goto usage;
+         break;
+
       case 'w':
          options.window = 1;
+         break;
+
+      case 'p':
+         options.audio_passthrough = 1;
          break;
 
       case 'h': goto usage;
@@ -456,6 +480,7 @@ usage:
       fprintf(stderr, " -v(vv): increase verbosity\n");
       fprintf(stderr, " -np   : disable playback phase\n");
       fprintf(stderr, " -nv   : disable video\n");
+      fprintf(stderr, " -nvd  : disable video decode\n");
       fprintf(stderr, " -na   : disable audio\n");
       fprintf(stderr, " -es   : enable scheduling\n");
       fprintf(stderr, " -t <n>: play URI(s) for <n> seconds then stop\n");
@@ -478,7 +503,9 @@ usage:
       fprintf(stderr, " -mvs <s>:  name of the splitter module to use\n");
       fprintf(stderr, " -mar <s>:  name of the audio render module to use\n");
       fprintf(stderr, " -mad <s>:  name of the audio decoder module to use\n");
-      fprintf(stderr, " -a <s>: set audio destination\n");
+      fprintf(stderr, " -ra <s>: set audio destination\n");
+      fprintf(stderr, " -rv <n>: set video destination\n");
+      fprintf(stderr, " -p    : use audio passthrough\n");
       fprintf(stderr, " -w    : window mode (i.e. not fullscreen)\n");
    }
    return 1;

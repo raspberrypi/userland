@@ -236,7 +236,7 @@ static MMAL_STATUS_T mmalplay_pipeline_video_create(MMALPLAY_T *ctx, MMAL_PORT_T
    MMALPLAY_CONNECTIONS_T *connections)
 {
    MMAL_STATUS_T status;
-   MMAL_COMPONENT_T *component, *previous;
+   MMAL_COMPONENT_T *component, *previous = NULL;
    unsigned int i, save = connections->num;
 
    if (!source || ctx->options.disable_video)
@@ -256,12 +256,16 @@ static MMAL_STATUS_T mmalplay_pipeline_video_create(MMALPLAY_T *ctx, MMAL_PORT_T
    }
 
    /* Create and setup video decoder component */
-   component = previous = mmalplay_component_create(ctx, MMAL_COMPONENT_DEFAULT_VIDEO_DECODER, &status);
-   if (!component)
-      goto error;
-   MMALPLAY_CONNECTION_IN(connections) = component->input[0];
-   MMALPLAY_CONNECTION_ADD(connections);
-   MMALPLAY_CONNECTION_OUT(connections) = component->output[0];
+   if (!ctx->options.disable_video_decode)
+   {
+      component = previous = mmalplay_component_create(ctx, MMAL_COMPONENT_DEFAULT_VIDEO_DECODER, &status);
+      if (!component)
+         goto error;
+      MMALPLAY_CONNECTION_IN(connections) = component->input[0];
+      MMALPLAY_CONNECTION_ADD(connections);
+      MMALPLAY_CONNECTION_OUT(connections) = component->output[0];
+   }
+   else ctx->video_out_port = source;
 
    if (ctx->options.enable_scheduling)
    {
@@ -303,7 +307,7 @@ static MMAL_STATUS_T mmalplay_pipeline_video_create(MMALPLAY_T *ctx, MMAL_PORT_T
       component = mmalplay_component_create(ctx, MMAL_COMPONENT_DEFAULT_VIDEO_RENDERER, &status);
       if (!component)
          goto error;
-      MMALPLAY_CONNECTION_OUT(connections) = previous->output[i];
+      MMALPLAY_CONNECTION_OUT(connections) = previous ? previous->output[i] : source;
       MMALPLAY_CONNECTION_IN(connections) = component->input[0];
       MMALPLAY_CONNECTION_ADD(connections);
    }
@@ -325,7 +329,7 @@ static MMAL_STATUS_T mmalplay_pipeline_clock_create(MMALPLAY_T *ctx, MMALPLAY_CO
    if (!ctx->audio_clock || !ctx->video_clock)
    {
       LOG_ERROR("clock port(s) not present %p %p", ctx->audio_clock, ctx->video_clock);
-      goto error;
+      return MMAL_SUCCESS;
    }
 
    /* Connect audio clock to video clock */
@@ -891,8 +895,9 @@ static MMAL_STATUS_T mmalplay_setup_video_render(MMALPLAY_T *ctx, MMAL_COMPONENT
    MMAL_DISPLAYREGION_T param;
    param.hdr.id = MMAL_PARAMETER_DISPLAYREGION;
    param.hdr.size = sizeof(MMAL_DISPLAYREGION_T);
-   param.set = MMAL_DISPLAY_SET_LAYER;
+   param.set = MMAL_DISPLAY_SET_LAYER|MMAL_DISPLAY_SET_NUM;
    param.layer = ctx->options.render_layer + 2;   /* Offset of two to put it above the Android UI layer */
+   param.display_num = ctx->options.video_destination;
    if (ctx->options.window)
    {
       param.dest_rect.x = 0;
@@ -1111,6 +1116,14 @@ static MMAL_STATUS_T mmalplay_setup_audio_decoder(MMALPLAY_T *ctx, MMAL_COMPONEN
    {
       LOG_ERROR("%s doesn't have input/output ports", decoder->name);
       goto error;
+   }
+
+   if (ctx->options.audio_passthrough)
+   {
+      status = mmal_port_parameter_set_boolean(decoder->control,
+         MMAL_PARAMETER_AUDIO_PASSTHROUGH, MMAL_TRUE);
+      if (status != MMAL_SUCCESS)
+         LOG_INFO("could not set audio passthrough mode");
    }
 
    /* Enable Zero Copy if requested. This needs to be sent before enabling the port. */

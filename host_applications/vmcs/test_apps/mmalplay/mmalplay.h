@@ -60,6 +60,7 @@ typedef struct {
    int disable_video;
    int disable_audio;
    int enable_scheduling;
+   int disable_video_decode;
 
    const char *component_container_reader;
    const char *component_video_decoder;
@@ -72,6 +73,7 @@ typedef struct {
    const char *component_audio_render;
 
    const char *audio_destination;
+   unsigned int video_destination;
 
    const char *output_uri;
 
@@ -80,6 +82,7 @@ typedef struct {
    float seeking;
    int stepping;
 
+   int audio_passthrough;
 } MMALPLAY_OPTIONS_T;
 
 /** Create an instance of mmalplay.
