@@ -143,6 +143,7 @@ static const int drc_mode_map_size = sizeof(drc_mode_map)/sizeof(drc_mode_map[0]
 #define CommandShutterSpeed 16
 #define CommandAwbGains    17
 #define CommandDRCLevel    18
+#define CommandStatsPass   19
 
 static COMMAND_LIST  cmdline_commands[] =
 {
@@ -164,7 +165,8 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandROI,         "-roi",       "roi","Set region of interest (x,y,w,d as normalised coordinates [0.0-1.0])", 1},
    {CommandShutterSpeed,"-shutter",   "ss", "Set shutter speed in microseconds", 1},
    {CommandAwbGains,    "-awbgains",  "awbg", "Set AWB gains - AWB mode must be off", 1},
-   {CommandDRCLevel,    "-drc",       "drc", "Set DRC Level", 1}
+   {CommandDRCLevel,    "-drc",       "drc", "Set DRC Level", 1},
+   {CommandStatsPass,   "-stats",     "st", "Force recomputation of statistics on stills capture pass"},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -637,6 +639,13 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
       break;
    }
 
+   case CommandStatsPass:
+   {
+      params->stats_pass = MMAL_TRUE;
+      used = 1;
+      break;
+   }
+
    }
 
    return used;
@@ -779,6 +788,7 @@ void raspicamcontrol_set_defaults(RASPICAM_CAMERA_PARAMETERS *params)
    params->awb_gains_r = 0;      // Only have any function if AWB OFF is used.
    params->awb_gains_b = 0;
    params->drc_level = MMAL_PARAMETER_DRC_STRENGTH_OFF;
+   params->stats_pass = MMAL_FALSE;
 }
 
 /**
@@ -841,6 +851,7 @@ int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_
    result += raspicamcontrol_set_ROI(camera, params->roi);
    result += raspicamcontrol_set_shutter_speed(camera, params->shutter_speed);
    result += raspicamcontrol_set_DRC(camera, params->drc_level);
+   result += raspicamcontrol_set_stats_pass(camera, params->stats_pass);
 
    return result;
 }
@@ -1254,6 +1265,13 @@ int raspicamcontrol_set_DRC(MMAL_COMPONENT_T *camera, MMAL_PARAMETER_DRC_STRENGT
    return mmal_status_to_int(mmal_port_parameter_set(camera->control, &drc.hdr));
 }
 
+int raspicamcontrol_set_stats_pass(MMAL_COMPONENT_T *camera, int stats_pass)
+{
+   if (!camera)
+      return 1;
+
+   return mmal_status_to_int(mmal_port_parameter_set_boolean(camera->control, MMAL_PARAMETER_CAPTURE_STATS_PASS, stats_pass));
+}
 
 /**
  * Asked GPU how much memory it has allocated

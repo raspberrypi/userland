@@ -3,7 +3,7 @@
 # experimental.
 # add_definitions(-DENABLE_MMAL_VCSM)
 
-add_library(mmal_vc_client SHARED mmal_vc_client.c mmal_vc_shm.c mmal_vc_api.c mmal_vc_opaque_alloc.c mmal_vc_msgnames.c mmal_vc_api_drm.c)
+add_library(mmal_vc_client ${LIBRARY_TYPE} mmal_vc_client.c mmal_vc_shm.c mmal_vc_api.c mmal_vc_opaque_alloc.c mmal_vc_msgnames.c mmal_vc_api_drm.c)
 target_link_libraries(mmal_vc_client vchiq_arm vcos)
 
 # target_link_libraries(mmal_vc_client vchiq_arm vcos vcsm)

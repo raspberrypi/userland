@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2012, Broadcom Europe Ltd
+Copyright (c) 2012-2014, Broadcom Europe Ltd
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -52,8 +52,6 @@ typedef struct {
    uint32_t              notify_length;
    uint32_t              num_connections;
    VCOS_MUTEX_T          lock;
-   //HOST_DISPMANX_RESOURCE_T host_resources[VC_NUM_HOST_RESOURCES];
-   //int num_host_resources;
    char dispmanx_devices[DISPMANX_MAX_HOST_DEVICES][DISPMANX_MAX_DEVICE_NAME_LEN];
    uint32_t num_devices;
    uint32_t num_modes[DISPMANX_MAX_HOST_DEVICES];
@@ -62,6 +60,11 @@ typedef struct {
    DISPMANX_CALLBACK_FUNC_T update_callback;
    void *update_callback_param;
    DISPMANX_UPDATE_HANDLE_T pending_update_handle;
+
+   //Callback for vsync
+   DISPMANX_CALLBACK_FUNC_T vsync_callback;
+   void *vsync_callback_param;
+   int vsync_enabled;
 
    int initialised;
 } DISPMANX_SERVICE_T;
@@ -146,6 +149,9 @@ void vc_vchi_dispmanx_init (VCHI_INSTANCE_T initialise_instance, VCHI_CONNECTION
    int32_t success;
    uint32_t i;
 
+   if (dispmanx_client.initialised)
+     return;
+
    // record the number of connections
    memset( &dispmanx_client, 0, sizeof(DISPMANX_SERVICE_T) );
    dispmanx_client.num_connections = num_connections;
@@ -228,6 +234,10 @@ VCHPRE_ void VCHPOST_ vc_dispmanx_stop( void ) {
    //TODO: kill the notifier task
    void *dummy;
    uint32_t i;
+
+   if (!dispmanx_client.initialised)
+      return;
+
    lock_obtain();
    for (i=0; i<dispmanx_client.num_connections; i++) {
       int32_t result;
@@ -695,13 +705,22 @@ VCHPRE_ DISPMANX_UPDATE_HANDLE_T VCHPOST_ vc_dispmanx_update_start( int32_t prio
 VCHPRE_ int VCHPOST_ vc_dispmanx_update_submit( DISPMANX_UPDATE_HANDLE_T update, DISPMANX_CALLBACK_FUNC_T cb_func, void *cb_arg ) {
    uint32_t update_param[] = {(uint32_t) VC_HTOV32(update), (uint32_t) ((cb_func)? VC_HTOV32(1) : 0)};
    int success;
-   //Set the callback
-   dispmanx_client.update_callback = cb_func;
-   dispmanx_client.update_callback_param = cb_arg;
-   dispmanx_client.pending_update_handle = update;
-   vchi_service_use(dispmanx_client.notify_handle[0]); // corresponding release is in dispmanx_notify_func
-   success = (int) dispmanx_send_command( EDispmanUpdateSubmit | DISPMANX_NO_REPLY_MASK,
-                                          update_param, sizeof(update_param));
+
+   vcos_assert(update); // handles must be non-zero
+   if (update)
+   {
+      //Set the callback
+      dispmanx_client.update_callback = cb_func;
+      dispmanx_client.update_callback_param = cb_arg;
+      dispmanx_client.pending_update_handle = update;
+      vchi_service_use(dispmanx_client.notify_handle[0]); // corresponding release is in dispmanx_notify_func
+      success = (int) dispmanx_send_command( EDispmanUpdateSubmit | DISPMANX_NO_REPLY_MASK,
+                                             update_param, sizeof(update_param));
+   }
+   else
+   {
+      success = -1;
+   }
    return success;
 }
 
@@ -1023,6 +1042,52 @@ VCHPRE_ int VCHPOST_ vc_dispmanx_resource_set_palette( DISPMANX_RESOURCE_HANDLE_
    return (int) success;
 }
 
+
+/***********************************************************
+ * Name: vc_dispmanx_vsync_callback
+ *
+ * Arguments:
+ *       DISPMANX_DISPLAY_HANDLE_T display
+ *       DISPMANX_CALLBACK_FUNC_T cb_func
+ *       void *cb_arg
+ *
+ * Description: start sending callbacks on vsync events
+ *              Use a NULL cb_func to stop the callbacks
+ * Returns: 0 or failure
+ *
+ ***********************************************************/
+VCHPRE_ int VCHPOST_ vc_dispmanx_vsync_callback( DISPMANX_DISPLAY_HANDLE_T display, DISPMANX_CALLBACK_FUNC_T cb_func, void *cb_arg )
+{
+   // Steal the invalid 0 handle to indicate this is a vsync request
+   DISPMANX_UPDATE_HANDLE_T update = 0;
+   int enable = (cb_func != NULL);
+   uint32_t update_param[] = {(uint32_t) VC_HTOV32(display), VC_HTOV32(update), (int32_t)enable};
+   int success;
+
+   // Set the callback
+   dispmanx_client.vsync_callback = cb_func;
+   dispmanx_client.vsync_callback_param = cb_arg;
+
+   if (!dispmanx_client.vsync_enabled && enable) {
+      // An extra "use" is required while a vsync callback is registered.
+      // The corresponding "release" is below.
+      vchi_service_use(dispmanx_client.notify_handle[0]);
+   }
+
+   success = (int) dispmanx_send_command( EDispmanVsyncCallback | DISPMANX_NO_REPLY_MASK,
+                                          update_param, sizeof(update_param));
+
+   if (dispmanx_client.vsync_enabled && !enable) {
+      // The extra "use" added above is no longer required.
+      vchi_service_release(dispmanx_client.notify_handle[0]);
+   }
+
+   dispmanx_client.vsync_enabled = enable;
+
+   return (int) success;
+}
+
+
 /*********************************************************************************
  *
  *  Static functions definitions
@@ -1068,7 +1133,7 @@ static void dispmanx_notify_callback( void *callback_param,
                                       void *msg_handle ) {
    VCOS_EVENT_T *event = (VCOS_EVENT_T *)callback_param;
 
-	(void)msg_handle;
+   (void)msg_handle;
 
    if ( reason != VCHI_CALLBACK_MSG_AVAILABLE )
       return;
@@ -1216,18 +1281,29 @@ static void *dispmanx_notify_func( void *arg ) {
 
    (void)arg;
 
-   while(1) {
+   while (1) {
+      DISPMANX_UPDATE_HANDLE_T handle;
       status = vcos_event_wait(&dispmanx_notify_available_event);
-      if(status != VCOS_SUCCESS || !dispmanx_client.initialised)
+      if (status != VCOS_SUCCESS || !dispmanx_client.initialised)
          break;
       success = vchi_msg_dequeue( dispmanx_client.notify_handle[0], dispmanx_client.notify_buffer, sizeof(dispmanx_client.notify_buffer), &dispmanx_client.notify_length, VCHI_FLAGS_NONE );
-      vchi_service_release(dispmanx_client.notify_handle[0]); // corresponding use in vc_dispmanx_update_submit
-      if(success != 0)
+      if (success != 0)
          continue;
-   
-      if(dispmanx_client.update_callback ) {
-         vcos_assert( dispmanx_client.pending_update_handle == (DISPMANX_UPDATE_HANDLE_T) dispmanx_client.notify_buffer[1]);
-         dispmanx_client.update_callback((DISPMANX_UPDATE_HANDLE_T) dispmanx_client.notify_buffer[1], dispmanx_client.update_callback_param);
+
+      handle = (DISPMANX_UPDATE_HANDLE_T)dispmanx_client.notify_buffer[1];
+      if (handle) {
+         // This is the response to an update submit
+         // Decrement the use count - the corresponding "use" is in vc_dispmanx_update_submit.
+         vchi_service_release(dispmanx_client.notify_handle[0]);
+         if (dispmanx_client.update_callback ) {
+            vcos_assert( dispmanx_client.pending_update_handle == handle);
+            dispmanx_client.update_callback(handle, dispmanx_client.update_callback_param);
+         }
+      } else {
+         // This is a vsync notification
+         if (dispmanx_client.vsync_callback ) {
+            dispmanx_client.vsync_callback(handle, dispmanx_client.vsync_callback_param);
+         }
       }
    }
    return 0;

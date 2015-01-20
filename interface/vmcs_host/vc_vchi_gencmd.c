@@ -129,6 +129,9 @@ void vc_vchi_gencmd_init (VCHI_INSTANCE_T initialise_instance, VCHI_CONNECTION_T
    int32_t success;
    int i;
 
+   if (gencmd_client.initialised)
+     return;
+
    // record the number of connections
    memset( &gencmd_client, 0, sizeof(GENCMD_SERVICE_T) );
    gencmd_client.num_connections = (int) num_connections;
@@ -208,6 +211,9 @@ void vc_gencmd_stop () {
    // Assume a "power down" gencmd has been sent and the lock is held. There will
    // be no response so this should be called instead.
    int32_t success,i;
+
+   if (!gencmd_client.initialised)
+      return;
 
    if(lock_obtain() == 0)
    {

@@ -1304,6 +1304,8 @@ extern void mem_get_internal_stats(struct MEM_MANAGER_STATS_T *stats);
 
 extern int mem_handle_acquire_if_valid(MEM_HANDLE_T handle);
 
+void mem_compact_task_enable(int enable);
+
 /******************************************************************************
 API of memory access control using sandbox regions
     Users take the responsibility of assuring thread-safety

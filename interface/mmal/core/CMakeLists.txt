@@ -1,4 +1,4 @@
-add_library (mmal_core SHARED
+add_library (mmal_core ${LIBRARY_TYPE}
    mmal_format.c
    mmal_port.c
    mmal_port_clock.c

@@ -186,7 +186,8 @@ struct RASPIVID_STATE_S
    char *imv_filename;                  /// filename of inline Motion Vectors output
    
    int cameraNum;                       /// Camera number
-
+   int settings;                        /// Request settings from the camera
+   int sensor_mode;			/// Sensor mode. 0=auto. Check docs/forum for modes selected by other values.
 };
 
 
@@ -238,6 +239,8 @@ static void display_valid_parameters(char *app_name);
 #define CommandCircular     22
 #define CommandIMV          23
 #define CommandCamSelect    24
+#define CommandSettings     25
+#define CommandSensorMode   26
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -251,7 +254,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandDemoMode,      "-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 1},
    { CommandFramerate,     "-framerate",  "fps","Specify the frames per second to record", 1},
    { CommandPreviewEnc,    "-penc",       "e",  "Display preview image *after* encoding (shows compression artifacts)", 0},
-   { CommandIntraPeriod,   "-intra",      "g",  "Specify the intra refresh period (key frame rate/GoP size)", 1},
+   { CommandIntraPeriod,   "-intra",      "g",  "Specify the intra refresh period (key frame rate/GoP size). Zero to produce an initial I-frame and then just P-frames.", 1},
    { CommandProfile,       "-profile",    "pf", "Specify H264 profile to use for encoding", 1},
    { CommandTimed,         "-timed",      "td", "Cycle between capture and pause. -cycle on,off where on is record time and off is pause time in ms", 0},
    { CommandSignal,        "-signal",     "s",  "Cycle between capture and pause on Signal", 0},
@@ -266,6 +269,8 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandCircular,      "-circular",   "c",  "Run encoded data through circular buffer until triggered then save", 0},
    { CommandIMV,           "-vectors",    "x",  "Output filename <filename> for inline motion vectors", 1 },
    { CommandCamSelect,     "-camselect",  "cs", "Select camera <number>. Default 0", 1 },
+   { CommandSettings,      "-settings",   "set","Retrieve camera settings and write to stdout", 0},
+   { CommandSensorMode,    "-mode",       "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -310,7 +315,7 @@ static void default_status(RASPIVID_STATE *state)
    state->height = 1080;
    state->bitrate = 17000000; // This is a decent default bitrate for 1080p
    state->framerate = VIDEO_FRAME_RATE_NUM;
-   state->intraperiod = 0;    // Not set
+   state->intraperiod = -1;    // Not set
    state->quantisationParameter = 0;
    state->demoMode = 0;
    state->demoInterval = 250; // ms
@@ -332,6 +337,8 @@ static void default_status(RASPIVID_STATE *state)
    state->inlineMotionVectors = 0;
    
    state->cameraNum = 0;
+   state->settings = 0;
+   state->sensor_mode = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -672,8 +679,23 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          }
          else
             valid = 0;
-		  break;
-	  }
+         break;
+      }
+
+      case CommandSettings:
+         state->settings = 1;
+         break;
+
+      case CommandSensorMode:
+      {
+         if (sscanf(argv[i + 1], "%u", &state->sensor_mode) == 1)
+         {
+            i++;
+         }
+         else
+            valid = 0;
+         break;
+      }
 
       default:
       {
@@ -763,6 +785,22 @@ static void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 {
    if (buffer->cmd == MMAL_EVENT_PARAMETER_CHANGED)
    {
+      MMAL_EVENT_PARAMETER_CHANGED_T *param = (MMAL_EVENT_PARAMETER_CHANGED_T *)buffer->data;
+      switch (param->hdr.id) {
+         case MMAL_PARAMETER_CAMERA_SETTINGS:
+         {
+            MMAL_PARAMETER_CAMERA_SETTINGS_T *settings = (MMAL_PARAMETER_CAMERA_SETTINGS_T*)param;
+            vcos_log_error("Exposure now %u, analog gain %u/%u, digital gain %u/%u",
+			settings->exposure,
+                        settings->analog_gain.num, settings->analog_gain.den,
+                        settings->digital_gain.num, settings->digital_gain.den);
+            vcos_log_error("AWB R=%u/%u, B=%u/%u",
+                        settings->awb_red_gain.num, settings->awb_red_gain.den,
+                        settings->awb_blue_gain.num, settings->awb_blue_gain.den
+                        );
+         }
+         break;
+      }
    }
    else
    {
@@ -1092,9 +1130,30 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
       goto error;
    }
 
+   status = mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_CAMERA_CUSTOM_SENSOR_CONFIG, state->sensor_mode);
+
+   if (status != MMAL_SUCCESS)
+   {
+      vcos_log_error("Could not set sensor mode : error %d", status);
+      goto error;
+   }
+
    preview_port = camera->output[MMAL_CAMERA_PREVIEW_PORT];
    video_port = camera->output[MMAL_CAMERA_VIDEO_PORT];
    still_port = camera->output[MMAL_CAMERA_CAPTURE_PORT];
+
+   if (state->settings)
+   {
+      MMAL_PARAMETER_CHANGE_EVENT_REQUEST_T change_event_request =
+         {{MMAL_PARAMETER_CHANGE_EVENT_REQUEST, sizeof(MMAL_PARAMETER_CHANGE_EVENT_REQUEST_T)},
+          MMAL_PARAMETER_CAMERA_SETTINGS, 1};
+
+      status = mmal_port_parameter_set(camera->control, &change_event_request.hdr);
+      if ( status != MMAL_SUCCESS )
+      {
+         vcos_log_error("No camera settings events");
+      }
+   }
 
    // Enable the camera, and tell it its control callback function
    status = mmal_port_enable(camera->control, camera_control_callback);
@@ -1134,6 +1193,30 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
    format->encoding = MMAL_ENCODING_OPAQUE;
    format->encoding_variant = MMAL_ENCODING_I420;
 
+   if(state->camera_parameters.shutter_speed > 6000000)
+   {
+        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+                                                     { 50, 1000 }, {166, 1000}};
+        mmal_port_parameter_set(preview_port, &fps_range.hdr);
+   }
+   else if(state->camera_parameters.shutter_speed > 1000000)
+   {
+        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+                                                     { 166, 1000 }, {999, 1000}};
+        mmal_port_parameter_set(preview_port, &fps_range.hdr);
+   }
+
+   //enable dynamic framerate if necessary
+   if (state->camera_parameters.shutter_speed)
+   {   
+      if (state->framerate > 1000000./state->camera_parameters.shutter_speed)
+      {
+         state->framerate=0;
+         if (state->verbose)
+            fprintf(stderr, "Enable dynamic frame rate to fulfil shutter speed requirement\n");
+      }
+   } 
+
    format->encoding = MMAL_ENCODING_OPAQUE;
    format->es->video.width = VCOS_ALIGN_UP(state->width, 32);
    format->es->video.height = VCOS_ALIGN_UP(state->height, 16);
@@ -1156,6 +1239,19 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
 
    format = video_port->format;
    format->encoding_variant = MMAL_ENCODING_I420;
+
+   if(state->camera_parameters.shutter_speed > 6000000)
+   {
+        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+                                                     { 50, 1000 }, {166, 1000}};
+        mmal_port_parameter_set(video_port, &fps_range.hdr);
+   }
+   else if(state->camera_parameters.shutter_speed > 1000000)
+   {
+        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+                                                     { 167, 1000 }, {999, 1000}};
+        mmal_port_parameter_set(video_port, &fps_range.hdr);
+   }
 
    format->encoding = MMAL_ENCODING_OPAQUE;
    format->es->video.width = VCOS_ALIGN_UP(state->width, 32);
@@ -1327,7 +1423,7 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
 
    }
 
-   if (state->intraperiod)
+   if (state->intraperiod != -1)
    {
       MMAL_PARAMETER_UINT32_T param = {{ MMAL_PARAMETER_INTRAPERIOD, sizeof(param)}, state->intraperiod};
       status = mmal_port_parameter_set(encoder_output, &param.hdr);

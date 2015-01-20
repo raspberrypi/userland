@@ -216,6 +216,9 @@ VCHPRE_ void VCHPOST_ vc_vchi_cec_init(VCHI_INSTANCE_T initialise_instance, VCHI
    VCOS_THREAD_ATTR_T attrs;
    uint32_t i;
 
+   if (cecservice_client.initialised)
+     return;
+
    vc_cec_log_info("Initialising CEC service");
    // record the number of connections
    vcos_memset( &cecservice_client, 0, sizeof(CECSERVICE_HOST_STATE_T) );
@@ -306,6 +309,10 @@ VCHPRE_ void VCHPOST_ vc_vchi_cec_init(VCHI_INSTANCE_T initialise_instance, VCHI
 VCHPRE_ void VCHPOST_ vc_vchi_cec_stop( void ) {
    // Wait for the current lock-holder to finish before zapping TV service
    uint32_t i;
+
+   if (!cecservice_client.initialised)
+      return;
+
    if(lock_obtain() == 0)
    {
       void *dummy;

@@ -61,16 +61,6 @@ static int inited;
 #  define VCOS_WANT_LOG_CMD   0
 #endif
 
-/* For now, do not link logging categories into linked lists
- * as it breaks when people unload shared libraries without
- * getting the counts right.
- */
-#ifdef __VIDEOCORE__
-#define REGISTER_CATEGORIES 1
-#else
-#define REGISTER_CATEGORIES 0
-#endif
-
 #if VCOS_WANT_LOG_CMD
 
 /*****************************************************************************
@@ -387,9 +377,6 @@ void vcos_log_register(const char *name, VCOS_LOG_CAT_T *category)
    }
    category->flags.want_prefix = (category != &dflt_log_category );
 
-   if (!REGISTER_CATEGORIES)
-      return;
-
    vcos_mutex_lock(&lock);
 
    /* is it already registered? */
@@ -456,9 +443,6 @@ void vcos_log_register(const char *name, VCOS_LOG_CAT_T *category)
 void vcos_log_unregister(VCOS_LOG_CAT_T *category)
 {
    VCOS_LOG_CAT_T **pcat;
-
-   if (!REGISTER_CATEGORIES)
-      return;
 
    vcos_mutex_lock(&lock);
    category->refcount--;

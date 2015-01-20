@@ -70,7 +70,7 @@ typedef enum {
    METADATA_ABL                  = ( 0 <<24)+('A'<<16)+('B'<<8)+('L'),   // '\x00ABL'    struct ISP_TUNER_BRCM_BLACK_LEVEL_ABL_T defined in /middleware/ISP/tuner/isp_tuner_brcm_black_level.h
    METADATA_DRC                  = ( 0 <<24)+('D'<<16)+('R'<<8)+('C'),	 // 'DRC'	  struct DRC_METADATA_T defined in /middleware/camplus/sw/drc/drc.h
    METADATA_REGISTRATION         = ( 0 <<24)+('R'<<16)+('E'<<8)+('G'),    // 'REG'         struct REGISTRATION_OFFSETS_T defined in /middleware/camplus/sw/registration/registration.h
-	METADATA_RAW_CAPTURE          = ('R'<<24)+('W'<<16)+('M'<<8)+('D'),    // 'RWMD'   struct RAW_CAPTURE_METADATA_T defined in /middleware/camplus/sw/raw_metadata.h
+   METADATA_RAW_CAPTURE          = ('R'<<24)+('W'<<16)+('M'<<8)+('D'),    // 'RWMD'   struct RAW_CAPTURE_METADATA_T defined in /middleware/camplus/sw/raw_metadata.h
    // structure definitions for IL metadata are
    // in middleware/openmaxil/headers/ilmetadata.h
    METADATA_IL_CAMERA_NAME         = ('I'<<24)+('L'<<16)+('C'<<8)+('A'), // 'ILCA'
