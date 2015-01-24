@@ -1066,8 +1066,9 @@ do_vchi_ping_test(VCHI_SERVICE_HANDLE_T service, int size, int async, int oneway
    if ((oneway == 0) && (async == 0))
    {
       params->magic = MSG_SYNC;
-
+      vcos_mutex_lock(&g_mutex);
       g_sync_mode = 1;
+      vcos_mutex_unlock(&g_mutex);
 
       start = vcos_getmicrosecs();
       for (i = 0; i < iters; i++)
@@ -1082,7 +1083,9 @@ do_vchi_ping_test(VCHI_SERVICE_HANDLE_T service, int size, int async, int oneway
 
       vcos_sleep(10);
 
+      vcos_mutex_lock(&g_mutex);
       g_sync_mode = 0;
+      vcos_mutex_unlock(&g_mutex);
    }
 
    while (vchi_msg_dequeue(service, pong_buf, sizeof(pong_buf), &actual, VCHI_FLAGS_NONE) != -1)
