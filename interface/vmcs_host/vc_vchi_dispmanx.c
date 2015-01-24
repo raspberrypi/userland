@@ -1306,7 +1306,6 @@ static void *dispmanx_notify_func( void *arg ) {
             // Decrement the use count - the corresponding "use" is in vc_dispmanx_update_submit.
             vchi_service_release(dispmanx_client.notify_handle[0]);
             if (dispmanx_client.update_callback ) {
-               vcos_assert( dispmanx_client.pending_update_handle == handle);
                dispmanx_client.update_callback(handle, dispmanx_client.update_callback_param);
             }
          } else {
