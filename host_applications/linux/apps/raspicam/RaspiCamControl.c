@@ -28,6 +28,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdio.h>
 #include <memory.h>
+#include <ctype.h>
 
 #include "interface/vcos/vcos.h"
 
@@ -131,7 +132,7 @@ static const int drc_mode_map_size = sizeof(drc_mode_map)/sizeof(drc_mode_map[0]
 #define CommandISO         4
 #define CommandVideoStab   5
 #define CommandEVComp      6
-#define CommandExposure  7
+#define CommandExposure    7
 #define CommandAWB         8
 #define CommandImageFX     9
 #define CommandColourFX    10
@@ -144,6 +145,7 @@ static const int drc_mode_map_size = sizeof(drc_mode_map)/sizeof(drc_mode_map[0]
 #define CommandAwbGains    17
 #define CommandDRCLevel    18
 #define CommandStatsPass   19
+#define CommandAnnotate    20
 
 static COMMAND_LIST  cmdline_commands[] =
 {
@@ -167,6 +169,7 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandAwbGains,    "-awbgains",  "awbg", "Set AWB gains - AWB mode must be off", 1},
    {CommandDRCLevel,    "-drc",       "drc", "Set DRC Level", 1},
    {CommandStatsPass,   "-stats",     "st", "Force recomputation of statistics on stills capture pass"},
+   {CommandAnnotate,    "-annotate",  "a",  "Enable/Set annotate flags or text", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -646,6 +649,23 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
       break;
    }
 
+   case CommandAnnotate:
+   {
+      // If parameter is a number, assume its a bitmask, otherwise a string
+      if (isdigit(*arg2))
+      {
+         sscanf(arg2, "%u", &params->enable_annotate);
+      }
+      else
+      {
+         params->enable_annotate = ANNOTATE_USER_TEXT;
+         strncpy(params->annotate_string, arg2, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V2);
+         params->annotate_string[MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V2-1] = '\0';
+      }
+      used=2;
+      break;
+   }
+
    }
 
    return used;
@@ -789,6 +809,8 @@ void raspicamcontrol_set_defaults(RASPICAM_CAMERA_PARAMETERS *params)
    params->awb_gains_b = 0;
    params->drc_level = MMAL_PARAMETER_DRC_STRENGTH_OFF;
    params->stats_pass = MMAL_FALSE;
+   params->enable_annotate = 0;
+   params->annotate_string[0] = '\0';
 }
 
 /**
@@ -852,6 +874,7 @@ int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_
    result += raspicamcontrol_set_shutter_speed(camera, params->shutter_speed);
    result += raspicamcontrol_set_DRC(camera, params->drc_level);
    result += raspicamcontrol_set_stats_pass(camera, params->stats_pass);
+   result += raspicamcontrol_set_annotate(camera, params->enable_annotate, params->annotate_string);
 
    return result;
 }
@@ -1272,6 +1295,74 @@ int raspicamcontrol_set_stats_pass(MMAL_COMPONENT_T *camera, int stats_pass)
 
    return mmal_status_to_int(mmal_port_parameter_set_boolean(camera->control, MMAL_PARAMETER_CAPTURE_STATS_PASS, stats_pass));
 }
+
+
+/**
+ * Set the annotate data
+ * @param camera Pointer to camera component
+ * @param Bitmask of required annotation data. 0 for off.
+ * @param If set, a pointer to text string to use instead of bitmask, max length 32 characters
+ *
+ * @return 0 if successful, non-zero if any parameters out of range
+ */
+int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, const char *string)
+{
+   MMAL_PARAMETER_CAMERA_ANNOTATE_V2_T annotate =
+      {{MMAL_PARAMETER_ANNOTATE, sizeof(MMAL_PARAMETER_CAMERA_ANNOTATE_V2_T)}};
+
+   if (settings)
+   {
+      time_t t = time(NULL);
+      struct tm tm = *localtime(&t);
+      char tmp[MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V2];
+
+      annotate.enable = 1;
+
+      if (settings & (ANNOTATE_APP_TEXT | ANNOTATE_USER_TEXT))
+      {
+         strncpy(annotate.text, string, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V2);
+         annotate.text[MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V2-1] = '\0';
+      }
+
+      if (settings & ANNOTATE_TIME_TEXT)
+      {
+         strftime(tmp, 32, "%X ", &tm );
+         strncat(annotate.text, tmp, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V2 - strlen(annotate.text) - 1);
+      }
+
+      if (settings & ANNOTATE_DATE_TEXT)
+      {
+         strftime(tmp, 32, "%x", &tm );
+         strncat(annotate.text, tmp, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V2 - strlen(annotate.text) - 1);
+      }
+
+      if (settings & ANNOTATE_SHUTTER_SETTINGS)
+         annotate.show_shutter = 1;
+
+      if (settings & ANNOTATE_GAIN_SETTINGS)
+         annotate.show_analog_gain = 1;
+
+      if (settings & ANNOTATE_LENS_SETTINGS)
+         annotate.show_lens = 1;
+
+      if (settings & ANNOTATE_CAF_SETTINGS)
+         annotate.show_caf = 1;
+
+      if (settings & ANNOTATE_MOTION_SETTINGS)
+         annotate.show_motion = 1;
+
+      if (settings & ANNOTATE_FRAME_NUMBER)
+         annotate.show_frame_num = 1;
+
+      if (settings & ANNOTATE_BLACK_BACKGROUND)
+         annotate.black_text_background = 1;
+   }
+   else
+      annotate.enable = 0;
+
+   return mmal_status_to_int(mmal_port_parameter_set(camera->control, &annotate.hdr));
+}
+
 
 /**
  * Asked GPU how much memory it has allocated

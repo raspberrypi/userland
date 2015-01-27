@@ -186,7 +186,8 @@ struct RASPIVID_STATE_S
    
    int cameraNum;                       /// Camera number
    int settings;                        /// Request settings from the camera
-   int sensor_mode;			/// Sensor mode. 0=auto. Check docs/forum for modes selected by other values.
+   int sensor_mode;			            /// Sensor mode. 0=auto. Check docs/forum for modes selected by other values.
+   int intra_refresh_type;              /// What intra refresh type to use. -1 to not set.
 };
 
 
@@ -208,6 +209,17 @@ static XREF_T  initial_map[] =
 };
 
 static int initial_map_size = sizeof(initial_map) / sizeof(initial_map[0]);
+
+static XREF_T  intra_refresh_map[] =
+{
+   {"cyclic",       MMAL_VIDEO_INTRA_REFRESH_CYCLIC},
+   {"adaptive",     MMAL_VIDEO_INTRA_REFRESH_ADAPTIVE},
+   {"both",         MMAL_VIDEO_INTRA_REFRESH_BOTH},
+   {"cyclicrows",   MMAL_VIDEO_INTRA_REFRESH_CYCLIC_MROWS},
+//   {"random",       MMAL_VIDEO_INTRA_REFRESH_PSEUDO_RAND} Cannot use random, crashes the encoder. No idea why.
+};
+
+static int intra_refresh_map_size = sizeof(intra_refresh_map) / sizeof(intra_refresh_map[0]);
 
 
 static void display_valid_parameters(char *app_name);
@@ -240,6 +252,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandCamSelect    24
 #define CommandSettings     25
 #define CommandSensorMode   26
+#define CommandIntraRefreshType 27
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -270,6 +283,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandCamSelect,     "-camselect",  "cs", "Select camera <number>. Default 0", 1 },
    { CommandSettings,      "-settings",   "set","Retrieve camera settings and write to stdout", 0},
    { CommandSensorMode,    "-mode",       "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
+   { CommandIntraRefreshType,"-irefresh", "if", "Set intra refresh type", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -339,6 +353,8 @@ static void default_status(RASPIVID_STATE *state)
    state->settings = 0;
    state->sensor_mode = 0;
 
+   state->intra_refresh_type = -1;
+
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
 
@@ -366,6 +382,7 @@ static void dump_status(RASPIVID_STATE *state)
    fprintf(stderr, "bitrate %d, framerate %d, time delay %d\n", state->bitrate, state->framerate, state->timeout);
    fprintf(stderr, "H264 Profile %s\n", raspicli_unmap_xref(state->profile, profile_map, profile_map_size));
    fprintf(stderr, "H264 Quantisation level %d, Inline headers %s\n", state->quantisationParameter, state->bInlineHeaders ? "Yes" : "No");
+   fprintf(stderr, "H264 Intra refresh type %s, period %d\n", raspicli_unmap_xref(state->intra_refresh_type, intra_refresh_map, intra_refresh_map_size), state->intraperiod);
 
    // Not going to display segment data unless asked for it.
    if (state->segmentSize)
@@ -696,6 +713,13 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          break;
       }
 
+      case CommandIntraRefreshType:
+      {
+         state->intra_refresh_type = raspicli_map_xref(argv[i + 1], intra_refresh_map, intra_refresh_map_size);
+         i++;
+         break;
+      }
+
       default:
       {
          // Try parsing for any image specific parameters
@@ -757,6 +781,16 @@ static void display_valid_parameters(char *app_name)
    for (i=1;i<profile_map_size;i++)
    {
       fprintf(stderr, ",%s", profile_map[i].mode);
+   }
+
+   fprintf(stderr, "\n");
+
+   // Intra refresh options
+   fprintf(stderr, "\n\nH264 Intra refresh options :\n%s", intra_refresh_map[0].mode );
+
+   for (i=1;i<intra_refresh_map_size;i++)
+   {
+      fprintf(stderr, ",%s", intra_refresh_map[i].mode);
    }
 
    fprintf(stderr, "\n");
@@ -889,6 +923,41 @@ static FILE *open_imv_filename(RASPIVID_STATE *pState)
 }
 
 /**
+ * Update any annotation data specific to the video.
+ * This simply passes on the setting from cli, or
+ * if application defined annotate requested, updates
+ * with the H264 parameters
+ *
+ * @param state Pointer to state control struct
+ *
+ */
+static void update_annotation_data(RASPIVID_STATE *state)
+{
+   // So, if we have asked for a application supplied string, set it to the H264 parameters
+   if (state->camera_parameters.enable_annotate & ANNOTATE_APP_TEXT)
+   {
+      char *text;
+      char *refresh = raspicli_unmap_xref(state->intra_refresh_type, intra_refresh_map, intra_refresh_map_size);
+
+      asprintf(&text,  "%dk,%df,%s,%d,%s",
+            state->bitrate / 1000,  state->framerate,
+            refresh ? refresh : "(none)",
+            state->intraperiod,
+            raspicli_unmap_xref(state->profile, profile_map, profile_map_size));
+
+      raspicamcontrol_set_annotate(state->camera_component, state->camera_parameters.enable_annotate, text);
+
+      free(text);
+   }
+   else
+   {
+      raspicamcontrol_set_annotate(state->camera_component, state->camera_parameters.enable_annotate, state->camera_parameters.annotate_string);
+   }
+}
+
+
+
+/**
  *  buffer header callback function for encoder
  *
  *  Callback will dump buffer data to the specific file
@@ -900,6 +969,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 {
    MMAL_BUFFER_HEADER_T *new_buffer;
    static int64_t base_time =  -1;
+   static int64_t last_second = -1;
 
    // All our segment times based on the receipt of the first encoder callback
    if (base_time == -1)
@@ -1062,6 +1132,13 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
             }
          }
       }
+
+      // See if the second count has changed and we need to update any annotation
+      if (current_time/1000 != last_second)
+      {
+         update_annotation_data(pData->pstate);
+         last_second = current_time/1000;
+      }
    }
    else
    {
@@ -1085,7 +1162,6 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
          vcos_log_error("Unable to return a buffer to the encoder port");
    }
 }
-
 
 /**
  * Create the camera component, set up its ports
@@ -1316,6 +1392,8 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
 
    state->camera_component = camera;
 
+   update_annotation_data(state);
+
    if (state->verbose)
       fprintf(stderr, "Camera component done\n");
 
@@ -1495,6 +1573,29 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
    {
       vcos_log_error("failed to set INLINE VECTORS parameters");
       // Continue rather than abort..
+   }
+
+   // Adaptive intra refresh settings
+   if (state->intra_refresh_type != -1)
+   {
+      MMAL_PARAMETER_VIDEO_INTRA_REFRESH_T  param;
+      param.hdr.id = MMAL_PARAMETER_VIDEO_INTRA_REFRESH;
+      param.hdr.size = sizeof(param);
+
+      // Get first so we don't overwrite anything unexpectedly
+      status = mmal_port_parameter_get(encoder_output, &param.hdr);
+
+      param.refresh_mode = state->intra_refresh_type;
+
+      //if (state->intra_refresh_type == MMAL_VIDEO_INTRA_REFRESH_CYCLIC_MROWS)
+      //   param.cir_mbs = 10;
+
+      status = mmal_port_parameter_set(encoder_output, &param.hdr);
+      if (status != MMAL_SUCCESS)
+      {
+         vcos_log_error("Unable to set H264 intra-refresh values");
+         goto error;
+      }
    }
 
    //  Enable component
