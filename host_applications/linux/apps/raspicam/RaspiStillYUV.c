@@ -376,7 +376,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
          if (sscanf(argv[i + 1], "%u", &state->timeout) == 1)
          {
             // Ensure that if previously selected CommandKeypress we don't overwrite it
-            if (state->timeout == 0 && state->frameNextMethod != FRAME_NEXT_KEYPRESS)
+            if (state->timeout == 0 && state->frameNextMethod == FRAME_NEXT_SINGLE)
                state->frameNextMethod = FRAME_NEXT_FOREVER;
 
             i++;
