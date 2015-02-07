@@ -20,5 +20,6 @@ install(FILES
    mmal_component_private.h
    mmal_core_private.h
    mmal_port_private.h
+   mmal_events_private.h
    DESTINATION include/interface/mmal/core
 )
