@@ -120,6 +120,7 @@ typedef struct
    int wantRAW;                        /// Flag for whether the JPEG metadata also contains the RAW bayer image
    char *filename;                     /// filename of output file
    char *linkname;                     /// filename of output file
+   int frameStart;                     /// First number of frame output counter
    MMAL_PARAM_THUMBNAIL_CONFIG_T thumbnailConfig;
    int verbose;                        /// !0 if want detailed run information
    int demoMode;                       /// Run app in demo mode
@@ -173,22 +174,23 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandRaw          4
 #define CommandOutput       5
 #define CommandVerbose      6
-#define CommandTimeout      7
-#define CommandThumbnail    8
-#define CommandDemoMode     9
-#define CommandEncoding     10
-#define CommandExifTag      11
-#define CommandTimelapse    12
-#define CommandFullResPreview 13
-#define CommandLink         14
-#define CommandKeypress     15
-#define CommandSignal       16
-#define CommandGL           17
-#define CommandGLCapture    18
-#define CommandSettings     19
-#define CommandCamSelect    20
-#define CommandBurstMode    21
-#define CommandSensorMode   22
+#define CommandFrameStart   7
+#define CommandTimeout      8
+#define CommandThumbnail    9
+#define CommandDemoMode     10
+#define CommandEncoding     11
+#define CommandExifTag      12
+#define CommandTimelapse    13
+#define CommandFullResPreview 14
+#define CommandLink         15
+#define CommandKeypress     16
+#define CommandSignal       17
+#define CommandGL           18
+#define CommandGLCapture    19
+#define CommandSettings     20
+#define CommandCamSelect    21
+#define CommandBurstMode    22
+#define CommandSensorMode   23
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -199,6 +201,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandRaw,     "-raw",        "r",  "Add raw bayer data to jpeg metadata", 0 },
    { CommandOutput,  "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -'). If not specified, no file is saved", 1 },
    { CommandLink,    "-latest",     "l",  "Link latest complete image to filename <filename>", 1},
+   { CommandFrameStart,"-framestart","fs",  "Starting frame number in output pattern", 1},
    { CommandVerbose, "-verbose",    "v",  "Output verbose information during run", 0 },
    { CommandTimeout, "-timeout",    "t",  "Time (in ms) before takes picture and shuts down (if not specified, set to 5s)", 1 },
    { CommandThumbnail,"-thumb",     "th", "Set thumbnail parameters (x:y:quality) or none", 1},
@@ -270,6 +273,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->wantRAW = 0;
    state->filename = NULL;
    state->linkname = NULL;
+   state->frameStart = 0;
    state->verbose = 0;
    state->thumbnailConfig.enable = 1;
    state->thumbnailConfig.width = 64;
@@ -479,6 +483,18 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          break;
 
       }
+
+      case CommandFrameStart:  // use a staring value != 0
+      {
+         if (sscanf(argv[i + 1], "%u", &state->frameStart) == 1)
+         {
+           i++;
+         }
+         else
+            valid = 0;
+         break;
+      }
+
       case CommandVerbose: // display lots of data during run
          state->verbose = 1;
          break;
@@ -1766,7 +1782,7 @@ int main(int argc, const char **argv)
             char *use_filename = NULL;      // Temporary filename while image being written
             char *final_filename = NULL;    // Name that file gets once writing complete
 
-            frame = 0;
+            frame = state.frameStart;
 
             while (keep_looping)
             {
