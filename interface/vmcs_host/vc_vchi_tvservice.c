@@ -217,6 +217,9 @@ VCHPRE_ int VCHPOST_ vc_vchi_tv_init(VCHI_INSTANCE_T initialise_instance, VCHI_C
          0               // No overscan flags.
       };
 
+   if (tvservice_client.initialised)
+     return -2;
+
    vcos_log_set_level(VCOS_LOG_CATEGORY, VCOS_LOG_ERROR);
    vcos_log_register("tvservice-client", VCOS_LOG_CATEGORY);
 
@@ -326,6 +329,9 @@ VCHPRE_ int VCHPOST_ vc_vchi_tv_init(VCHI_INSTANCE_T initialise_instance, VCHI_C
 VCHPRE_ void VCHPOST_ vc_vchi_tv_stop( void ) {
    // Wait for the current lock-holder to finish before zapping TV service
    uint32_t i;
+
+   if (!tvservice_client.initialised)
+      return;
 
    vcos_log_trace("[%s]", VCOS_FUNCTION);
    if(tvservice_lock_obtain() == 0)
@@ -1619,7 +1625,7 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_explicit(HDMI_MODE_T mode, HDMI_RES_GRO
       property.param1 = HDMI_RES_GROUP_CEA;
       property.param2 = 0;
       vc_tv_hdmi_set_property(&property);
-      group == HDMI_RES_GROUP_CEA;
+      group = HDMI_RES_GROUP_CEA;
    }
    return vc_tv_hdmi_power_on_explicit_new(mode, group, code);
 }

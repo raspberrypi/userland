@@ -25,44 +25,108 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "interface/vcos/vcos.h"
-#include "interface/vcos/vcos_msgqueue.h"
+#include "vcos.h"
+#include "vcos_msgqueue.h"
 #include <stddef.h>
 #include <string.h>
 #include <stdio.h>
 
-typedef struct VCOS_ENDPOINT_WAITER_T
+#define MAGIC VCOS_MSGQ_MAGIC
+
+/* Probably a good idea for MSG_T to be multiple of 8 so that doubles
+ * are naturally aligned without problem.
+ */
+vcos_static_assert((sizeof(VCOS_MSG_T) & 7) == 0);
+
+static void vcos_msgq_pool_on_reply(VCOS_MSG_WAITER_T *waiter,
+                                    VCOS_MSG_T *msg);
+static void vcos_msgq_queue_waiter_on_reply(VCOS_MSG_WAITER_T *waiter,
+                                    VCOS_MSG_T *msg);
+
+/** Simple reply protocol. The client creates a semaphore and waits
+ * for it. No queuing of multiple replies is possible but nothing needs
+ * to be setup in advance. Because creating semaphores is very fast on
+ * VideoCore there's no need to do anything elaborate to optimize create
+ * time - this might need revisiting on other platforms.
+ */
+
+typedef struct
 {
-   const char *name;
-   VCOS_SEMAPHORE_T sem;
-   struct VCOS_ENDPOINT_WAITER_T *next;
-} VCOS_ENDPOINT_WAITER_T;
+   VCOS_MSG_WAITER_T waiter;
+   VCOS_SEMAPHORE_T waitsem;
+} VCOS_MSG_SIMPLE_WAITER_T;
 
-static VCOS_MUTEX_T lock;
-static VCOS_MSG_ENDPOINT_T *endpoints;
-static VCOS_ENDPOINT_WAITER_T *waiters;
-static VCOS_TLS_KEY_T tls_key;
+static void vcos_msgq_simple_waiter_on_reply(VCOS_MSG_WAITER_T *waiter,
+                                             VCOS_MSG_T *msg)
+{
+   VCOS_MSG_SIMPLE_WAITER_T *self;
+   (void)msg;
+   self = (VCOS_MSG_SIMPLE_WAITER_T*)waiter;
+   vcos_semaphore_post(&self->waitsem);
+}
 
-static VCOS_STATUS_T vcos_msgq_create(VCOS_MSGQUEUE_T *q)
+static VCOS_STATUS_T vcos_msgq_simple_waiter_init(VCOS_MSG_SIMPLE_WAITER_T *waiter)
+{
+   VCOS_STATUS_T status;
+   status = vcos_semaphore_create(&waiter->waitsem, "waiter", 0);
+   waiter->waiter.on_reply = vcos_msgq_simple_waiter_on_reply;
+   return status;
+}
+
+static void vcos_msgq_simple_waiter_deinit(VCOS_MSG_SIMPLE_WAITER_T *waiter)
+{
+   vcos_semaphore_delete(&waiter->waitsem);
+}
+
+/*
+ * Message queues
+ */
+
+static VCOS_STATUS_T vcos_msgq_create_internal(VCOS_MSGQUEUE_T *q, const char *name)
 {
    VCOS_STATUS_T st;
 
    memset(q, 0, sizeof(*q));
 
-   st = vcos_semaphore_create(&q->sem,"vcos:msgqueue",0);
-   if (st == VCOS_SUCCESS)
-      st = vcos_mutex_create(&q->lock,"vcos:msgqueue");
+   q->waiter.on_reply = vcos_msgq_queue_waiter_on_reply;
+   st = vcos_semaphore_create(&q->sem, name, 0);
+   if (st != VCOS_SUCCESS)
+      goto fail_sem;
+
+   st = vcos_mutex_create(&q->lock, name);
+   if (st != VCOS_SUCCESS)
+      goto fail_mtx;
+
+   return st;
+
+fail_mtx:
+   vcos_semaphore_delete(&q->sem);
+fail_sem:
    return st;
 }
 
-static void vcos_msgq_delete(VCOS_MSGQUEUE_T *q)
+static void vcos_msgq_delete_internal(VCOS_MSGQUEUE_T *q)
 {
    vcos_semaphore_delete(&q->sem);
    vcos_mutex_delete(&q->lock);
 }
 
+VCOS_STATUS_T vcos_msgq_create(VCOS_MSGQUEUE_T *q, const char *name)
+{
+   VCOS_STATUS_T st;
+
+   st = vcos_msgq_create_internal(q, name);
+
+   return st;
+}
+
+void vcos_msgq_delete(VCOS_MSGQUEUE_T *q)
+{
+   vcos_msgq_delete_internal(q);
+}
+
 /* append a message to a message queue */
-static void msgq_append(VCOS_MSGQUEUE_T *q, VCOS_MSG_T *msg)
+static _VCOS_INLINE void msgq_append(VCOS_MSGQUEUE_T *q, VCOS_MSG_T *msg)
 {
    vcos_mutex_lock(&q->lock);
    if (q->head == NULL)
@@ -77,114 +141,41 @@ static void msgq_append(VCOS_MSGQUEUE_T *q, VCOS_MSG_T *msg)
    vcos_mutex_unlock(&q->lock);
 }
 
+/*
+ * A waiter for a message queue. Just appends the message to the
+ * queue, waking up the waiting thread.
+ */
+static void vcos_msgq_queue_waiter_on_reply(VCOS_MSG_WAITER_T *waiter,
+                                            VCOS_MSG_T *msg)
+{
+   VCOS_MSGQUEUE_T *queue = (VCOS_MSGQUEUE_T*)waiter;
+   msgq_append(queue, msg);
+   vcos_semaphore_post(&queue->sem);
+}
+
 /* initialise this library */
 
 VCOS_STATUS_T vcos_msgq_init(void)
 {
-   VCOS_STATUS_T st = vcos_mutex_create(&lock,"msgq");
-   if (st != VCOS_SUCCESS)
-      goto fail_mtx;
-
-   st = vcos_tls_create(&tls_key);
-   if (st != VCOS_SUCCESS)
-      goto fail_tls;
-
-   endpoints = NULL;
-   return st;
-
-fail_tls:
-   vcos_mutex_delete(&lock);
-fail_mtx:
-   return st;
+   return VCOS_SUCCESS;
 }
 
 void vcos_msgq_deinit(void)
 {
-   vcos_mutex_delete(&lock);
-   vcos_tls_delete(tls_key);
-}
-
-/* find a message queue, optionally blocking until it is created */
-static VCOS_MSGQUEUE_T *vcos_msgq_find_helper(const char *name, int wait)
-{
-   VCOS_MSG_ENDPOINT_T *ep;
-   VCOS_ENDPOINT_WAITER_T waiter;
-   do
-   {
-      vcos_mutex_lock(&lock);
-      for (ep = endpoints; ep != NULL; ep = ep->next)
-      {
-         if (strcmp(ep->name, name) == 0)
-         {
-            /* found it - return to caller */
-            vcos_mutex_unlock(&lock);
-            return &ep->primary;
-         }
-      }
-
-      /* if we get here, we did not find it */
-      if (!wait)
-      {
-         vcos_mutex_unlock(&lock);
-         return NULL;
-      }
-      else
-      {
-         VCOS_STATUS_T st;
-         waiter.name = name;
-         st = vcos_semaphore_create(&waiter.sem,"vcos:waiter",0);
-         if (st != VCOS_SUCCESS)
-         {
-            vcos_assert(0);
-            vcos_mutex_unlock(&lock);
-            return NULL;
-         }
-
-         /* Push new waiter onto head of global waiters list */
-         /* coverity[use] Suppress ATOMICITY warning - 'waiters' might have
-          * changed since the last iteration of the loop, which is okay */
-         waiter.next = waiters;
-         waiters = &waiter;
-
-         /* we're now on the list, so can safely go to sleep */
-         vcos_mutex_unlock(&lock);
-
-         /* coverity[lock] This is a semaphore, not a mutex */
-         vcos_semaphore_wait(&waiter.sem);
-         /* It should now be on the list, but it could in theory be deleted
-          * between waking up and going to look for it. So may have to wait
-          * again.
-          * So, go round again....
-          */
-         vcos_semaphore_delete(&waiter.sem);
-         continue;
-      }
-   } while (1);
-}
-
-VCOS_MSGQUEUE_T *vcos_msgq_find(const char *name)
-{
-   return vcos_msgq_find_helper(name,0);
-}
-  
-
-VCOS_MSGQUEUE_T *vcos_msgq_wait(const char *name)
-{
-   return vcos_msgq_find_helper(name,1);
 }
 
 static _VCOS_INLINE
-void vcos_msg_send_helper(VCOS_MSGQUEUE_T *src,
-                           VCOS_MSGQUEUE_T *dest,
-                           uint32_t code,
-                           VCOS_MSG_T *msg)
+void vcos_msg_send_helper(VCOS_MSG_WAITER_T *waiter,
+                          VCOS_MSGQUEUE_T *dest,
+                          uint32_t code,
+                          VCOS_MSG_T *msg)
 {
    vcos_assert(msg);
    vcos_assert(dest);
 
    msg->code = code;
-   msg->dst = dest;
-   msg->src = src;
+   if (waiter)
+      msg->waiter = waiter;
    msg->next = NULL;
    msg->src_thread = vcos_thread_current();
 
@@ -193,8 +184,7 @@ void vcos_msg_send_helper(VCOS_MSGQUEUE_T *src,
 }
 
 /* wait on a queue for a message */
-static _VCOS_INLINE
-VCOS_MSG_T *vcos_msg_wait_helper(VCOS_MSGQUEUE_T *queue)
+VCOS_MSG_T *vcos_msg_wait(VCOS_MSGQUEUE_T *queue)
 {
    VCOS_MSG_T *msg;
    vcos_semaphore_wait(&queue->sem);
@@ -212,8 +202,7 @@ VCOS_MSG_T *vcos_msg_wait_helper(VCOS_MSGQUEUE_T *queue)
 }
 
 /* peek on a queue for a message */
-static _VCOS_INLINE
-VCOS_MSG_T *vcos_msg_peek_helper(VCOS_MSGQUEUE_T *queue)
+VCOS_MSG_T *vcos_msg_peek(VCOS_MSGQUEUE_T *queue)
 {
    VCOS_MSG_T *msg;
    vcos_mutex_lock(&queue->lock);
@@ -226,6 +215,13 @@ VCOS_MSG_T *vcos_msg_peek_helper(VCOS_MSGQUEUE_T *queue)
       queue->head = msg->next;
       if (queue->head == NULL)
          queue->tail = NULL;
+
+      /* keep the semaphore count consistent */
+
+      /* coverity[lock_order]
+       * the semaphore must have a non-zero count so cannot block here.
+       */
+      vcos_semaphore_wait(&queue->sem);
    }
 
    vcos_mutex_unlock(&queue->lock);
@@ -234,136 +230,160 @@ VCOS_MSG_T *vcos_msg_peek_helper(VCOS_MSGQUEUE_T *queue)
 
 void vcos_msg_send(VCOS_MSGQUEUE_T *dest, uint32_t code, VCOS_MSG_T *msg)
 {
+   vcos_assert(msg->magic == MAGIC);
    vcos_msg_send_helper(NULL, dest, code, msg);
 }
 
-/* send on to the target queue, then wait on our secondary queue for the reply */
-void vcos_msg_sendwait(VCOS_MSGQUEUE_T *dest, uint32_t code, VCOS_MSG_T *msg)
-{
-   VCOS_MSG_ENDPOINT_T *self = (VCOS_MSG_ENDPOINT_T *)vcos_tls_get(tls_key);
-   VCOS_MSG_T *reply;
-   vcos_assert(self);
-   vcos_msg_send_helper(&self->secondary, dest, code, msg);
-   reply = vcos_msg_wait_helper(&self->secondary);
-
-   /* If this fires, then the caller is sending and waiting for multiple things at the same time,
-    * somehow. In that case you need a state machine.
-    */
-   vcos_assert(reply == msg);
-
-   (void)reply;
-}
-
-/** Wait for a message
-  */
-VCOS_MSG_T *vcos_msg_wait(void)
-{
-   VCOS_MSG_ENDPOINT_T *self = (VCOS_MSG_ENDPOINT_T *)vcos_tls_get(tls_key);
-   vcos_assert(self);
-   return vcos_msg_wait_helper(&self->primary);
-}
-
-/** Peek for a message
-  */
-VCOS_MSG_T *vcos_msg_peek(void)
-{
-   VCOS_MSG_ENDPOINT_T *self = (VCOS_MSG_ENDPOINT_T *)vcos_tls_get(tls_key);
-   vcos_assert(self);   
-   return vcos_msg_peek_helper(&self->primary);
-}
-
-/* wait for a specific message, on the secondary interface
- * FIXME: does this need to do the nasty waking-up-and-walking-the-queue trick?
+/** Send on to the target queue, then wait on a simple waiter for the reply
  */
-VCOS_MSG_T * vcos_msg_wait_specific(VCOS_MSGQUEUE_T *queue, VCOS_MSG_T *msg)
+VCOS_STATUS_T vcos_msg_sendwait(VCOS_MSGQUEUE_T *dest, uint32_t code, VCOS_MSG_T *msg)
 {
-   VCOS_MSG_ENDPOINT_T *self = (VCOS_MSG_ENDPOINT_T *)vcos_tls_get(tls_key);
-   VCOS_MSG_T *reply;
-   (void)queue;
-   vcos_assert(self);
-   reply = vcos_msg_wait_helper(&self->secondary);
-   vcos_assert(reply == msg); /* if this fires, someone is playing fast and loose with sendwait */
-   (void)msg;
-   return reply;
+   VCOS_STATUS_T st;
+   VCOS_MSG_SIMPLE_WAITER_T waiter;
+
+   vcos_assert(msg->magic == MAGIC);
+
+   /* if this fires, you've set a waiter up but are now about to obliterate it
+    * with the 'wait for a reply' waiter.
+    */
+   vcos_assert(msg->waiter == NULL);
+
+   if ((st=vcos_msgq_simple_waiter_init(&waiter)) != VCOS_SUCCESS)
+      return st;
+
+   vcos_msg_send_helper(&waiter.waiter, dest, code, msg);
+   vcos_semaphore_wait(&waiter.waitsem);
+   vcos_msgq_simple_waiter_deinit(&waiter);
+
+   return VCOS_SUCCESS;
 }
 
 /** Send a reply to a message
   */
 void vcos_msg_reply(VCOS_MSG_T *msg)
 {
-   VCOS_MSGQUEUE_T *src = msg->src;
-   VCOS_MSGQUEUE_T *dst = msg->dst;
-   vcos_msg_send_helper(dst, src, msg->code | VCOS_MSG_REPLY_BIT, msg);
-}
-
-
-/** Create an endpoint. Each thread should need no more than one of these - if you 
-  * find yourself needing a second one, you've done something wrong.
-  */
-VCOS_STATUS_T vcos_msgq_endpoint_create(VCOS_MSG_ENDPOINT_T *ep, const char *name)
-{
-   VCOS_STATUS_T st;
-   if (strlen(name) > sizeof(ep->name)-1)
-      return VCOS_EINVAL;
-   vcos_snprintf(ep->name, sizeof(ep->name), "%s", name);
-
-   st = vcos_msgq_create(&ep->primary);
-   if (st == VCOS_SUCCESS)
+   vcos_assert(msg->magic == MAGIC);
+   msg->code |= MSG_REPLY_BIT;
+   if (msg->waiter)
    {
-      st = vcos_msgq_create(&ep->secondary);
-   }
-
-   if (st != VCOS_SUCCESS)
-   {
-      vcos_msgq_delete(&ep->primary);
+      msg->waiter->on_reply(msg->waiter, msg);
    }
    else
    {
-      VCOS_ENDPOINT_WAITER_T **pwaiter;
-      vcos_mutex_lock(&lock);
-      ep->next = endpoints;
-      endpoints = ep;
-      vcos_tls_set(tls_key,ep);
-
-      /* is anyone waiting for this endpoint to come into existence? */
-      for (pwaiter = &waiters; *pwaiter != NULL;)
-      {
-         VCOS_ENDPOINT_WAITER_T *waiter = *pwaiter;
-         if (vcos_strcasecmp(waiter->name, name) == 0)
-         {
-            *pwaiter = waiter->next;
-            vcos_semaphore_post(&waiter->sem);
-         }
-         else
-            pwaiter = &(*pwaiter)->next;
-      }
-      vcos_mutex_unlock(&lock);
+      VCOS_ALERT("%s: reply to non-reply message id %d",
+                 VCOS_FUNCTION,
+                 msg->code);
+      vcos_assert(0);
    }
-   return st;
 }
 
-/** Destroy an endpoint.
-  */
-void  vcos_msgq_endpoint_delete(VCOS_MSG_ENDPOINT_T *ep)
+void vcos_msg_set_source(VCOS_MSG_T *msg, VCOS_MSGQUEUE_T *queue)
 {
-   VCOS_MSG_ENDPOINT_T **pep;
-   vcos_tls_set(tls_key, NULL);
-
-   vcos_mutex_lock(&lock);
-
-   pep = &endpoints;
-
-   while ((*pep) != ep)
-   {
-      pep = & (*pep)->next;
-   }
-   *pep = ep->next;
-
-   vcos_msgq_delete(&ep->primary);
-   vcos_msgq_delete(&ep->secondary);
-
-   vcos_mutex_unlock(&lock);
+   vcos_assert(msg);
+   vcos_assert(msg->magic == MAGIC);
+   vcos_assert(queue);
+   msg->waiter = &queue->waiter;
 }
 
+/*
+ * Message pools
+ */
 
+VCOS_STATUS_T vcos_msgq_pool_create(VCOS_MSGQ_POOL_T *pool,
+                                    size_t count,
+                                    size_t payload_size,
+                                    const char *name)
+{
+   VCOS_STATUS_T status;
+   int bp_size = payload_size + sizeof(VCOS_MSG_T);
+   status = vcos_blockpool_create_on_heap(&pool->blockpool,
+                                          count, bp_size,
+                                          VCOS_BLOCKPOOL_ALIGN_DEFAULT,
+                                          0,
+                                          name);
+   if (status != VCOS_SUCCESS)
+      goto fail_pool;
 
+   status = vcos_semaphore_create(&pool->sem, name, count);
+   if (status != VCOS_SUCCESS)
+      goto fail_sem;
+
+   pool->waiter.on_reply = vcos_msgq_pool_on_reply;
+   pool->magic = MAGIC;
+   return status;
+
+fail_sem:
+   vcos_blockpool_delete(&pool->blockpool);
+fail_pool:
+   return status;
+}
+
+void vcos_msgq_pool_delete(VCOS_MSGQ_POOL_T *pool)
+{
+   vcos_blockpool_delete(&pool->blockpool);
+   vcos_semaphore_delete(&pool->sem);
+}
+
+/** Called when a message from a pool is replied-to. Just returns
+ * the message back to the blockpool.
+ */
+static void vcos_msgq_pool_on_reply(VCOS_MSG_WAITER_T *waiter,
+                                    VCOS_MSG_T *msg)
+{
+   vcos_unused(waiter);
+   vcos_assert(msg->magic == MAGIC);
+   vcos_msgq_pool_free(msg);
+}
+
+VCOS_MSG_T *vcos_msgq_pool_alloc(VCOS_MSGQ_POOL_T *pool)
+{
+   VCOS_MSG_T *msg;
+   if (vcos_semaphore_trywait(&pool->sem) == VCOS_SUCCESS)
+   {
+      msg = vcos_blockpool_calloc(&pool->blockpool);
+      vcos_assert(msg);
+      msg->magic = MAGIC;
+      msg->waiter = &pool->waiter;
+      msg->pool = pool;
+   }
+   else
+   {
+      msg = NULL;
+   }
+   return msg;
+}
+
+void vcos_msgq_pool_free(VCOS_MSG_T *msg)
+{
+   if (msg)
+   {
+      VCOS_MSGQ_POOL_T *pool;
+      vcos_assert(msg->pool);
+
+      pool = msg->pool;
+      vcos_assert(msg->pool->magic == MAGIC);
+
+      vcos_blockpool_free(msg);
+      vcos_semaphore_post(&pool->sem);
+   }
+}
+
+VCOS_MSG_T *vcos_msgq_pool_wait(VCOS_MSGQ_POOL_T *pool)
+{
+   VCOS_MSG_T *msg;
+   vcos_semaphore_wait(&pool->sem);
+   msg = vcos_blockpool_calloc(&pool->blockpool);
+   vcos_assert(msg);
+   msg->magic = MAGIC;
+   msg->waiter = &pool->waiter;
+   msg->pool = pool;
+   return msg;
+}
+
+void vcos_msg_init(VCOS_MSG_T *msg)
+{
+   msg->magic = MAGIC;
+   msg->next = NULL;
+   msg->waiter = NULL;
+   msg->pool = NULL;
+}

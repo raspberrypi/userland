@@ -65,6 +65,7 @@ static volatile int g_sync_mode = 0;
 
 static VCOS_EVENT_T func_test_sync;
 static int want_echo = 1;
+static int func_error = 0;
 static int fun2_error = 0;
 static int func_data_test_start = -1;
 static int func_data_test_end = 0x7fffffff;
@@ -852,12 +853,14 @@ do_functional_test(void)
    EXPECT(vchiq_queue_bulk_transmit(service, clnt_service1_data, sizeof(clnt_service1_data), (void*)0x1001), VCHIQ_SUCCESS);
 
    vcos_event_wait(&func_test_sync);
+   EXPECT(func_error, 0);
    EXPECT(vchiq_remove_service(service), VCHIQ_SUCCESS);
    vcos_event_wait(&func_test_sync);
 
    EXPECT(vchiq_shutdown(instance), VCHIQ_SUCCESS);
 
    vcos_event_wait(&func_test_sync);
+   EXPECT(func_error, 0);
 
    INIT_PARAMS(&service_params, FUNC_FOURCC, func_clnt_callback, NULL, VCHIQ_TEST_VER);
    EXPECT(vchiq_open_service(instance, &service_params, &service), VCHIQ_ERROR); /* Instance not initialised */
@@ -1255,28 +1258,27 @@ func_data_test(VCHIQ_SERVICE_HANDLE_T service, int datalen, int align, int serve
 
    if (success)
    {
-      for (i = 0; i < (datalen - 1); i++)
+      int diffs = 0;
+      for (i = 0; i < datalen; i++)
       {
-         if ((i & 0x1f) == 0)
+         int diff = (i == datalen - 1) ?
+            (data[i] != 0) :
+            ((i & 0x1f) == 0) ?
+            (data[i] != (uint8_t)(i >> 5)) :
+            (data[i] != (uint8_t)i);
+
+         if (diff)
+            diffs++;
+         else if (diffs)
          {
-            if (data[i] != (uint8_t)(i >> 5))
-            {
-               success = 0;
-               break;
-            }
-         }
-         else if (data[i] != (uint8_t)i)
-         {
-            success = 0;
-            break;
+            vcos_log_error("%d: Data corrupted at %x-%x (datalen %x, align %x, server_align %x) -> %02x", func_data_test_iter, i - diffs, i - 1, datalen, align, server_align, data[i-1]);
+            VCOS_BKPT;
+            diffs = 0;
          }
       }
-      if (success && (data[i] != 0))
-         success = 0;
-
-      if (!success)
+      if (diffs)
       {
-         vcos_log_error("%d: Data corrupted at %x (datalen %x, align %x, server_align %x) -> %02x", func_data_test_iter, i, datalen, align, server_align, data[i]);
+         vcos_log_error("%d: Data corrupted at %x-%x (datalen %x, align %x, server_align %x) -> %02x", func_data_test_iter, i - diffs, i - 1, datalen, align, server_align, data[i-1]);
          VCOS_BKPT;
       }
    }
@@ -1532,6 +1534,9 @@ func_clnt_callback(VCHIQ_REASON_T reason, VCHIQ_HEADER_T *header,
 error_exit:
    callback_count = 0;
    bulk_count = 0;
+
+   func_error = 1;
+   vcos_event_signal(&func_test_sync);
 
    return VCHIQ_ERROR;
 }

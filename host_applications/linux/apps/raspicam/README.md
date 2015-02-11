@@ -207,6 +207,10 @@ Allows the specification of the area of the sensor to be used as the source for 
 
 Set the shutter speed to the specified value (in microseconds). There is currently an upper limit of approximately 330000us (330ms, 0.33s) past which operation is undefined. This is being investigated.
 
+	--camselect,   	-cs	Select <camera number>
+
+Select camera number. Default 0
+
 Application specific settings
 
 raspistill
@@ -356,7 +360,7 @@ Switch on an option to display the preview after compression. This will show any
 
 	--intra,    	-g  	Specify the intra refresh period (key frame rate/GoP)
 
-Sets the intra refresh period (GoP) rate for the recorded video. H264 video uses a complete frame (I-frame) every intra refresh period from which subsequent frames are based. This options specifies the numbers of frames between each I-frame. Larger numbers here will reduce the size of the resulting video, smaller numbers make the stream more robust to error.
+Sets the intra refresh period (GoP) rate for the recorded video. H264 video uses a complete frame (I-frame) every intra refresh period from which subsequent frames are based. This options specifies the numbers of frames between each I-frame. Larger numbers here will reduce the size of the resulting video, smaller numbers make the stream more robust to error. Setting 0 will produce an initial I-frame and then just P-frames.
 
 	--profile,	-pf	Specify H264 profile to use for encoding
 

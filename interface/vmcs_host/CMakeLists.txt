@@ -32,5 +32,5 @@ target_link_libraries(vchostif vchiq_arm vcos vcfiled_check)
 #target_link_libraries(bufman WFC)
 
 add_subdirectory(linux/vcfiled)
-install(TARGETS vchostif DESTINATION lib)
+install(TARGETS vchostif vcilcs DESTINATION lib)
 

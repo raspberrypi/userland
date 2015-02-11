@@ -589,6 +589,7 @@ MMAL_STATUS_T mmal_vc_sendwait_message(struct MMAL_CLIENT_T *client,
     * FIXME: we could do with a timeout here. Need to be careful to cancel
     * the semaphore on a timeout.
     */
+   /* coverity[lock] This semaphore isn't being used as a mutex */
    vcos_semaphore_wait(&waiter->sem);
 
    mmal_vc_release_internal(client);

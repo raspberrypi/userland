@@ -328,7 +328,7 @@ EGL_SURFACE_T *egl_surface_create(
 
    EGL_SURFACE_T *surface = egl_surface_pool_alloc();
 
-   vcos_assert(width > 0 && height > 0);
+   //vcos_assert(width > 0 && height > 0);
    vcos_assert((width <= EGL_CONFIG_MAX_WIDTH && height <= EGL_CONFIG_MAX_HEIGHT) || largest_pbuffer);
 
    if (!surface) {

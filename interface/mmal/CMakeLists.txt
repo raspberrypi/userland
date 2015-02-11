@@ -1,3 +1,7 @@
+# We support building both static and shared libraries
+if (NOT DEFINED LIBRARY_TYPE)
+set(LIBRARY_TYPE SHARED)
+endif (NOT DEFINED LIBRARY_TYPE)
 
 add_definitions(-Wall -Werror)
 
@@ -6,16 +10,11 @@ add_library(mmal SHARED util/mmal_util.c)
 add_subdirectory(core)
 add_subdirectory(util)
 add_subdirectory(vc)
-
-#add_subdirectory(test/lua)
-#add_subdirectory(test/standalone)
-
-if(BUILD_MMAL_COMPONENTS)
 add_subdirectory(components)
+add_subdirectory(openmaxil)
+add_subdirectory(client)
+
 target_link_libraries(mmal mmal_core mmal_util mmal_vc_client vcos mmal_components)
-else(BUILD_MMAL_COMPONENTS)
-target_link_libraries(mmal mmal_core mmal_util mmal_vc_client vcos)
-endif(BUILD_MMAL_COMPONENTS)
 
 install(TARGETS mmal DESTINATION lib)
 install(FILES
@@ -40,3 +39,8 @@ install(FILES
    mmal_types.h
    DESTINATION include/interface/mmal
 )
+
+# Test apps
+if(BUILD_MMAL_APPS)
+add_subdirectory(test)
+endif(BUILD_MMAL_APPS)
