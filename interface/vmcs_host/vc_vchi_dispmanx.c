@@ -1290,7 +1290,7 @@ static void *dispmanx_notify_func( void *arg ) {
       if (success != 0)
          continue;
 
-      handle = (DISPMANX_UPDATE_HANDLE_T)dispmanx_client.notify_buffer[1];
+      handle = (DISPMANX_UPDATE_HANDLE_T)dispmanx_client.notify_buffer[0];
       if (handle) {
          // This is the response to an update submit
          // Decrement the use count - the corresponding "use" is in vc_dispmanx_update_submit.
