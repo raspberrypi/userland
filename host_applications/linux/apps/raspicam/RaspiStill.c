@@ -505,7 +505,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          if (sscanf(argv[i + 1], "%u", &state->timeout) == 1)
          {
             // Ensure that if previously selected CommandKeypress we don't overwrite it
-            if (state->timeout == 0 && state->frameNextMethod != FRAME_NEXT_KEYPRESS)
+            if (state->timeout == 0 && state->frameNextMethod == FRAME_NEXT_SINGLE)
                state->frameNextMethod = FRAME_NEXT_FOREVER;
 
             i++;
@@ -653,22 +653,6 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
             valid = 0;
          break;
       }
-
-      case CommandTimestamp: // use timestamp
-         state->overwriteFrameValue = 1;
-         state->frameFormat = 0;
-         break;
-
-      case CommandDateTime: // use datetime
-         state->overwriteFrameValue = 1;
-         state->frameFormat = 1;
-         break;
-
-      case CommandHms: // use timestamp
-         state->overwriteFrameValue = 1;
-         state->frameFormat = 2;
-         break;
-
 
       default:
       {
@@ -1392,32 +1376,7 @@ MMAL_STATUS_T create_filenames(char** finalName, char** tempName, char * pattern
 {
    *finalName = NULL;
    *tempName = NULL;
-   if (state->datetime)
-   {
-      time_t rawtime;
-      struct tm *timeinfo;
-
-      time(&rawtime);
-      timeinfo = localtime(&rawtime);
-
-      frame = timeinfo->tm_year+1900;
-      frame *= 100;
-      frame += timeinfo->tm_mon+1;
-      frame *= 100;
-      frame += timeinfo->tm_mday;
-      frame *= 100;
-      frame += timeinfo->tm_hour;
-      frame *= 100;
-      frame += timeinfo->tm_min;
-      frame *= 100;
-      frame += timeinfo->tm_sec;
-      *pattern = "%d";
-   }
-   if (state->timestamp)
-   {
-      frame = (int)time(NULL);
-      *pattern = "%d";
-   }
+   
    if (0 > asprintf(finalName, pattern, frame) ||
        0 > asprintf(tempName, "%s~", *finalName))
    {
