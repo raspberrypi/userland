@@ -654,6 +654,21 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          break;
       }
 
+      case CommandTimestamp: // use timestamp
+         state->overwriteFrameValue = 1;
+         state->frameFormat = 0;
+         break;
+
+      case CommandDateTime: // use datetime
+         state->overwriteFrameValue = 1;
+         state->frameFormat = 1;
+         break;
+
+      case CommandHms: // use timestamp
+         state->overwriteFrameValue = 1;
+         state->frameFormat = 2;
+         break;
+
 
       default:
       {
