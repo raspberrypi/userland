@@ -223,7 +223,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},
    { CommandSensorMode,"-mode",     "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
    { CommandDateTime,  "-datetime",  "dt", "Replace frame number in file name with DateTime (YearMonthDayHourMinSec)", 0},
-   { CommandTimestamp, "-timestamp", "ts", "Replace frame number in file name with unix timestamp (seconds since 1900)", 0},
+   { CommandTimeStamp, "-timestamp", "ts", "Replace frame number in file name with unix timestamp (seconds since 1900)", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -496,7 +496,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
       case CommandDateTime: // use datetime
          state->datetime = 1;
          break;
-      case CommandTimestamp: // use timestamp
+      case CommandTimeStamp: // use timestamp
          state->timestamp = 1;
          break;
 
