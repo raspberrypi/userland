@@ -3,6 +3,8 @@
 
 SET(COMPILE_DEFINITIONS -Werror)
 
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/makefiles/cmake/Modules/")
+
 include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/libs/bcm_host/include)
 include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/apps/raspicam/)
 
@@ -27,7 +29,13 @@ add_executable(raspividyuv  ${COMMON_SOURCES} RaspiVidYUV.c)
 
 set (MMAL_LIBS mmal_core mmal_util mmal_vc_client)
 
-target_link_libraries(raspistill ${MMAL_LIBS} vcos bcm_host GLESv2 EGL m)
+find_package(liblo)
+include_directories(${liblo_INCLUDE_DIRS})
+if(liblo_FOUND)
+   add_definitions(HAVE_LIBLO)
+endif()
+
+target_link_libraries(raspistill ${MMAL_LIBS} vcos bcm_host GLESv2 EGL m ${liblo_LIBRARIES})
 target_link_libraries(raspiyuv   ${MMAL_LIBS} vcos bcm_host)
 target_link_libraries(raspivid   ${MMAL_LIBS} vcos bcm_host)
 target_link_libraries(raspividyuv   ${MMAL_LIBS} vcos bcm_host)
