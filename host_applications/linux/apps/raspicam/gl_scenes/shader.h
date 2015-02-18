@@ -36,6 +36,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiTexUtil.h"
 
 int shader_open(RASPITEX_STATE *state);
-RASPITEXUTIL_SHADER_PROGRAM_T* oscshader_get_shader();
+RASPITEXUTIL_SHADER_PROGRAM_T* shader_get_shader();
 
 #endif /* SHADER_H */
