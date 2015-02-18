@@ -1002,6 +1002,10 @@ int main( int argc, char **argv )
 
    if ( opt_preferred == 1 )
    {
+      if(set_property( HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_NONE, 0) != 0)
+      {
+         goto err_stop_service;
+      }
       if ( power_on_preferred() != 0 )
       {
          goto err_stop_service;
@@ -1010,7 +1014,11 @@ int main( int argc, char **argv )
    else if ( opt_explicit == 1 )
    {
       //Distinguish between turning on 3D side by side and 3D top/bottom
-      if(opt_3d == 1 && set_property( HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_SBS_HALF, 0) != 0)
+      if(opt_3d == 0 && set_property( HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_NONE, 0) != 0)
+      {
+         goto err_stop_service;
+      }
+      else if(opt_3d == 1 && set_property( HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_SBS_HALF, 0) != 0)
       {
          goto err_stop_service;
       }
