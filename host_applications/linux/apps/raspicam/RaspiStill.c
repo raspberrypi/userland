@@ -79,6 +79,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <semaphore.h>
 
 #include "gl_scenes/shader.h"
+
+#ifdef HAVE_LIBLO
+#include <lo/lo.h>
+#endif
+
 // Standard port setting for the camera component
 #define MMAL_CAMERA_PREVIEW_PORT 0
 #define MMAL_CAMERA_VIDEO_PORT 1
@@ -151,6 +156,12 @@ typedef struct
    MMAL_POOL_T *encoder_pool; /// Pointer to the pool of buffers used by encoder output port
 
    RASPITEX_STATE raspitex_state; /// GL renderer state and parameters
+   
+   #ifdef HAVE_LIBLO
+   lo_server_thread osc_server;
+   char* osc_inport;
+   #endif
+   int useOSC;
 
 } RASPISTILL_STATE;
 
@@ -190,6 +201,7 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandCamSelect    20
 #define CommandBurstMode    21
 #define CommandSensorMode   22
+#define CommandOSCport      23
 #define CommandFragmentShader 24
 #define CommandVertexShader 25
 
@@ -218,6 +230,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandCamSelect, "-camselect","cs", "Select camera <number>. Default 0", 1 },
    { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},
    { CommandSensorMode,"-mode",     "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
+   { CommandOSCport, "-oscport",  "oscp",  "OSC input port", 1 },
    { CommandFragmentShader, "-fragmentshader",  "frag",  "fragment shader program file", 1 },
    { CommandVertexShader, "-fragmentshader",  "vert",  "vertex shader program file", 1 },
 };
@@ -299,6 +312,8 @@ static void default_status(RASPISTILL_STATE *state)
    state->cameraNum = 0;
    state->burstCaptureMode=0;
    state->sensor_mode = 0;
+   
+   state->useOSC = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -308,6 +323,7 @@ static void default_status(RASPISTILL_STATE *state)
 
    // Set initial GL preview state
    raspitex_set_defaults(&state->raspitex_state);
+   
 }
 
 /**
@@ -644,6 +660,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
       
       case CommandOSCport: // Set OSC port (only valid with shader scene)
       {
+#ifdef HAVE_LIBLO
          int len = strlen(argv[i + 1]);
          if (len)
          {
@@ -657,6 +674,10 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          else
             valid = 0;
          break;
+#else
+         fprintf(stderr, "OSC port passed as argument put Raspistill have been build without liblo !");
+         fprintf(stderr, "OSC is disable.");
+#endif /* HAVE_LIBLO */
       }
       
       case CommandFragmentShader: // Set fragment shader file to load
@@ -1664,6 +1685,54 @@ static void rename_file(RASPISTILL_STATE *state, FILE *output_file,
    }
 }
 
+#ifdef HAVE_LIBLO
+void osc_error(int num, const char *msg, const char *path)
+{
+    printf("liblo server error %d in path %s: %s\n", num, path, msg);
+    fflush(stdout);
+}
+
+void osc_generic_handler(const char *path, const char *types, lo_arg ** argv,
+                    int argc, void *data, void *user_data)
+{
+   int i;
+   
+   RASPISTILL_STATE *state = user_data;
+   RASPITEXUTIL_SHADER_PROGRAM_T *shader = shader_get_shader();
+    
+   if (state->verbose)
+   {
+      fprintf(stderr, "Receive OSC message : %s with %d values\n", path, argc);
+   }
+        
+   for (i=0;i<shader->uniform_count;i++){
+      if ( strcmp(shader->uniform_array[i].name, path+1) == 0 ){
+         int j;
+         for (j=0;j<argc;j++){
+            if ( types[j] == 'f') {
+               shader->uniform_array[i].param[j]= (GLfloat) argv[j]->f;
+            } else if ( types[j] == 'i' ){
+               shader->uniform_array[i].param[j]= (GLfloat) argv[j]->i;
+            } else {
+               printf("%s parameter #%d wrong type (%c)! only float or int are allowed !\n",path,j,types[j]);
+            }
+         }
+         shader->uniform_array[i].flag = 1;
+         break;
+      }
+   }
+}
+
+static void init_osc(RASPISTILL_STATE *state)
+{
+   printf("initialize OSC server on port %s\n", state->osc_inport);
+   state->osc_server = lo_server_thread_new(state->osc_inport, osc_error);
+   /* add method that will match any path and args */
+   lo_server_thread_add_method(state->osc_server , NULL, NULL, (lo_method_handler) osc_generic_handler, state);
+   lo_server_thread_start(state->osc_server);
+}
+#endif /* HAVE_LIBLO */
+
 /**
  * main
  */
@@ -1717,6 +1786,11 @@ int main(int argc, const char **argv)
 
    if (state.useGL)
       raspitex_init(&state.raspitex_state);
+
+#ifdef HAVE_LIBLO
+   if (state.useOSC)
+      init_osc(&state);
+#endif
 
    // OK, we have a nice set of parameters. Now set up our components
    // We have three components. Camera, Preview and encoder.
