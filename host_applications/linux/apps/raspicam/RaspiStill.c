@@ -651,7 +651,6 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          break;
       }
 
-
       default:
       {
          // Try parsing for any image specific parameters
@@ -1374,6 +1373,7 @@ MMAL_STATUS_T create_filenames(char** finalName, char** tempName, char * pattern
 {
    *finalName = NULL;
    *tempName = NULL;
+   
    if (0 > asprintf(finalName, pattern, frame) ||
        0 > asprintf(tempName, "%s~", *finalName))
    {
@@ -1783,7 +1783,7 @@ int main(int argc, const char **argv)
             frame = 0;
 
             while (keep_looping)
-            {
+            {   
             	keep_looping = wait_for_next_frame(&state, &frame);
 
                 if (state.datetime)
