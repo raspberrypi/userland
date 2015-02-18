@@ -29,7 +29,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef RASPITEX_UTIL_H_
 #define RASPITEX_UTIL_H_
 
+#ifndef VCOS_LOG_CATEGORY
 #define VCOS_LOG_CATEGORY (&raspitex_log_category)
+#endif
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
