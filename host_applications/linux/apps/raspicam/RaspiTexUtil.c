@@ -582,7 +582,25 @@ int raspitexutil_build_shader_program(RASPITEXUTIL_SHADER_PROGRAM_T *p)
         }
     }
 
-    return 0;
+   /// Automatically find uniform variables
+   glGetProgramiv( p->program, GL_ACTIVE_UNIFORM_MAX_LENGTH, &p->max_length);
+   glGetProgramiv( p->program, GL_ACTIVE_UNIFORMS, &p->uniform_count);
+   printf("found %d uniform variable(s) : \n",p->uniform_count);
+
+   raspitexutil_create_param_array(p);
+
+   GLchar *name= (GLchar*) malloc(sizeof(GLchar)*p->max_length);
+   GLsizei    length=0;
+   RASPITEXUTIL_SHADER_PARAMETER_T *array = p->uniform_array;
+   for(i=0;i<p->uniform_count;i++){
+    glGetActiveUniform(p->program, i, p->max_length, &length, &array[i].size, &array[i].type, name);
+    array[i].loc = glGetUniformLocation( p->program, name );
+    strncpy(array[i].name,name,length+1);
+    printf("\t%s\n",name);
+   }
+   free(name);
+   
+   return 0;
 
 fail:
     vcos_log_error("%s: Failed to build shader program", VCOS_FUNCTION);
@@ -595,3 +613,38 @@ fail:
     return -1;
 }
 
+void raspitexutil_create_param_array(RASPITEXUTIL_SHADER_PROGRAM_T *p)
+{
+  
+   int i;
+
+   p->uniform_array = (RASPITEXUTIL_SHADER_PARAMETER_T*) malloc(sizeof (RASPITEXUTIL_SHADER_PARAMETER_T) * p->uniform_count);
+   p->attribute_array = (RASPITEXUTIL_SHADER_PARAMETER_T*) malloc(sizeof (RASPITEXUTIL_SHADER_PARAMETER_T) * p->attribute_count);
+   
+   RASPITEXUTIL_SHADER_PARAMETER_T* array = p->uniform_array;
+   // allocate maximum size for a param, which is a 4x4 matrix of floats
+   // in the future, only allocate for specific type
+   // also, technically we should handle arrays of matrices, too...sheesh!
+   for (i = 0; i < p->uniform_count; i++) {
+      int j=0;
+      array[i].size   = 0;
+      array[i].type   = 0;
+      array[i].loc    = 0;
+      // uniform_array[i].param  = (float*) malloc(sizeof(float)*16);
+      array[i].name   = (GLchar*) malloc(sizeof(GLchar)* p->max_length+1);;
+      array[i].flag   = 0;
+      for(j=0; j<16; j++)array[i].param[j]=0;
+   }
+
+   array = p->attribute_array;
+   for (i = 0; i < p->attribute_count; i++) {
+      int j=0;
+      array[i].size   = 0;
+      array[i].type   = 0;
+      array[i].loc    = 0;
+      // attribute_array[i].param  = (float*) malloc(sizeof(float)*16);
+      array[i].name   = (GLchar*) malloc(sizeof(GLchar)* p->max_length+1);
+      array[i].flag   = 0;
+      for(j=0; j<16; j++)array[i].param[j]=0;
+   }
+}
