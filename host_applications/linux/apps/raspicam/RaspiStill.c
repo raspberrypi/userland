@@ -78,6 +78,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <semaphore.h>
 
+#include "gl_scenes/shader.h"
 // Standard port setting for the camera component
 #define MMAL_CAMERA_PREVIEW_PORT 0
 #define MMAL_CAMERA_VIDEO_PORT 1
@@ -189,6 +190,8 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandCamSelect    20
 #define CommandBurstMode    21
 #define CommandSensorMode   22
+#define CommandFragmentShader 24
+#define CommandVertexShader 25
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -215,6 +218,8 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandCamSelect, "-camselect","cs", "Select camera <number>. Default 0", 1 },
    { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},
    { CommandSensorMode,"-mode",     "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
+   { CommandFragmentShader, "-fragmentshader",  "frag",  "fragment shader program file", 1 },
+   { CommandVertexShader, "-fragmentshader",  "vert",  "vertex shader program file", 1 },
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -636,8 +641,56 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
             valid = 0;
          break;
       }
-
-
+      
+      case CommandOSCport: // Set OSC port (only valid with shader scene)
+      {
+         int len = strlen(argv[i + 1]);
+         if (len)
+         {
+            state->osc_inport = malloc(len+1); // leave enough space for any timelapse generated changes to filename
+            vcos_assert(state->osc_inport);
+            if (state->osc_inport)
+               strncpy(state->osc_inport, argv[i + 1], len+1);
+            i++;
+            state->useOSC=1;
+         }
+         else
+            valid = 0;
+         break;
+      }
+      
+      case CommandFragmentShader: // Set fragment shader file to load
+      {
+         int len = strlen(argv[i + 1]);
+         if (len)
+         {
+            state->raspitex_state.fragment_shader_filename = malloc(len+1); // leave enough space for any timelapse generated changes to filename
+            vcos_assert(state->raspitex_state->fragment_shader_filename);
+            if (state->raspitex_state.fragment_shader_filename)
+               strncpy(state->raspitex_state.fragment_shader_filename, argv[i + 1], len+1);
+            i++;
+         }
+         else
+            valid = 0;
+         break;
+      }
+      
+      case CommandVertexShader: // Set vertex shader file to load
+      {
+         int len = strlen(argv[i + 1]);
+         if (len)
+         {
+            state->raspitex_state.vertex_shader_filename = malloc(len+1); // leave enough space for any timelapse generated changes to filename
+            vcos_assert(state->raspitex_state->vertex_shader_filename);
+            if (state->raspitex_state.vertex_shader_filename)
+               strncpy(state->raspitex_state.vertex_shader_filename, argv[i + 1], len+1);
+            i++;
+         }
+         else
+            valid = 0;
+         break;
+      }
+      
       default:
       {
          // Try parsing for any image specific parameters

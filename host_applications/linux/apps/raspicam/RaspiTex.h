@@ -46,6 +46,7 @@ typedef enum {
    RASPITEX_SCENE_TEAPOT,
    RASPITEX_SCENE_YUV,
    RASPITEX_SCENE_SOBEL,
+   RASPITEX_SCENE_SHADER,
 
 } RASPITEX_SCENE_T;
 
@@ -173,7 +174,9 @@ typedef struct RASPITEX_STATE
    int verbose;                        /// Log FPS
 
    RASPITEX_CAPTURE capture;           /// Frame-buffer capture state
-
+   char* fragment_shader_filename;
+   char* vertex_shader_filename;
+   
 } RASPITEX_STATE;
 
 int raspitex_init(RASPITEX_STATE *state);
