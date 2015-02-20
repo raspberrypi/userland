@@ -124,6 +124,15 @@ static XREF_T drc_mode_map[] =
 
 static const int drc_mode_map_size = sizeof(drc_mode_map)/sizeof(drc_mode_map[0]);
 
+static XREF_T stereo_mode_map[] =
+{
+   {"off",           MMAL_STEREOSCOPIC_MODE_NONE},
+   {"sbs",           MMAL_STEREOSCOPIC_MODE_SIDE_BY_SIDE},
+   {"tb",            MMAL_STEREOSCOPIC_MODE_TOP_BOTTOM},
+};
+
+static const int stereo_mode_map_size = sizeof(stereo_mode_map)/sizeof(stereo_mode_map[0]);
+
 
 #define CommandSharpness   0
 #define CommandContrast    1
@@ -146,6 +155,9 @@ static const int drc_mode_map_size = sizeof(drc_mode_map)/sizeof(drc_mode_map[0]
 #define CommandDRCLevel    18
 #define CommandStatsPass   19
 #define CommandAnnotate    20
+#define CommandStereoMode  21
+#define CommandStereoDecimate 22
+#define CommandStereoSwap  23
 
 static COMMAND_LIST  cmdline_commands[] =
 {
@@ -170,6 +182,9 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandDRCLevel,    "-drc",       "drc", "Set DRC Level", 1},
    {CommandStatsPass,   "-stats",     "st", "Force recomputation of statistics on stills capture pass"},
    {CommandAnnotate,    "-annotate",  "a",  "Enable/Set annotate flags or text", 1},
+   {CommandStereoMode,  "-stereo",    "3d", "Select stereoscopic mode", 1},
+   {CommandStereoDecimate,"-decimate","dec", "Half width/height of stereo image"},
+   {CommandStereoSwap,  "-3dswap",    "3dswap", "Swap camera order for stereoscopic"},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -485,6 +500,22 @@ static MMAL_PARAMETER_DRC_STRENGTH_T drc_mode_from_string(const char *str)
 }
 
 /**
+ * Convert string to the MMAL parameter for exposure metering mode
+ * @param str Incoming string to match
+ * @return MMAL parameter matching the string, or the AUTO option if no match found
+ */
+static MMAL_STEREOSCOPIC_MODE_T stereo_mode_from_string(const char *str)
+{
+   int i = raspicli_map_xref(str, stereo_mode_map, stereo_mode_map_size);
+
+   if( i != -1)
+      return (MMAL_STEREOSCOPIC_MODE_T)i;
+
+   vcos_log_error("Unknown metering mode: %s", str);
+   return MMAL_STEREOSCOPIC_MODE_NONE;
+}
+
+/**
  * Parse a possible command pair - command and parameter
  * @param arg1 Command
  * @param arg2 Parameter (could be NULL)
@@ -666,6 +697,27 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
       break;
    }
 
+   case CommandStereoMode:
+   {
+      params->stereo_mode.mode = stereo_mode_from_string(arg2);
+      used = 2;
+      break;
+   }
+
+   case CommandStereoDecimate:
+   {
+      params->stereo_mode.decimate = MMAL_TRUE;
+      used = 1;
+      break;
+   }
+
+   case CommandStereoSwap:
+   {
+      params->stereo_mode.swap_eyes = MMAL_TRUE;
+      used = 1;
+      break;
+   }
+
    }
 
    return used;
@@ -811,6 +863,9 @@ void raspicamcontrol_set_defaults(RASPICAM_CAMERA_PARAMETERS *params)
    params->stats_pass = MMAL_FALSE;
    params->enable_annotate = 0;
    params->annotate_string[0] = '\0';
+   params->stereo_mode.mode = MMAL_STEREOSCOPIC_MODE_NONE;
+   params->stereo_mode.decimate = MMAL_FALSE;
+   params->stereo_mode.swap_eyes = MMAL_FALSE;
 }
 
 /**
@@ -1316,7 +1371,7 @@ int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, c
       struct tm tm = *localtime(&t);
       char tmp[MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V2];
 
-      annotate.enable = 1;
+       annotate.enable = 1;
 
       if (settings & (ANNOTATE_APP_TEXT | ANNOTATE_USER_TEXT))
       {
@@ -1363,6 +1418,18 @@ int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, c
    return mmal_status_to_int(mmal_port_parameter_set(camera->control, &annotate.hdr));
 }
 
+int raspicamcontrol_set_stereo_mode(MMAL_PORT_T *port, MMAL_PARAMETER_STEREOSCOPIC_MODE_T *stereo_mode)
+{
+   MMAL_PARAMETER_STEREOSCOPIC_MODE_T stereo = { {MMAL_PARAMETER_STEREOSCOPIC_MODE, sizeof(stereo)},
+                               MMAL_STEREOSCOPIC_MODE_NONE, MMAL_FALSE, MMAL_FALSE };
+   if (stereo_mode->mode != MMAL_STEREOSCOPIC_MODE_NONE)
+   {
+      stereo.mode = stereo_mode->mode;
+      stereo.decimate = stereo_mode->decimate;
+      stereo.swap_eyes = stereo_mode->swap_eyes;
+   }
+   return mmal_status_to_int(mmal_port_parameter_set(port, &stereo.hdr));
+}
 
 /**
  * Asked GPU how much memory it has allocated
