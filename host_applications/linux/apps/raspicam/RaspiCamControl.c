@@ -158,6 +158,7 @@ static const int stereo_mode_map_size = sizeof(stereo_mode_map)/sizeof(stereo_mo
 #define CommandStereoMode  21
 #define CommandStereoDecimate 22
 #define CommandStereoSwap  23
+#define CommandAnnotateExtras 24
 
 static COMMAND_LIST  cmdline_commands[] =
 {
@@ -185,6 +186,7 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandStereoMode,  "-stereo",    "3d", "Select stereoscopic mode", 1},
    {CommandStereoDecimate,"-decimate","dec", "Half width/height of stereo image"},
    {CommandStereoSwap,  "-3dswap",    "3dswap", "Swap camera order for stereoscopic"},
+   {CommandAnnotateExtras,"-annotateex","ae",  "Set extra annotation parameters (text size, text colour(hex YUV), bg colour(hex YUV))", 2},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -697,6 +699,16 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
       break;
    }
 
+   case CommandAnnotateExtras:
+   {
+      // 3 parameters - text size (6-80), text colour (Hex VVUUYY) and background colour (Hex VVUUYY)
+      sscanf(arg2, "%u,%X,%X", &params->annotate_text_size,
+                               &params->annotate_text_colour,
+                               &params->annotate_bg_colour);
+      used=2;
+      break;
+   }
+
    case CommandStereoMode:
    {
       params->stereo_mode.mode = stereo_mode_from_string(arg2);
@@ -863,6 +875,9 @@ void raspicamcontrol_set_defaults(RASPICAM_CAMERA_PARAMETERS *params)
    params->stats_pass = MMAL_FALSE;
    params->enable_annotate = 0;
    params->annotate_string[0] = '\0';
+   params->annotate_text_size = 0;	//Use firmware default
+   params->annotate_text_colour = -1;   //Use firmware default
+   params->annotate_bg_colour = -1;     //Use firmware default
    params->stereo_mode.mode = MMAL_STEREOSCOPIC_MODE_NONE;
    params->stereo_mode.decimate = MMAL_FALSE;
    params->stereo_mode.swap_eyes = MMAL_FALSE;
@@ -929,7 +944,10 @@ int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_
    result += raspicamcontrol_set_shutter_speed(camera, params->shutter_speed);
    result += raspicamcontrol_set_DRC(camera, params->drc_level);
    result += raspicamcontrol_set_stats_pass(camera, params->stats_pass);
-   result += raspicamcontrol_set_annotate(camera, params->enable_annotate, params->annotate_string);
+   result += raspicamcontrol_set_annotate(camera, params->enable_annotate, params->annotate_string,
+                       params->annotate_text_size,
+                       params->annotate_text_colour,
+                       params->annotate_bg_colour);
 
    return result;
 }
@@ -1360,57 +1378,80 @@ int raspicamcontrol_set_stats_pass(MMAL_COMPONENT_T *camera, int stats_pass)
  *
  * @return 0 if successful, non-zero if any parameters out of range
  */
-int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, const char *string)
+int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, const char *string,
+                const int text_size, const int text_colour, const int bg_colour)
 {
-   MMAL_PARAMETER_CAMERA_ANNOTATE_V2_T annotate =
-      {{MMAL_PARAMETER_ANNOTATE, sizeof(MMAL_PARAMETER_CAMERA_ANNOTATE_V2_T)}};
+   MMAL_PARAMETER_CAMERA_ANNOTATE_V3_T annotate =
+      {{MMAL_PARAMETER_ANNOTATE, sizeof(MMAL_PARAMETER_CAMERA_ANNOTATE_V3_T)}};
 
    if (settings)
    {
       time_t t = time(NULL);
       struct tm tm = *localtime(&t);
-      char tmp[MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V2];
+      char tmp[MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3];
 
        annotate.enable = 1;
 
       if (settings & (ANNOTATE_APP_TEXT | ANNOTATE_USER_TEXT))
       {
-         strncpy(annotate.text, string, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V2);
-         annotate.text[MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V2-1] = '\0';
+         strncpy(annotate.text, string, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3);
+         annotate.text[MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3-1] = '\0';
       }
 
       if (settings & ANNOTATE_TIME_TEXT)
       {
          strftime(tmp, 32, "%X ", &tm );
-         strncat(annotate.text, tmp, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V2 - strlen(annotate.text) - 1);
+         strncat(annotate.text, tmp, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3 - strlen(annotate.text) - 1);
       }
 
       if (settings & ANNOTATE_DATE_TEXT)
       {
          strftime(tmp, 32, "%x", &tm );
-         strncat(annotate.text, tmp, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V2 - strlen(annotate.text) - 1);
+         strncat(annotate.text, tmp, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3 - strlen(annotate.text) - 1);
       }
 
       if (settings & ANNOTATE_SHUTTER_SETTINGS)
-         annotate.show_shutter = 1;
+         annotate.show_shutter = MMAL_TRUE;
 
       if (settings & ANNOTATE_GAIN_SETTINGS)
-         annotate.show_analog_gain = 1;
+         annotate.show_analog_gain = MMAL_TRUE;
 
       if (settings & ANNOTATE_LENS_SETTINGS)
-         annotate.show_lens = 1;
+         annotate.show_lens = MMAL_TRUE;
 
       if (settings & ANNOTATE_CAF_SETTINGS)
-         annotate.show_caf = 1;
+         annotate.show_caf = MMAL_TRUE;
 
       if (settings & ANNOTATE_MOTION_SETTINGS)
-         annotate.show_motion = 1;
+         annotate.show_motion = MMAL_TRUE;
 
       if (settings & ANNOTATE_FRAME_NUMBER)
-         annotate.show_frame_num = 1;
+         annotate.show_frame_num = MMAL_TRUE;
 
       if (settings & ANNOTATE_BLACK_BACKGROUND)
-         annotate.black_text_background = 1;
+         annotate.enable_text_background = MMAL_TRUE;
+
+      annotate.text_size = text_size;
+
+      if (text_colour != -1)
+      {
+         annotate.custom_text_colour = MMAL_TRUE;
+         annotate.custom_text_Y = text_colour&0xff;
+         annotate.custom_text_U = (text_colour>>8)&0xff;
+         annotate.custom_text_V = (text_colour>>16)&0xff;
+      }
+      else
+         annotate.custom_text_colour = MMAL_FALSE;
+ 
+      if (bg_colour != -1)
+      {
+         annotate.custom_background_colour = MMAL_TRUE;
+         annotate.custom_background_Y = bg_colour&0xff;
+         annotate.custom_background_U = (bg_colour>>8)&0xff;
+         annotate.custom_background_V = (bg_colour>>16)&0xff;
+      }
+      else
+         annotate.custom_background_colour = MMAL_FALSE;
    }
    else
       annotate.enable = 0;

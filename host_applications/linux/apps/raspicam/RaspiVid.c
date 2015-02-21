@@ -945,13 +945,19 @@ static void update_annotation_data(RASPIVID_STATE *state)
             state->intraperiod,
             raspicli_unmap_xref(state->profile, profile_map, profile_map_size));
 
-      raspicamcontrol_set_annotate(state->camera_component, state->camera_parameters.enable_annotate, text);
+      raspicamcontrol_set_annotate(state->camera_component, state->camera_parameters.enable_annotate, text,
+                       state->camera_parameters.annotate_text_size,
+                       state->camera_parameters.annotate_text_colour,
+                       state->camera_parameters.annotate_bg_colour);
 
       free(text);
    }
    else
    {
-      raspicamcontrol_set_annotate(state->camera_component, state->camera_parameters.enable_annotate, state->camera_parameters.annotate_string);
+      raspicamcontrol_set_annotate(state->camera_component, state->camera_parameters.enable_annotate, state->camera_parameters.annotate_string,
+                       state->camera_parameters.annotate_text_size,
+                       state->camera_parameters.annotate_text_colour,
+                       state->camera_parameters.annotate_bg_colour);
    }
 }
 
