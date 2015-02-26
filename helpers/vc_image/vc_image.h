@@ -105,10 +105,8 @@ extern "C" {
       VC_IMAGE_PROP_IS_DECIMATED,
       VC_IMAGE_PROP_IS_PACKED,
       VC_IMAGE_PROP_YUV_COLOURSPACE,
-#ifdef CONFIG_VC_IMAGE_LINKED_MULTICHANN
       /* Linked-multichannel properties*/
       VC_IMAGE_PROP_LINKED_MULTICHANN
-#endif
    } VC_IMAGE_PROPERTY_T;
 
    /* A property key and value */
@@ -417,19 +415,14 @@ unsigned int cube_map           : 1;
       uint32_t                        video_timestamp;/* 90000 Hz RTP times domain - derived from audio timestamp */
       uint8_t                         num_channels;   /* number of channels (2 for stereo) */
       uint8_t                         current_channel;/* the channel this header is currently pointing to */
-#ifdef CONFIG_VC_IMAGE_LINKED_MULTICHANN
       uint8_t                         linked_multichann_flag;/* Indicate the header has the linked-multichannel structure*/
       uint8_t                         is_channel_linked;     /* Track if the above structure is been used to link the header
                                                                 into a linked-mulitchannel image */
       uint8_t                         channel_index;         /* index of the channel this header represents while  
                                                                 it is being linked. */
       uint8_t                         _dummy[3];      /* pad struct to 64 bytes */
-#else
-      uint8_t                         _dummy[6];     /* pad struct to 64 bytes */
-#endif
    };
 
-#ifdef CONFIG_VC_IMAGE_LINKED_MULTICHANN
    /**
     * \brief storage for pointers to image headers of the previous and next channel
     *
@@ -442,7 +435,6 @@ unsigned int cube_map           : 1;
       VC_IMAGE_T* next;
    };
    typedef struct VC_IMAGE_LINKED_MULTICHANN_T VC_IMAGE_LINKED_MULTICHANN_T;
-#endif
 
    /**
     * \brief Image buffer object, with image data locked in memory and ready for access.
@@ -548,10 +540,8 @@ unsigned int cube_map           : 1;
 
    void vc_image_lock_extract( VC_IMAGE_BUF_T *dst, const VC_IMAGE_T *src, uint8_t chan_idx );
 
-#ifdef CONFIG_VC_IMAGE_LINKED_MULTICHANN
    void vc_image_lock_channel(VC_IMAGE_BUF_T *dst, const VC_IMAGE_T *chann);
    void vc_image_lock_channel_perma(VC_IMAGE_BUF_T *dst, const VC_IMAGE_T *chann); //lightweight version of lock channel
-#endif
 
    void vc_image_unlock( VC_IMAGE_BUF_T *img );
 
