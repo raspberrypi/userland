@@ -585,6 +585,7 @@ static struct {
 } mmal_omx_video_coding_table[] =
 {
    {MMAL_ENCODING_H264,           OMX_VIDEO_CodingAVC},
+   {MMAL_ENCODING_MVC,            OMX_VIDEO_CodingMVC},
    {MMAL_ENCODING_MP4V,           OMX_VIDEO_CodingMPEG4},
    {MMAL_ENCODING_MP2V,           OMX_VIDEO_CodingMPEG2},
    {MMAL_ENCODING_MP1V,           OMX_VIDEO_CodingMPEG2},
