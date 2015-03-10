@@ -527,6 +527,10 @@ static void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
          break;
       }
    }
+   else if (buffer->cmd == MMAL_EVENT_ERROR)
+   {
+      vcos_log_error("No data received from sensor. Check all connections, including the Sunny one on the camera board");
+   }
    else
    {
       vcos_log_error("Received unexpected camera control callback event, 0x%08x", buffer->cmd);
