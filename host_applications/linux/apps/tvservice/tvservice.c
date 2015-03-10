@@ -116,7 +116,7 @@ static void show_usage( void )
 {
    LOG_STD( "Usage: tvservice [OPTION]..." );
    LOG_STD( "  -p, --preferred                   Power on HDMI with preferred settings" );
-   LOG_STD( "  -e, --explicit=\"GROUP MODE DRIVE\" Power on HDMI with explicit GROUP (CEA, DMT, CEA_3D_SBS, CEA_3D_TB)\n"
+   LOG_STD( "  -e, --explicit=\"GROUP MODE DRIVE\" Power on HDMI with explicit GROUP (CEA, DMT, CEA_3D_SBS, CEA_3D_TB, CEA_3D_FP)\n"
             "                                      MODE (see --modes) and DRIVE (HDMI, DVI)" );
    LOG_STD( "  -t, --ntsc                        Use NTSC frequency for HDMI mode (e.g. 59.94Hz rather than 60Hz)" );
    LOG_STD( "  -c, --sdtvon=\"MODE ASPECT\"        Power on SDTV with MODE (PAL or NTSC) and ASPECT (4:3 14:9 or 16:9)" );
@@ -337,6 +337,8 @@ static const char *status_mode( TV_DISPLAY_STATE_T *tvstate ) {
             tmp = status_sprintf(mode_str, MAX_STATUS_STR_LENGTH, &offset, " 3D SbS"); break;
          case HDMI_3D_FORMAT_TB_HALF:
             tmp = status_sprintf(mode_str, MAX_STATUS_STR_LENGTH, &offset, " 3D T&B"); break;
+         case HDMI_3D_FORMAT_FRAME_PACKING:
+            tmp = status_sprintf(mode_str, MAX_STATUS_STR_LENGTH, &offset, " 3D FP"); break;
          default: break;
          }
       }
@@ -778,6 +780,11 @@ int main( int argc, char **argv )
                power_on_explicit_group = HDMI_RES_GROUP_CEA;
                opt_3d = 2;
             }
+            else if ( vcos_strcasecmp( "CEA_3D_FP", group_str ) == 0 )
+            {
+               power_on_explicit_group = HDMI_RES_GROUP_CEA;
+               opt_3d = 3;
+            }
             else
             {
                LOG_ERR( "Invalid group '%s'", group_str );
@@ -1023,6 +1030,10 @@ int main( int argc, char **argv )
          goto err_stop_service;
       }
       else if(opt_3d == 2 && set_property( HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_TB_HALF, 0) != 0)
+      {
+         goto err_stop_service;
+      }
+      else if(opt_3d == 3 && set_property( HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_FRAME_PACKING, 0) != 0)
       {
          goto err_stop_service;
       }
