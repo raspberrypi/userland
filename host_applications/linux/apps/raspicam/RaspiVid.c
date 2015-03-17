@@ -949,13 +949,19 @@ static void update_annotation_data(RASPIVID_STATE *state)
             state->intraperiod,
             raspicli_unmap_xref(state->profile, profile_map, profile_map_size));
 
-      raspicamcontrol_set_annotate(state->camera_component, state->camera_parameters.enable_annotate, text);
+      raspicamcontrol_set_annotate(state->camera_component, state->camera_parameters.enable_annotate, text,
+                       state->camera_parameters.annotate_text_size,
+                       state->camera_parameters.annotate_text_colour,
+                       state->camera_parameters.annotate_bg_colour);
 
       free(text);
    }
    else
    {
-      raspicamcontrol_set_annotate(state->camera_component, state->camera_parameters.enable_annotate, state->camera_parameters.annotate_string);
+      raspicamcontrol_set_annotate(state->camera_component, state->camera_parameters.enable_annotate, state->camera_parameters.annotate_string,
+                       state->camera_parameters.annotate_text_size,
+                       state->camera_parameters.annotate_text_colour,
+                       state->camera_parameters.annotate_bg_colour);
    }
 }
 
@@ -1190,18 +1196,28 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
       vcos_log_error("Failed to create camera component");
       goto error;
    }
-   
+
+   status = raspicamcontrol_set_stereo_mode(camera->output[0], &state->camera_parameters.stereo_mode);
+   status += raspicamcontrol_set_stereo_mode(camera->output[1], &state->camera_parameters.stereo_mode);
+   status += raspicamcontrol_set_stereo_mode(camera->output[2], &state->camera_parameters.stereo_mode);
+
+   if (status != MMAL_SUCCESS)
+   {
+      vcos_log_error("Could not set stereo mode : error %d", status);
+      goto error;
+   }
+
    MMAL_PARAMETER_INT32_T camera_num =
       {{MMAL_PARAMETER_CAMERA_NUM, sizeof(camera_num)}, state->cameraNum};
 
    status = mmal_port_parameter_set(camera->control, &camera_num.hdr);
-   
+
    if (status != MMAL_SUCCESS)
    {
       vcos_log_error("Could not select camera : error %d", status);
       goto error;
    }
-   
+
    if (!camera->output_num)
    {
       status = MMAL_ENOSYS;
