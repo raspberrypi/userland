@@ -150,7 +150,7 @@ uint32_t khrn_image_get_alpha_size(KHRN_IMAGE_FORMAT_T format)
 uint32_t khrn_image_get_z_size(KHRN_IMAGE_FORMAT_T format)
 {
    if (khrn_image_is_depth(format) && (format & IMAGE_FORMAT_Z)) {
-      if (format == DEPTH_32_TLBD || DEPTH_COL_64_TLBD)
+      if (format == DEPTH_32_TLBD || format == DEPTH_COL_64_TLBD)
          return 24;
       switch (format & IMAGE_FORMAT_PIXEL_SIZE_MASK) {
       case IMAGE_FORMAT_32: return 24;
@@ -170,7 +170,7 @@ uint32_t khrn_image_get_z_size(KHRN_IMAGE_FORMAT_T format)
 uint32_t khrn_image_get_stencil_size(KHRN_IMAGE_FORMAT_T format)
 {
    if (khrn_image_is_depth(format) && (format & IMAGE_FORMAT_STENCIL)) {
-      if (format == DEPTH_32_TLBD || DEPTH_COL_64_TLBD)
+      if (format == DEPTH_32_TLBD || format == DEPTH_COL_64_TLBD)
          return 8;
       vcos_assert((format & IMAGE_FORMAT_PIXEL_SIZE_MASK) == IMAGE_FORMAT_32);
       return 8;
