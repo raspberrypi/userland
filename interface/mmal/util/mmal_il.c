@@ -139,8 +139,16 @@ void mmalil_buffer_header_to_omx(OMX_BUFFERHEADERTYPE *omx, MMAL_BUFFER_HEADER_T
    omx->nTimeStamp = omx_ticks_from_s64(mmal->pts);
    if (mmal->pts == MMAL_TIME_UNKNOWN)
    {
-      omx->nFlags |= OMX_BUFFERFLAG_TIME_UNKNOWN;
-      omx->nTimeStamp = omx_ticks_from_s64(0);
+      if (mmal->dts == MMAL_TIME_UNKNOWN)
+      {
+         omx->nTimeStamp = omx_ticks_from_s64(0);
+         omx->nFlags |= OMX_BUFFERFLAG_TIME_UNKNOWN;
+      }
+      else
+      {
+        omx->nTimeStamp = omx_ticks_from_s64(mmal->dts);
+        omx->nFlags |= OMX_BUFFERFLAG_TIME_IS_DTS;
+      }
    }
 }
 
@@ -151,10 +159,21 @@ void mmalil_buffer_header_to_mmal(MMAL_BUFFER_HEADER_T *mmal, OMX_BUFFERHEADERTY
    mmal->alloc_size = omx->nAllocLen;
    mmal->length = omx->nFilledLen;
    mmal->offset = omx->nOffset;
-   mmal->pts = omx_ticks_to_s64(omx->nTimeStamp);
-   if (omx->nFlags & OMX_BUFFERFLAG_TIME_UNKNOWN)
-      mmal->pts = MMAL_TIME_UNKNOWN;
-   mmal->dts = MMAL_TIME_UNKNOWN;
+   if (omx->nFlags & OMX_BUFFERFLAG_TIME_IS_DTS)
+   {
+     mmal->dts = omx_ticks_to_s64(omx->nTimeStamp);
+     mmal->pts = MMAL_TIME_UNKNOWN;
+   }
+   else if (omx->nFlags & OMX_BUFFERFLAG_TIME_UNKNOWN)
+   {
+     mmal->dts = MMAL_TIME_UNKNOWN;
+     mmal->pts = MMAL_TIME_UNKNOWN;
+   }
+   else
+   {
+     mmal->dts = MMAL_TIME_UNKNOWN;
+     mmal->pts = omx_ticks_to_s64(omx->nTimeStamp);
+   }
    mmal->flags = mmalil_buffer_flags_to_mmal(omx->nFlags);
 }
 
