@@ -1,4 +1,4 @@
-#/bin/bash
+#!/bin/bash
 
 if [ "armv6l" = `arch` ]; then
 	# Native compile on the Raspberry Pi
