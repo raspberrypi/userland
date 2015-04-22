@@ -1604,6 +1604,12 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
 
       // Get first so we don't overwrite anything unexpectedly
       status = mmal_port_parameter_get(encoder_output, &param.hdr);
+      if (status != MMAL_SUCCESS)
+      {
+         vcos_log_warn("Unable to get existing H264 intra-refresh values. Please update your firmware");
+         // Set some defaults, don't just pass random stack data
+         param.air_mbs = param.air_ref = param.cir_mbs = param.pir_mbs = 0;
+      }
 
       param.refresh_mode = state->intra_refresh_type;
 
