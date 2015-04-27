@@ -28,7 +28,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "core/mmal_core_private.h"
 
 VCOS_LOG_CAT_T mmal_log_category;
-static VCOS_LOG_LEVEL_T mmal_log_level = VCOS_LOG_ERROR;
+static VCOS_LOG_LEVEL_T mmal_log_level = VCOS_LOG_TRACE;
 
 void mmal_logging_init(void)
 {
