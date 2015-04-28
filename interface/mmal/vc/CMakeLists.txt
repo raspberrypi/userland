@@ -1,12 +1,9 @@
-# MMAL can use VCSM to allow zero copy for ARM accessible buffers.
-# This is not enabled by default right now because VCSM on RPI is still
-# experimental.
-# add_definitions(-DENABLE_MMAL_VCSM)
+add_definitions(-DENABLE_MMAL_VCSM)
 
 add_library(mmal_vc_client ${LIBRARY_TYPE} mmal_vc_client.c mmal_vc_shm.c mmal_vc_api.c mmal_vc_opaque_alloc.c mmal_vc_msgnames.c mmal_vc_api_drm.c)
-target_link_libraries(mmal_vc_client vchiq_arm vcos)
+#target_link_libraries(mmal_vc_client vchiq_arm vcos)
 
-# target_link_libraries(mmal_vc_client vchiq_arm vcos vcsm)
+target_link_libraries(mmal_vc_client vchiq_arm vcos vcsm)
 
 if(BUILD_MMAL_APPS)
 add_executable(mmal_vc_diag mmal_vc_diag.c)
