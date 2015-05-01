@@ -1,0 +1,11 @@
+gpio -g mode 0 in
+gpio -g mode 1 in
+gpio -g mode 28 in
+gpio -g mode 28 alt0
+gpio -g mode 29 in
+gpio -g mode 29 alt0
+#shutdown
+gpio -g write 41 1
+#LED
+gpio -g write 32 1
+
