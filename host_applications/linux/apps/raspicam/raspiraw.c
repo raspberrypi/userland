@@ -30,8 +30,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <fcntl.h>
 
-#include <wiringPi.h>
-#include <wiringPiI2C.h>
+//#include <wiringPi.h>
+//#include <wiringPiI2C.h>
 #include <linux/i2c-dev.h>
 
 #include "interface/vcos/vcos.h"
@@ -258,7 +258,7 @@ static void callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 	vcos_log_error("Buffer %p returned, filled %d, timestamp %llu, flags %04X", buffer, buffer->length, buffer->pts, buffer->flags);
 	if(running)
 	{
-		if((buffer->flags&MMAL_BUFFER_HEADER_FLAG_CODECSIDEINFO) &&
+		if(!(buffer->flags&MMAL_BUFFER_HEADER_FLAG_CODECSIDEINFO) &&
                    (((count++)%15)==0))
 		{
 			// Save every 15th frame
