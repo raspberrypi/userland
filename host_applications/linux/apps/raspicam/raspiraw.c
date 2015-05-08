@@ -56,7 +56,18 @@ struct sensor_regs {
 
 #define WIDTH 2592
 #define HEIGHT 1944
-#define ENCODING MMAL_ENCODING_BAYER_SBGGR10P
+
+#define RAW_16
+
+#ifdef RAW16
+	#define ENCODING MMAL_ENCODING_BAYER_SBGGR16
+	#define UNPACK MMAL_CAMERA_RX_CONFIG_UNPACK_10;
+	#define PACK MMAL_CAMERA_RX_CONFIG_PACK_16;
+#else
+	#define ENCODING MMAL_ENCODING_BAYER_SBGGR10P
+	#define UNPACK MMAL_CAMERA_RX_CONFIG_UNPACK_NONE;
+	#define PACK MMAL_CAMERA_RX_CONFIG_PACK_NONE;
+#endif
 
 // These register settings were as logged off the line
 // by jbeale. There is a datasheet for OV5647 floating
@@ -286,6 +297,7 @@ int main (void)
 	MMAL_STATUS_T status;
 	MMAL_PORT_T *output;
 	MMAL_POOL_T *pool;
+	MMAL_PARAMETER_CAMERA_RX_CONFIG_T rx_cfg = {{MMAL_PARAMETER_CAMERA_RX_CONFIG, sizeof(rx_cfg)}};;
 	int i;
 
 	bcm_host_init();
@@ -297,13 +309,28 @@ int main (void)
 		vcos_log_error("Failed to create rawcam");
 		return -1;
 	}
+	output = rawcam->output[0];
+	status = mmal_port_parameter_get(output, &rx_cfg);
+	if(status != MMAL_SUCCESS)
+	{
+		vcos_log_error("Failed to get cfg");
+		goto component_destroy;
+	}
+	rx_cfg.unpack = PACK;
+	rx_cfg.pack = UNPACK;
+	status = mmal_port_parameter_set(output, &rx_cfg);
+	if(status != MMAL_SUCCESS)
+	{
+		vcos_log_error("Failed to set cfg");
+		goto component_destroy;
+	}
+
 	status = mmal_component_enable(rawcam);
 	if(status != MMAL_SUCCESS)
 	{
 		vcos_log_error("Failed to enable");
 		goto component_destroy;
 	}
-	output = rawcam->output[0];
 	status = mmal_port_parameter_set_boolean(output, MMAL_PARAMETER_ZERO_COPY, MMAL_TRUE);
 	if(status != MMAL_SUCCESS)
 	{
