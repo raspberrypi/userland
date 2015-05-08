@@ -41,6 +41,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/mmal/mmal_buffer.h"
 #include "interface/mmal/mmal_logging.h"
 #include "interface/mmal/util/mmal_util.h"
+#include "interface/mmal/util/mmal_util_params.h"
 
 #include <sys/ioctl.h>
 
@@ -310,7 +311,7 @@ int main (void)
 		return -1;
 	}
 	output = rawcam->output[0];
-	status = mmal_port_parameter_get(output, &rx_cfg);
+	status = mmal_port_parameter_get(output, &rx_cfg.hdr);
 	if(status != MMAL_SUCCESS)
 	{
 		vcos_log_error("Failed to get cfg");
@@ -318,7 +319,7 @@ int main (void)
 	}
 	rx_cfg.unpack = PACK;
 	rx_cfg.pack = UNPACK;
-	status = mmal_port_parameter_set(output, &rx_cfg);
+	status = mmal_port_parameter_set(output, &rx_cfg.hdr);
 	if(status != MMAL_SUCCESS)
 	{
 		vcos_log_error("Failed to set cfg");
