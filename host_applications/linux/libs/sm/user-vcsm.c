@@ -1559,3 +1559,40 @@ int vcsm_resize( unsigned int handle, unsigned int new_size )
 out:
    return rc;
 }
+
+
+/* Flush or invalidate the memory associated with this user opaque handle
+**
+** Returns:        non-zero on error
+**
+** structure contains a list of flush/invalidate commands
+** See header file
+*/
+int vcsm_clean_invalid( struct vcsm_user_clean_invalid_s *s )
+{
+   int rc = 0;
+   struct vmcs_sm_ioctl_clean_invalid cache;
+
+   if ( vcsm_handle == VCSM_INVALID_HANDLE )
+   {
+      vcos_log_error( "[%s]: [%d]: invalid device or invalid handle!",
+                      __func__,
+                      getpid() );
+
+      rc = -1;
+      goto out;
+   }
+
+   memcpy( &cache, s, sizeof cache );
+
+   rc = ioctl( vcsm_handle,
+                VMCS_SM_IOCTL_MEM_CLEAN_INVALID,
+                &cache );
+
+   /* Done.
+   */
+   goto out;
+
+out:
+   return rc;
+}
