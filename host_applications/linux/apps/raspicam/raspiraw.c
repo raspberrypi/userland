@@ -58,12 +58,17 @@ struct sensor_regs {
 #define WIDTH 2592
 #define HEIGHT 1944
 
-#define RAW_16
+//#define RAW16
+//#define RAW8
 
 #ifdef RAW16
 	#define ENCODING MMAL_ENCODING_BAYER_SBGGR16
 	#define UNPACK MMAL_CAMERA_RX_CONFIG_UNPACK_10;
 	#define PACK MMAL_CAMERA_RX_CONFIG_PACK_16;
+#elif defined RAW8
+	#define ENCODING MMAL_ENCODING_BAYER_SBGGR8
+	#define UNPACK MMAL_CAMERA_RX_CONFIG_UNPACK_10;
+	#define PACK MMAL_CAMERA_RX_CONFIG_PACK_8;
 #else
 	#define ENCODING MMAL_ENCODING_BAYER_SBGGR10P
 	#define UNPACK MMAL_CAMERA_RX_CONFIG_UNPACK_NONE;
@@ -298,7 +303,7 @@ int main (void)
 	MMAL_STATUS_T status;
 	MMAL_PORT_T *output;
 	MMAL_POOL_T *pool;
-	MMAL_PARAMETER_CAMERA_RX_CONFIG_T rx_cfg = {{MMAL_PARAMETER_CAMERA_RX_CONFIG, sizeof(rx_cfg)}};;
+	MMAL_PARAMETER_CAMERA_RX_CONFIG_T rx_cfg = {{MMAL_PARAMETER_CAMERA_RX_CONFIG, sizeof(rx_cfg)}};
 	int i;
 
 	bcm_host_init();
@@ -317,8 +322,9 @@ int main (void)
 		vcos_log_error("Failed to get cfg");
 		goto component_destroy;
 	}
-	rx_cfg.unpack = PACK;
-	rx_cfg.pack = UNPACK;
+	rx_cfg.unpack = UNPACK;
+	rx_cfg.pack = PACK;
+vcos_log_error("Set pack to %d, unpack to %d", rx_cfg.unpack, rx_cfg.pack);
 	status = mmal_port_parameter_set(output, &rx_cfg.hdr);
 	if(status != MMAL_SUCCESS)
 	{
