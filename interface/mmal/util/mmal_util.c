@@ -68,28 +68,37 @@ static struct {
    uint32_t encoding;
    uint32_t pitch_num;
    uint32_t pitch_den;
+   uint32_t alignment;
 } pixel_pitch[] =
 {
-   {MMAL_ENCODING_I420,  1, 1},
-   {MMAL_ENCODING_YV12,  1, 1},
-   {MMAL_ENCODING_I422,  1, 1},
-   {MMAL_ENCODING_NV21,  1, 1},
-   {MMAL_ENCODING_NV12,  1, 1},
-   {MMAL_ENCODING_ARGB,  4, 1},
-   {MMAL_ENCODING_RGBA,  4, 1},
-   {MMAL_ENCODING_RGB32, 4, 1},
-   {MMAL_ENCODING_ABGR,  4, 1},
-   {MMAL_ENCODING_BGRA,  4, 1},
-   {MMAL_ENCODING_BGR32, 4, 1},
-   {MMAL_ENCODING_RGB16, 2, 1},
-   {MMAL_ENCODING_RGB24, 3, 1},
-   {MMAL_ENCODING_BGR16, 2, 1},
-   {MMAL_ENCODING_BGR24, 3, 1},
+   {MMAL_ENCODING_I420,  1, 1, 1},
+   {MMAL_ENCODING_YV12,  1, 1, 1},
+   {MMAL_ENCODING_I422,  1, 1, 1},
+   {MMAL_ENCODING_NV21,  1, 1, 1},
+   {MMAL_ENCODING_NV12,  1, 1, 1},
+   {MMAL_ENCODING_ARGB,  4, 1, 1},
+   {MMAL_ENCODING_RGBA,  4, 1, 1},
+   {MMAL_ENCODING_RGB32, 4, 1, 1},
+   {MMAL_ENCODING_ABGR,  4, 1, 1},
+   {MMAL_ENCODING_BGRA,  4, 1, 1},
+   {MMAL_ENCODING_BGR32, 4, 1, 1},
+   {MMAL_ENCODING_RGB16, 2, 1, 1},
+   {MMAL_ENCODING_RGB24, 3, 1, 1},
+   {MMAL_ENCODING_BGR16, 2, 1, 1},
+   {MMAL_ENCODING_BGR24, 3, 1, 1},
 
-   {MMAL_ENCODING_YUYV,  2, 1},
-   {MMAL_ENCODING_YVYU,  2, 1},
-   {MMAL_ENCODING_UYVY,  2, 1},
-   {MMAL_ENCODING_VYUY,  2, 1},
+   {MMAL_ENCODING_YUYV,  2, 1, 1},
+   {MMAL_ENCODING_YVYU,  2, 1, 1},
+   {MMAL_ENCODING_UYVY,  2, 1, 1},
+   {MMAL_ENCODING_VYUY,  2, 1, 1},
+
+   // Bayer formats, the resulting alignment must also be a multiple of 16.
+   // Camplus padded to a multiple of 32, so let's copy that.
+   {MMAL_ENCODING_BAYER_SBGGR8,        1, 1, 32},
+   {MMAL_ENCODING_BAYER_SBGGR10DPCM8,  1, 1, 32},
+   {MMAL_ENCODING_BAYER_SBGGR10P,      10,8, 32},
+   {MMAL_ENCODING_BAYER_SBGGR16,       2, 1, 32},
+
    /* {MMAL_ENCODING_YUVUV128, 1, 1}, That's a special case which must not be included */
    {MMAL_ENCODING_UNKNOWN, 0, 0}
 };
@@ -117,7 +126,7 @@ uint32_t mmal_encoding_width_to_stride(uint32_t encoding, uint32_t width)
    if(pixel_pitch[i].encoding == MMAL_ENCODING_UNKNOWN)
       return 0;
 
-   return pixel_pitch[i].pitch_num * width / pixel_pitch[i].pitch_den;
+   return VCOS_ALIGN_UP(pixel_pitch[i].pitch_num * width / pixel_pitch[i].pitch_den, pixel_pitch[i].alignment);
 }
 
 const char* mmal_port_type_to_string(MMAL_PORT_TYPE_T type)
