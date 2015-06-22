@@ -56,6 +56,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <unistd.h>
 #include <errno.h>
 #include <sysexits.h>
+#include <math.h>
+#include <time.h>
 
 #define VERSION_STRING "v1.3.8"
 
@@ -75,6 +77,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiPreview.h"
 #include "RaspiCLI.h"
 #include "RaspiTex.h"
+
+#include "gps.h"
 
 #include <semaphore.h>
 
@@ -104,6 +108,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define FRAME_NEXT_SIGNAL        5
 #define FRAME_NEXT_IMMEDIATELY   6
 
+
+static struct gps_data_t gpsdata;
+static struct gps_data_t gpsdata_cache;
+static int gpsd_connected = 0;
 
 int mmal_status_to_int(MMAL_STATUS_T status);
 static void signal_handler(int signal_number);
@@ -139,6 +147,7 @@ typedef struct
    int sensor_mode;                     /// Sensor mode. 0=auto. Check docs/forum for modes selected by other values.
    int datetime;                       /// Use DateTime instead of frame#
    int timestamp;                      /// Use timestamp instead of frame#
+   int exif_gpsd;                      /// Add gpsd information to exif
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -193,6 +202,7 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandSensorMode   22
 #define CommandDateTime     23
 #define CommandTimeStamp    24
+#define CommandExifGpsd     25
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -221,6 +231,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandSensorMode,"-mode",     "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
    { CommandDateTime,  "-datetime",  "dt", "Replace frame number in file name with DateTime (YearMonthDayHourMinSec)", 0},
    { CommandTimeStamp, "-timestamp", "ts", "Replace frame number in file name with unix timestamp (seconds since 1900)", 0},
+   { CommandExifGpsd,  "-gpsd",     "gps", "Apply GPS information from gpsd as EXIF tags", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -255,6 +266,78 @@ static struct
 };
 
 static int next_frame_description_size = sizeof(next_frame_description) / sizeof(next_frame_description[0]);
+
+static int connect_gpsd(void)
+{
+   if (!gpsd_connected)
+   {
+      char *server = "localhost";
+      char *port = DEFAULT_GPSD_PORT;
+      /* Open the stream to gpsd. */
+      if (gps_open(server, port, &gpsdata) != 0)
+      {
+         fprintf(stderr, "no gpsd running or network error: %d, %s\n",
+                 errno, gps_errstr(errno));
+         return -1;
+      }
+      gpsd_connected = 1;
+      gps_stream(&gpsdata, WATCH_ENABLE, NULL);
+   }
+   return 0;
+}
+
+static void read_gps_data(void)
+{
+   int r = 1;
+   while (gpsd_connected && (r > 0))
+   {
+      r = gps_read(&gpsdata);
+      if (r < 0)
+      {
+         gps_close(&gpsdata);
+         gpsd_connected = 0;
+      }
+      else if (r > 0)
+      {
+         gpsdata_cache.online = gpsdata.online;
+         if (gpsdata.online)
+         {
+            gps_mask_t required_mask = TIME_SET | LATLON_SET | ALTITUDE_SET |
+                                       SPEED_SET | TRACK_SET;
+            if ((gpsdata.fix.mode >= MODE_3D) &&
+                ((gpsdata.set & required_mask) == required_mask))
+               memcpy(&gpsdata_cache, &gpsdata, sizeof(gpsdata_cache));
+         }
+      }
+   }
+}
+
+static int deg_to_str(double f, char *buf, int buf_size)
+{
+   int sec, deg, min;
+   long frac_deg;
+   double fdsec, fsec, fdeg, fmin;
+
+   if (buf_size > 0)
+      *buf = 0;
+
+   if (f < 0 || f > 360)
+      return -1;
+
+   fmin = modf(f, &fdeg);
+   deg = (int)fdeg;
+   frac_deg = (long)(fmin * 1000000);
+
+   fsec = modf(fmin * 60, &fmin);
+   min = (int)fmin;
+   sec = (int)(fsec * 10000.0);
+
+   fdsec = modf(fsec * 60, &fsec);
+   sec = (int)fsec;
+   snprintf(buf, buf_size, "%02d/1,%02d/1,%02d/1", deg, min, sec);
+
+   return 0;
+}
 
 /**
  * Assign a default set of parameters to the state passed in
@@ -302,6 +385,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->sensor_mode = 0;
    state->datetime = 0;
    state->timestamp = 0;
+   state->exif_gpsd = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -622,6 +706,10 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
 
       case CommandSettings:
          state->settings = 1;
+         break;
+
+      case CommandExifGpsd:
+         state->exif_gpsd = 1;
          break;
 
          
@@ -1314,6 +1402,83 @@ static void add_exif_tags(RASPISTILL_STATE *state)
    snprintf(exif_buf, sizeof(exif_buf), "IFD0.DateTime=%s", time_buf);
    add_exif_tag(state, exif_buf);
 
+   if (state->exif_gpsd)
+   {
+      if (state->verbose)
+         fprintf(stderr, "Adding GPS EXIF\n");
+
+      // Add GPS tags
+      if (gpsdata_cache.online)
+      {
+         if (gpsdata.set & TIME_SET)
+         {
+            time_t the_time = gpsdata.fix.time;
+            struct tm *tmp;
+            tmp = localtime(&the_time);
+            strftime(time_buf, sizeof(time_buf), "%Y:%m:%d", tmp);
+            snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSDateStamp=%s", time_buf);
+            add_exif_tag(state, exif_buf);
+            strftime(time_buf, sizeof(time_buf), "%H/1,%M/1,%S/1", tmp);
+            snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSTimeStamp=%s", time_buf);
+            add_exif_tag(state, exif_buf);
+         }
+         if ((gpsdata.set & LATLON_SET) && (gpsdata.fix.mode >= MODE_2D))
+         {
+            if (isnan(gpsdata.fix.latitude) == 0)
+            {
+               if (deg_to_str(fabs(gpsdata.fix.latitude), time_buf, sizeof(time_buf)) == 0)
+               {
+                  snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSLatitude=%s", time_buf);
+                  add_exif_tag(state, exif_buf);
+                  snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSLatitudeRef=%c",
+                           (gpsdata.fix.latitude < 0) ? 'S' : 'N');
+                  add_exif_tag(state, exif_buf);
+               }
+            }
+            if (isnan(gpsdata.fix.longitude) == 0)
+            {
+               if (deg_to_str(fabs(gpsdata.fix.longitude), time_buf, sizeof(time_buf)) == 0)
+               {
+                  snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSLongitude=%s", time_buf);
+                  add_exif_tag(state, exif_buf);
+                  snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSLongitudeRef=%c",
+                           (gpsdata.fix.longitude < 0) ? 'W' : 'E');
+                  add_exif_tag(state, exif_buf);
+               }
+            }
+         }
+         if ((gpsdata.set & ALTITUDE_SET) && (gpsdata.fix.mode >= MODE_3D))
+         {
+            if (isnan(gpsdata.fix.altitude) == 0)
+            {
+               snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSAltitude=%d/10",
+                        (int)(gpsdata.fix.altitude*10+0.5));
+               add_exif_tag(state, exif_buf);
+               add_exif_tag(state, "GPS.GPSAltitudeRef=0");
+            }
+         }
+         if ((gpsdata.set & SPEED_SET) && (gpsdata.fix.mode >= MODE_2D))
+         {
+            if (isnan(gpsdata.fix.speed) == 0)
+            {
+               snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSSpeed=%d/10",
+                        (int)(gpsdata.fix.speed*MPS_TO_KPH*10+0.5));
+               add_exif_tag(state, exif_buf);
+               add_exif_tag(state, "GPS.GPSSpeedRef=K");
+            }
+         }
+         if ((gpsdata.set & TRACK_SET) && (gpsdata.fix.mode >= MODE_2D))
+         {
+            if (isnan(gpsdata.fix.track) == 0)
+            {
+               snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSTrack=%d/10", (int)(gpsdata.fix.track*10+0.5));
+               add_exif_tag(state, exif_buf);
+               add_exif_tag(state, "GPS.GPSTrackRef=T");
+            }
+         }
+      }
+   }
+
    // Now send any user supplied tags
 
    for (i=0;i<state->numExifTags && i < MAX_USER_EXIF_TAGS;i++)
@@ -1690,6 +1855,14 @@ int main(int argc, const char **argv)
       dump_status(&state);
    }
 
+   if (state.exif_gpsd)
+   {
+      if (state.verbose)
+         fprintf(stderr, "Connecting to gpsd\n");
+      if (connect_gpsd())
+         exit(EX_SOFTWARE);
+   }
+
    if (state.useGL)
       raspitex_init(&state.raspitex_state);
 
@@ -1798,7 +1971,12 @@ int main(int argc, const char **argv)
 
             while (keep_looping)
             {
+                if (state.exif_gpsd)
+                   connect_gpsd();
+
             	keep_looping = wait_for_next_frame(&state, &frame);
+                if (state.exif_gpsd)
+                   read_gps_data();
 
                 if (state.datetime)
                 {
@@ -2020,6 +2198,18 @@ error:
 
       if (state.verbose)
          fprintf(stderr, "Close down completed, all components disconnected, disabled and destroyed\n\n");
+   }
+
+   if (state.exif_gpsd)
+   {
+      if (state.verbose)
+         fprintf(stderr, "Closing gpsd connection\n\n");
+      if (gpsd_connected)
+      {
+         gps_stream(&gpsdata, WATCH_DISABLE, NULL);
+         gps_close(&gpsdata);
+         gpsd_connected = 0;
+      }
    }
 
    if (status != MMAL_SUCCESS)
