@@ -1791,6 +1791,7 @@ int main(int argc, const char **argv)
       {
          fprintf(stderr, "no gpsd running or network error: %d, %s\n",
                  errno, gpsd.gps_errstr(errno));
+         libgps_unload(&gpsd);
          exit(EX_SOFTWARE);
       }
       wait_gpsd_stream(&gpsd, 5000);
