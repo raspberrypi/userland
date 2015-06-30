@@ -60,7 +60,7 @@ void libgps_unload(gpsd_info *gpsd);
 /* gpsd */
 int connect_gpsd(gpsd_info *gpsd);
 void disconnect_gpsd(gpsd_info *gpsd);
-void wait_gpsd_stream(gpsd_info *gpsd, int timeout_ms);
+int wait_gps_time(gpsd_info *gpsd, int timeout_ms);
 void read_gps_data(gpsd_info *gpsd);
 
 /* helper functions */

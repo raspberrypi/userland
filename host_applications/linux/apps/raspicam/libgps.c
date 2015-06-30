@@ -110,19 +110,22 @@ void disconnect_gpsd(gpsd_info *gpsd)
    }
 }
 
-void wait_gpsd_stream(gpsd_info *gpsd, int timeout_ms)
+int wait_gps_time(gpsd_info *gpsd, int timeout_ms)
 {
    if (gpsd->gpsd_connected)
    {
-      time_t start;
-      gps_mask_t mask = GPS_DATA_OF_INTEREST;
-      start = time(NULL);
-      while (((time(NULL) - start) < timeout_ms) && ((gpsd->gpsdata.set & mask) == 0))
+      gps_mask_t mask = TIME_SET;
+      time_t start = time(NULL);
+      while ((time(NULL) - start < timeout_ms) &&
+             ((!gpsd->gpsdata.online) || ((gpsd->gpsdata.set & mask) == 0)))
       {
          if (gpsd->gps_waiting(&gpsd->gpsdata, 200))
             read_gps_data(gpsd);
       }
+      if ((gpsd->gpsdata.online) && ((gpsd->gpsdata.set & mask) != 0))
+         return 0;
    }
+   return -1;
 }
 
 void read_gps_data(gpsd_info *gpsd)
