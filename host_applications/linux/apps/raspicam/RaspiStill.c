@@ -1794,7 +1794,9 @@ int main(int argc, const char **argv)
          libgps_unload(&gpsd);
          exit(EX_SOFTWARE);
       }
-      if (wait_gps_time(&gpsd, 5000))
+      if (state.verbose)
+         fprintf(stderr, "Waiting for GPS time\n");
+      if (wait_gps_time(&gpsd, 5))
       {
          if (state.verbose)
             fprintf(stderr, "Warning: GPS time not available\n");

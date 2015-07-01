@@ -110,13 +110,13 @@ void disconnect_gpsd(gpsd_info *gpsd)
    }
 }
 
-int wait_gps_time(gpsd_info *gpsd, int timeout_ms)
+int wait_gps_time(gpsd_info *gpsd, int timeout_s)
 {
    if (gpsd->gpsd_connected)
    {
       gps_mask_t mask = TIME_SET;
       time_t start = time(NULL);
-      while ((time(NULL) - start < timeout_ms) &&
+      while ((time(NULL) - start < timeout_s) &&
              ((!gpsd->gpsdata.online) || ((gpsd->gpsdata.set & mask) == 0)))
       {
          if (gpsd->gps_waiting(&gpsd->gpsdata, 200))
