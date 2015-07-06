@@ -159,27 +159,18 @@ void read_gps_data(gpsd_info *gpsd)
 
 int deg_to_str(double f, char *buf, int buf_size)
 {
-   int sec, deg, min;
-   long frac_deg;
-   double fdsec, fsec, fdeg, fmin;
+   double fsec, fdeg, fmin;
 
-   if (buf_size > 0)
-      *buf = 0;
-
+   if (buf_size <= 0)
+      return -1;
+   *buf = 0;
    if (f < 0 || f > 360)
       return -1;
 
    fmin = modf(f, &fdeg);
-   deg = (int)fdeg;
-   frac_deg = (long)(fmin * 1000000);
-
    fsec = modf(fmin * 60, &fmin);
-   min = (int)fmin;
-   sec = (int)(fsec * 10000.0);
-
-   fdsec = modf(fsec * 60, &fsec);
-   sec = (int)fsec;
-   snprintf(buf, buf_size, "%02d/1,%02d/1,%02d/1", deg, min, sec);
+   fsec *= 60;
+   snprintf(buf, buf_size, "%03d/1,%02d/1,%05d/1000", (int)fdeg, (int)fmin, (int)(fsec*1000));
 
    return 0;
 }
