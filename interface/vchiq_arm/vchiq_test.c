@@ -1273,6 +1273,7 @@ func_data_test(VCHIQ_SERVICE_HANDLE_T service, int datalen, int align, int serve
          {
             vcos_log_error("%d: Data corrupted at %x-%x (datalen %x, align %x, server_align %x) -> %02x", func_data_test_iter, i - diffs, i - 1, datalen, align, server_align, data[i-1]);
             VCOS_BKPT;
+            success = 0;
             diffs = 0;
          }
       }
@@ -1280,12 +1281,16 @@ func_data_test(VCHIQ_SERVICE_HANDLE_T service, int datalen, int align, int serve
       {
          vcos_log_error("%d: Data corrupted at %x-%x (datalen %x, align %x, server_align %x) -> %02x", func_data_test_iter, i - diffs, i - 1, datalen, align, server_align, data[i-1]);
          VCOS_BKPT;
+         success = 0;
       }
    }
 
 skip_iter:
-   func_data_test_iter++;
-   return VCHIQ_SUCCESS;
+   if (success)
+   {
+      func_data_test_iter++;
+      return VCHIQ_SUCCESS;
+   }
 
 error_exit:
    return VCHIQ_ERROR;
