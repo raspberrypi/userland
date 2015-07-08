@@ -41,7 +41,6 @@ typedef struct
    int gpsd_connected;
    /* requires libgps (GPSD_API_MAJOR_VERSION >= 5) */
    gps_mask_t current_mask;
-   struct gps_data_t gpsdata_cache;
    struct gps_data_t gpsdata;
    /* libgps functions */
    int (*gps_read)(struct gps_data_t *);

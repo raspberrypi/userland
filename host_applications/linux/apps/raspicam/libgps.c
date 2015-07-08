@@ -33,8 +33,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "libgps.h"
 
-#define GPS_DATA_OF_INTEREST (TIME_SET | LATLON_SET | ALTITUDE_SET | SPEED_SET | TRACK_SET)
-
 static int libgps_load_sym(void **func, void *handle, char *symbol)
 {
    char *sym_error;
@@ -138,21 +136,6 @@ void read_gps_data(gpsd_info *gpsd)
       {
          gpsd->gps_close(&gpsd->gpsdata);
          gpsd->gpsd_connected = 0;
-      }
-      else if (r > 0)
-      {
-         gpsd->gpsdata_cache.online = gpsd->gpsdata.online;
-         if (gpsd->gpsdata.online)
-         {
-            gps_mask_t mask = GPS_DATA_OF_INTEREST;
-            if ((gpsd->gpsdata.fix.mode >= MODE_2D) &&
-                (gpsd->gpsdata.fix.mode >= gpsd->gpsdata_cache.fix.mode) &&
-                ((gpsd->gpsdata.set & mask) >= gpsd->current_mask))
-            {
-               gpsd->current_mask = gpsd->gpsdata.set & mask;
-               memcpy(&gpsd->gpsdata_cache, &gpsd->gpsdata, sizeof(gpsd->gpsdata_cache));
-            }
-         }
       }
    }
 }

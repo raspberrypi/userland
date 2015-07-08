@@ -1994,7 +1994,7 @@ int main(int argc, const char **argv)
                   // once enabled no further exif data is accepted
                   if ( state.enableExifTags )
                   {
-                     add_exif_tags(&state, &gpsd.gpsdata_cache);
+                     add_exif_tags(&state, &gpsd.gpsdata);
                   }
                   else
                   {
