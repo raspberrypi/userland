@@ -1393,8 +1393,8 @@ static void add_exif_tags(RASPISTILL_STATE *state, struct gps_data_t *gpsdata)
          {
             if (isnan(gpsdata->fix.track) == 0)
             {
-               snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSTrack=%d/10",
-                        (int)(gpsdata->fix.track*10+0.5));
+               snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSTrack=%d/100",
+                        (int)(gpsdata->fix.track*100+0.5));
                add_exif_tag(state, exif_buf);
                add_exif_tag(state, "GPS.GPSTrackRef=T");
             }
