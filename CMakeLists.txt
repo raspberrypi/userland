@@ -113,6 +113,14 @@ set(vmcs_host_apps_VERSION_MAJOR 1)
 set(vmcs_host_apps_VERSION_MINOR 0)
 
 include_directories("${PROJECT_BINARY_DIR}")
-
+include(FindPkgConfig QUIET)
+if(PKG_CONFIG_FOUND)
+	# Produce a pkg-config file
+	foreach(PCFILE bcm_host.pc  egl.pc  glesv2.pc  vg.pc)
+		configure_file("pkgconfig/${PCFILE}.in" "${PCFILE}" @ONLY)
+		install(FILES       "${CMAKE_CURRENT_BINARY_DIR}/${PCFILE}"
+			DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig")
+	endforeach()
+endif()
 # Remove cache entry, if one added by command line
 unset(KHRONOS_EGL_PLATFORM CACHE)
