@@ -56,6 +56,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <memory.h>
 #include <sysexits.h>
 
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 #define VERSION_STRING "v1.3.12"
 
 #include "bcm_host.h"
@@ -134,6 +139,7 @@ typedef struct
    char  header_bytes[29];
    int  header_wptr;
    FILE *imv_file_handle;               /// File handle to write inline motion vectors to.
+   int  flush_buffers;
 } PORT_USERDATA;
 
 /** Structure containing all state information for the current run
@@ -253,6 +259,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandSettings     25
 #define CommandSensorMode   26
 #define CommandIntraRefreshType 27
+#define CommandFlush        28
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -284,6 +291,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandSettings,      "-settings",   "set","Retrieve camera settings and write to stdout", 0},
    { CommandSensorMode,    "-mode",       "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
    { CommandIntraRefreshType,"-irefresh", "if", "Set intra refresh type", 1},
+   { CommandFlush,         "-flush",      "fl",  "Flush buffers in order to decrease latency", 0 },
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -720,6 +728,12 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          break;
       }
 
+      case CommandFlush:
+      {
+         state->callback_data.flush_buffers = 1;
+         break;
+      }
+
       default:
       {
          // Try parsing for any image specific parameters
@@ -870,7 +884,52 @@ static FILE *open_filename(RASPIVID_STATE *pState)
    }
 
    if (filename)
-      new_handle = fopen(filename, "wb");
+   {
+      int network = 0, socktype;
+      if(!strncmp("tcp://", filename, 6))
+      {
+         network = 1;
+         socktype = SOCK_STREAM;
+      }
+      if(!strncmp("udp://", filename, 6))
+      {
+         network = 1;
+         socktype = SOCK_DGRAM;
+      }
+      if(network)
+      {
+         filename += 6;
+         char *colon;
+         colon = strchr(filename, ':');
+         int sfd = socket(AF_INET, socktype, 0);
+         if(sfd < 0)
+         {
+              perror("socket");
+         }
+
+         unsigned short port;
+         sscanf(colon + 1, "%hu", &port);
+         *colon = 0;
+
+         fprintf(stderr, "Connecting to %s:%hu\n", filename, port);
+         
+         struct sockaddr_in saddr;
+         saddr.sin_family = AF_INET;
+         saddr.sin_port = htons(port);
+         inet_aton(filename, &saddr.sin_addr);
+
+         if(connect(sfd, (struct sockaddr *)&saddr, sizeof(struct sockaddr_in)) < 0)
+         {
+            perror("connect");
+         }
+
+         new_handle = fdopen(sfd, "w");
+      }
+      else
+      {
+         new_handle = fopen(filename, "wb");
+      }
+   }
 
    if (pState->verbose)
    {
@@ -1121,6 +1180,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
                if(pData->pstate->inlineMotionVectors)
                {
                   bytes_written = fwrite(buffer->data, 1, buffer->length, pData->imv_file_handle);
+                  if(pData->flush_buffers) fflush(pData->imv_file_handle);
                }
                else
                {
@@ -1131,6 +1191,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
             else
             {
                bytes_written = fwrite(buffer->data, 1, buffer->length, pData->file_handle);            
+               if(pData->flush_buffers) fflush(pData->file_handle);
             }
 
             mmal_buffer_header_mem_unlock(buffer);
@@ -2212,6 +2273,7 @@ int main(int argc, const char **argv)
          // Save circular buffer
          fwrite(state.callback_data.cb_buff + state.callback_data.iframe_buff[state.callback_data.iframe_buff_rpos], 1, copy_from_end, state.callback_data.file_handle);
          fwrite(state.callback_data.cb_buff, 1, copy_from_start, state.callback_data.file_handle);
+         if(state.callback_data.flush_buffers) fflush(state.callback_data.file_handle);
       }
 
 error:
