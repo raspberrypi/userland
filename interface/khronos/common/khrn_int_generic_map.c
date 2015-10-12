@@ -25,6 +25,7 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "interface/khronos/common/khrn_client_platform.h"
 #include "interface/khronos/common/khrn_int_generic_map.h"
 #include "interface/khronos/common/khrn_int_util.h"
 
