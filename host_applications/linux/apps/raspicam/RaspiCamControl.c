@@ -692,7 +692,7 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
       }
       else
       {
-         params->enable_annotate = ANNOTATE_USER_TEXT;
+         params->enable_annotate |= ANNOTATE_USER_TEXT;
          //copy string char by char and replace "\n" with newline character
          unsigned char c;
          char const *s = arg2;
@@ -1415,24 +1415,39 @@ int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, c
       time_t t = time(NULL);
       struct tm tm = *localtime(&t);
       char tmp[MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3];
+      int process_datetime = 1;
 
        annotate.enable = 1;
 
       if (settings & (ANNOTATE_APP_TEXT | ANNOTATE_USER_TEXT))
       {
-         strncpy(annotate.text, string, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3);
+         if ((settings & (ANNOTATE_TIME_TEXT | ANNOTATE_DATE_TEXT)) && strchr(string,'%') != NULL)
+         {  //string contains strftime parameter?
+            strftime(annotate.text, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3, string, &tm );
+            process_datetime = 0;
+         }else{
+            strncpy(annotate.text, string, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3);
+         }
          annotate.text[MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3-1] = '\0';
       }
 
-      if (settings & ANNOTATE_TIME_TEXT)
+      if (process_datetime && (settings & ANNOTATE_TIME_TEXT))
       {
-         strftime(tmp, 32, "%X ", &tm );
+         if(strlen(annotate.text)){
+            strftime(tmp, 32, " %X", &tm );   
+         }else{
+            strftime(tmp, 32, "%X", &tm );
+         }
          strncat(annotate.text, tmp, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3 - strlen(annotate.text) - 1);
       }
 
-      if (settings & ANNOTATE_DATE_TEXT)
+      if (process_datetime && (settings & ANNOTATE_DATE_TEXT))
       {
-         strftime(tmp, 32, "%x", &tm );
+         if(strlen(annotate.text)){
+            strftime(tmp, 32, " %x", &tm );   
+         }else{
+            strftime(tmp, 32, "%x", &tm );
+         }
          strncat(annotate.text, tmp, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3 - strlen(annotate.text) - 1);
       }
 
