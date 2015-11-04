@@ -685,10 +685,12 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
 
    case CommandAnnotate:
    {
+      char dummy;
+      unsigned int bitmask;
       // If parameter is a number, assume its a bitmask, otherwise a string
-      if (isdigit(*arg2))
+      if (sscanf(arg2, "%u%c", &bitmask, &dummy) == 1)
       {
-         sscanf(arg2, "%u", &params->enable_annotate);
+         params->enable_annotate |= bitmask;
       }
       else
       {
