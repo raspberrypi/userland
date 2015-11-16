@@ -48,7 +48,7 @@ Private types and defines.
 ******************************************************************************/
 
 // number of threads that can use ilcs
-#define ILCS_MAX_WAITING 4
+#define ILCS_MAX_WAITING 8
 
 // maximum number of retries to grab a wait slot,
 // before the message is discarded and failure returned.
@@ -716,14 +716,24 @@ static int ilcs_execute_function_ex(ILCS_SERVICE_T *st, IL_FUNCTION_T func,
          // we'll pause until we can carry on and hope that's sufficient.
          vcos_mutex_unlock(&st->wait_mtx);
 
-         vcos_event_wait(&st->wait_event);
-
          // if we're the ilcs thread, then the waiters might need
          // us to handle their response, so try and clear those now
          if(vcos_thread_current() == &st->thread)
-            while(ilcs_process_message(st, 0))
-               if(st->kill_service >= CLOSED_CALLBACK)
-                  return -1;
+         {
+            while (vcos_event_try(&st->wait_event) != VCOS_SUCCESS)
+            {
+               while(ilcs_process_message(st, 0))
+                  if(st->kill_service >= CLOSED_CALLBACK)
+                     return -1;
+               if (vcos_event_try(&st->wait_event) == VCOS_SUCCESS)
+                  break;
+               vcos_sleep(1);
+            }
+         }
+         else
+         {
+            vcos_event_wait(&st->wait_event);
+         }
 
          vcos_mutex_lock(&st->wait_mtx);
       }
