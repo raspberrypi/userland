@@ -106,8 +106,6 @@ const int ABORT_INTERVAL = 100; // ms
 /// Run/record forever
 #define WAIT_METHOD_FOREVER        4
 
-extern FILE *stderr, *stdout;
-
 int mmal_status_to_int(MMAL_STATUS_T status);
 static void signal_handler(int signal_number);
 
