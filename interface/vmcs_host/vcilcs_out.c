@@ -32,6 +32,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ctype.h>
 
 #include "interface/vchi/vchi.h"
+#include "interface/vcos/vcos_dlfcn.h"
 #include "interface/vmcs_host/khronos/IL/OMX_Component.h"
 #include "interface/vmcs_host/khronos/IL/OMX_ILCS.h"
 #include "interface/vmcs_host/vc_ilcs_defs.h"
