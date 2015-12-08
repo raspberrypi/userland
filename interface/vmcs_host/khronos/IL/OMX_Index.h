@@ -521,6 +521,7 @@ typedef enum OMX_INDEXTYPE {
     OMX_IndexParamCameraRxConfig,                             /**< reference: OMX_PARAM_CAMERARXCONFIG_TYPE */
     OMX_IndexParamCameraRxTiming,                             /**< reference: OMX_PARAM_CAMERARXTIMING_TYPE */
     OMX_IndexParamDynamicParameterConfig,                     /**< reference: OMX_PARAM_U32TYPE */
+    OMX_IndexParamBrcmVideoAVCSPSTimingEnable,                /** reference: OMX_CONFIG_PORTBOOLEANTYPE */
     OMX_IndexMax = 0x7FFFFFFF
 } OMX_INDEXTYPE;
 
