@@ -770,43 +770,43 @@ void raspicamcontrol_display_help()
 {
    int i;
 
-   fprintf(stderr, "\nImage parameter commands\n\n");
+   fprintf(stdout, "\nImage parameter commands\n\n");
 
    raspicli_display_help(cmdline_commands, cmdline_commands_size);
 
-   fprintf(stderr, "\n\nNotes\n\nExposure mode options :\n%s", exposure_map[0].mode );
+   fprintf(stdout, "\n\nNotes\n\nExposure mode options :\n%s", exposure_map[0].mode );
 
    for (i=1;i<exposure_map_size;i++)
    {
-      fprintf(stderr, ",%s", exposure_map[i].mode);
+      fprintf(stdout, ",%s", exposure_map[i].mode);
    }
 
-   fprintf(stderr, "\n\nAWB mode options :\n%s", awb_map[0].mode );
+   fprintf(stdout, "\n\nAWB mode options :\n%s", awb_map[0].mode );
 
    for (i=1;i<awb_map_size;i++)
    {
-      fprintf(stderr, ",%s", awb_map[i].mode);
+      fprintf(stdout, ",%s", awb_map[i].mode);
    }
 
-   fprintf(stderr, "\n\nImage Effect mode options :\n%s", imagefx_map[0].mode );
+   fprintf(stdout, "\n\nImage Effect mode options :\n%s", imagefx_map[0].mode );
 
    for (i=1;i<imagefx_map_size;i++)
    {
-      fprintf(stderr, ",%s", imagefx_map[i].mode);
+      fprintf(stdout, ",%s", imagefx_map[i].mode);
    }
 
-   fprintf(stderr, "\n\nMetering Mode options :\n%s", metering_mode_map[0].mode );
+   fprintf(stdout, "\n\nMetering Mode options :\n%s", metering_mode_map[0].mode );
 
    for (i=1;i<metering_mode_map_size;i++)
    {
-      fprintf(stderr, ",%s", metering_mode_map[i].mode);
+      fprintf(stdout, ",%s", metering_mode_map[i].mode);
    }
 
-   fprintf(stderr, "\n\nDynamic Range Compression (DRC) options :\n%s", drc_mode_map[0].mode );
+   fprintf(stdout, "\n\nDynamic Range Compression (DRC) options :\n%s", drc_mode_map[0].mode );
 
    for (i=1;i<drc_mode_map_size;i++)
    {
-      fprintf(stderr, ",%s", drc_mode_map[i].mode);
+      fprintf(stdout, ",%s", drc_mode_map[i].mode);
    }
 
    fprintf(stderr, "\n");

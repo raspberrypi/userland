@@ -219,7 +219,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandCamSelect, "-camselect","cs", "Select camera <number>. Default 0", 1 },
    { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},
    { CommandSensorMode,"-mode",     "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
-   { CommandDateTime,  "-datetime",  "dt", "Replace frame number in file name with DateTime (YearMonthDayHourMinSec)", 0},
+   { CommandDateTime,  "-datetime",  "dt", "Replace frame number in file name with DateTime (MonthDayHourMinSec)", 0},
    { CommandTimeStamp, "-timestamp", "ts", "Replace frame number in file name with unix timestamp (seconds since 1900)", 0},
 };
 
@@ -712,10 +712,10 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
  */
 static void display_valid_parameters(char *app_name)
 {
-   fprintf(stderr, "Runs camera for specific time, and take JPG capture at end if requested\n\n");
-   fprintf(stderr, "usage: %s [options]\n\n", app_name);
+   fprintf(stdout, "Runs camera for specific time, and take JPG capture at end if requested\n\n");
+   fprintf(stdout, "usage: %s [options]\n\n", app_name);
 
-   fprintf(stderr, "Image parameter commands\n\n");
+   fprintf(stdout, "Image parameter commands\n\n");
 
    raspicli_display_help(cmdline_commands, cmdline_commands_size);
 
@@ -728,7 +728,7 @@ static void display_valid_parameters(char *app_name)
    // Now display GL preview help
    raspitex_display_help();
 
-   fprintf(stderr, "\n");
+   fprintf(stdout, "\n");
 
    return;
 }
@@ -1671,7 +1671,7 @@ int main(int argc, const char **argv)
    // Do we have any parameters
    if (argc == 1)
    {
-      fprintf(stderr, "\%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
+      fprintf(stdout, "\%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
 
       display_valid_parameters(basename(argv[0]));
       exit(EX_USAGE);
