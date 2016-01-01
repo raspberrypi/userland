@@ -169,7 +169,7 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandSaturation,  "-saturation","sa", "Set image saturation (-100 to 100)", 1},
    {CommandISO,         "-ISO",       "ISO","Set capture ISO",  1},
    {CommandVideoStab,   "-vstab",     "vs", "Turn on video stabilisation", 0},
-   {CommandEVComp,      "-ev",        "ev", "Set EV compensation",  1},
+   {CommandEVComp,      "-ev",        "ev", "Set EV compensation - steps of 1/6 stop",  1},
    {CommandExposure,    "-exposure",  "ex", "Set exposure mode (see Notes)", 1},
    {CommandAWB,         "-awb",       "awb","Set AWB mode (see Notes)", 1},
    {CommandImageFX,     "-imxfx",     "ifx","Set image effect (see Notes)", 1},
