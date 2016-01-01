@@ -460,6 +460,25 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          int len = strlen(argv[i + 1]);
          if (len)
          {
+            //We use sprintf to append the frame number for timelapse mode
+            //Ensure that any %<char> is either %% or %d.
+            char *percent = argv[i+1];
+            while(valid && *percent && (percent=strchr(percent, '%')) != NULL)
+            {
+               int digits=0;
+               percent++;
+               while(isdigit(*percent))
+               {
+                 percent++;
+                 digits++;
+               }
+               if(!((*percent == '%' && !digits) || *percent == 'd'))
+               {
+                  valid = 0;
+                  fprintf(stderr, "Filename contains %% characters, but not %%d or %%%% - sorry, will fail\n");
+               }
+               percent++;
+            }
             state->filename = malloc(len + 10); // leave enough space for any timelapse generated changes to filename
             vcos_assert(state->filename);
             if (state->filename)
