@@ -300,7 +300,7 @@ static void dump_status(RASPIVIDYUV_STATE *state)
    for (i=0;i<wait_method_description_size;i++)
    {
       if (state->waitMethod == wait_method_description[i].nextWaitMethod)
-         fprintf(stderr, wait_method_description[i].description);
+         fprintf(stderr, "%s", wait_method_description[i].description);
    }
    fprintf(stderr, "\nInitial state '%s'\n", raspicli_unmap_xref(state->bCapturing, initial_map, initial_map_size));
    fprintf(stderr, "\n\n");
