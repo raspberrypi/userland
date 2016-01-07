@@ -267,7 +267,7 @@ static void dump_status(RASPISTILLYUV_STATE *state)
    for (i=0;i<next_frame_description_size;i++)
    {
       if (state->frameNextMethod == next_frame_description[i].nextFrameMethod)
-         fprintf(stderr, next_frame_description[i].description);
+         fprintf(stderr, "%s", next_frame_description[i].description);
    }
    fprintf(stderr, "\n\n");
 
