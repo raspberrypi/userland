@@ -120,6 +120,7 @@ typedef struct
    int wantRAW;                        /// Flag for whether the JPEG metadata also contains the RAW bayer image
    char *filename;                     /// filename of output file
    char *linkname;                     /// filename of output file
+   int frameStart;                     /// First number of frame output counter
    MMAL_PARAM_THUMBNAIL_CONFIG_T thumbnailConfig;
    int verbose;                        /// !0 if want detailed run information
    int demoMode;                       /// Run app in demo mode
@@ -193,6 +194,7 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandSensorMode   22
 #define CommandDateTime     23
 #define CommandTimeStamp    24
+#define CommandFrameStart   25
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -221,6 +223,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandSensorMode,"-mode",     "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
    { CommandDateTime,  "-datetime",  "dt", "Replace frame number in file name with DateTime (MonthDayHourMinSec)", 0},
    { CommandTimeStamp, "-timestamp", "ts", "Replace frame number in file name with unix timestamp (seconds since 1900)", 0},
+   { CommandFrameStart,"-framestart","fs",  "Starting frame number in output pattern", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -276,6 +279,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->wantRAW = 0;
    state->filename = NULL;
    state->linkname = NULL;
+   state->frameStart = 0;
    state->verbose = 0;
    state->thumbnailConfig.enable = 1;
    state->thumbnailConfig.width = 64;
@@ -506,6 +510,18 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          break;
 
       }
+
+      case CommandFrameStart:  // use a staring value != 0
+      {
+         if (sscanf(argv[i + 1], "%u", &state->frameStart) == 1)
+         {
+           i++;
+         }
+         else
+            valid = 0;
+         break;
+      }
+
       case CommandVerbose: // display lots of data during run
          state->verbose = 1;
          break;
@@ -1813,7 +1829,7 @@ int main(int argc, const char **argv)
             char *use_filename = NULL;      // Temporary filename while image being written
             char *final_filename = NULL;    // Name that file gets once writing complete
 
-            frame = 0;
+            frame = state.frameStart;
 
             while (keep_looping)
             {
