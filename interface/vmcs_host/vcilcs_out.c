@@ -38,6 +38,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/vmcs_host/vc_ilcs_defs.h"
 #include "interface/vmcs_host/vcilcs.h"
 #include "interface/vmcs_host/vcilcs_common.h"
+#include "interface/vcos/vcos_dlfcn.h"
 
 static VC_PRIVATE_PORT_T *find_port(VC_PRIVATE_COMPONENT_T *comp, OMX_U32 nPortIndex)
 {
