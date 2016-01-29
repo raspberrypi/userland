@@ -467,7 +467,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          {
             //We use sprintf to append the frame number for timelapse mode
             //Ensure that any %<char> is either %% or %d.
-            char *percent = argv[i+1];
+            const char *percent = argv[i+1];
             while(valid && *percent && (percent=strchr(percent, '%')) != NULL)
             {
                int digits=0;
