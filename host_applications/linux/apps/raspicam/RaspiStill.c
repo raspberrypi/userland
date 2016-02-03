@@ -177,6 +177,7 @@ typedef struct
 
 typedef struct
 {
+   pthread_mutex_t gps_cache_mutex;
    gpsd_info gpsd;
    struct gps_data_t gpsdata_cache;
    time_t last_valid_time;
@@ -1480,6 +1481,7 @@ static void add_exif_tags(RASPISTILL_STATE *state, struct gps_data_t *gpsdata)
       add_exif_tag(state, "GPS.GPSTrack=");
       add_exif_tag(state, "GPS.GPSTrackRef=");
 
+      pthread_mutex_lock(&gps_reader_data.gps_cache_mutex);
       if (gpsdata->online)
       {
          if (state->verbose)
@@ -1577,6 +1579,7 @@ static void add_exif_tags(RASPISTILL_STATE *state, struct gps_data_t *gpsdata)
             }
          }
       }
+      pthread_mutex_unlock(&gps_reader_data.gps_cache_mutex);
    }
 
    // Now send any user supplied tags
@@ -1933,8 +1936,10 @@ void *gps_reader_process(void *gps_reader_data_ptr)
             // we have GPS fix, copy fresh data to cache
             gps_valid = 1;
             time(&gps_reader->last_valid_time);
+            pthread_mutex_lock(&gps_reader->gps_cache_mutex);
             memcpy(&gps_reader->gpsdata_cache, &gps_reader->gpsd.gpsdata,
                    sizeof(struct gps_data_t));
+            pthread_mutex_unlock(&gps_reader->gps_cache_mutex);
          }
       }
       if (!gps_valid)
@@ -1944,15 +1949,19 @@ void *gps_reader_process(void *gps_reader_data_ptr)
          if (now - gps_reader->last_valid_time > GPS_CACHE_EXPIRY)
          {
             // our cache is stale, clear it
+            pthread_mutex_lock(&gps_reader->gps_cache_mutex);
             gps_reader->gpsdata_cache.online = gps_reader->gpsd.gpsdata.online;
             gps_reader->gpsdata_cache.set = 0;
             gps_reader->gpsdata_cache.fix.mode = 0;
+            pthread_mutex_unlock(&gps_reader->gps_cache_mutex);
          }
          // we lost GPS fix, copy GPS time to cache if available
          if (gps_reader->gpsd.gpsdata.set & TIME_SET)
          {
+            pthread_mutex_lock(&gps_reader->gps_cache_mutex);
             gps_reader->gpsdata_cache.set |= TIME_SET;
             gps_reader->gpsdata_cache.fix.time = gps_reader->gpsd.gpsdata.fix.time;
+            pthread_mutex_unlock(&gps_reader->gps_cache_mutex);
          }
       }
    }
@@ -2017,11 +2026,15 @@ int main(int argc, const char **argv)
    if (state.gpsdExif)
    {
       memset(&gps_reader_data, 0, sizeof(gps_reader_data));
+      pthread_mutex_init(&gps_reader_data.gps_cache_mutex, NULL);
       gps_reader_data.pstate = &state;
 
       gpsd_init(&gps_reader_data.gpsd);
       if (libgps_load(&gps_reader_data.gpsd))
+      {
+         pthread_mutex_destroy(&gps_reader_data.gps_cache_mutex);
          exit(EX_SOFTWARE);
+      }
       if (state.verbose)
          fprintf(stderr, "Connecting to gpsd @ %s:%s\n",
                  gps_reader_data.gpsd.server, gps_reader_data.gpsd.port);
@@ -2030,6 +2043,7 @@ int main(int argc, const char **argv)
          fprintf(stderr, "no gpsd running or network error: %d, %s\n",
                  errno, gps_reader_data.gpsd.gps_errstr(errno));
          libgps_unload(&gps_reader_data.gpsd);
+         pthread_mutex_destroy(&gps_reader_data.gps_cache_mutex);
          exit(EX_SOFTWARE);
       }
       if (state.verbose)
@@ -2402,6 +2416,7 @@ gps_error:
          fprintf(stderr, "Closing gpsd connection\n\n");
       disconnect_gpsd(&gps_reader_data.gpsd);
       libgps_unload(&gps_reader_data.gpsd);
+      pthread_mutex_destroy(&gps_reader_data.gps_cache_mutex);
    }
 
    if (status != MMAL_SUCCESS)
