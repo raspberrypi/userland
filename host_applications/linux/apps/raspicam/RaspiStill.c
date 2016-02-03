@@ -2392,16 +2392,16 @@ gps_error:
    if (state.gpsdExif)
    {
       gps_reader_data.terminated = 1;
-      if ((state.verbose) && (gps_reader_data.gpsd.gpsd_connected))
-         fprintf(stderr, "Closing gpsd connection\n\n");
-      disconnect_gpsd(&gps_reader_data.gpsd);
-      libgps_unload(&gps_reader_data.gpsd);
       if (gps_reader_data.gps_reader_thread_ok)
       {
          if (state.verbose)
             fprintf(stderr, "Waiting for GPS reader thread to terminate\n");
          pthread_join(gps_reader_data.gps_reader_thread, NULL);
       }
+      if ((state.verbose) && (gps_reader_data.gpsd.gpsd_connected))
+         fprintf(stderr, "Closing gpsd connection\n\n");
+      disconnect_gpsd(&gps_reader_data.gpsd);
+      libgps_unload(&gps_reader_data.gpsd);
    }
 
    if (status != MMAL_SUCCESS)
