@@ -15,14 +15,6 @@ set(VCHOSTIF_SOURCE
 #            ${VMCS_TARGET}/vmcs_main.c
 #  vc_vchi_haud.c
 
-if (BUILD_WAYLAND)
-wayland_add_protocol_server(
-    VCHOSTIF_SOURCE
-    ../../interface/wayland/dispmanx.xml
-    dispmanx
-)
-endif ()
-
 add_library(vchostif ${VCHOSTIF_SOURCE})
 
 #add_library(bufman            vc_vchi_bufman.c            )

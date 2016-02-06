@@ -69,7 +69,7 @@ typedef struct {
 #ifdef BUILD_WAYLAND
 /* XXX: This should be in a private header that can be included from EGL and vc_* */
 #include <wayland-server.h>
-#include "interface/vmcs_host/wayland-dispmanx-server-protocol.h"
+#include "interface/vcos/pthreads/wayland-dispmanx-server-protocol.h"
 struct wl_dispmanx_server_buffer {
 	struct wl_resource *resource;
 	struct wl_dispmanx *dispmanx;

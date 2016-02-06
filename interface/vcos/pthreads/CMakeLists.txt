@@ -33,6 +33,14 @@ set (SOURCES
    ../generic/vcos_generic_blockpool.c
 )
 
+if (BUILD_WAYLAND)
+wayland_add_protocol_server(
+    SOURCES
+    ../../../interface/wayland/dispmanx.xml
+    dispmanx
+)
+endif ()
+
 if (VCOS_PTHREADS_BUILD_SHARED)
    add_library (vcos SHARED ${SOURCES})
    target_link_libraries (vcos pthread dl rt)
