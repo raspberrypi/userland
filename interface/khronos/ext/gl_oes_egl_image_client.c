@@ -107,7 +107,6 @@ GL_API void GL_APIENTRY glEGLImageTargetTexture2DOES (GLenum target, GLeglImageO
                    GLEGLIMAGETARGETTEXTURE2DOES_ID,
                    RPC_ENUM(target),
                    RPC_EGLID(image));
-         RPC_FLUSH(thread);
 #if EGL_BRCM_global_image
       }
 #endif
