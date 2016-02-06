@@ -690,11 +690,13 @@ void egl_surface_free(EGL_SURFACE_T *surface)
       if (surface->back_wl_buffer) {
          wl_buffer_destroy(surface->back_wl_buffer->wl_buffer);
          free(surface->back_wl_buffer);
+         surface->back_wl_buffer = 0;
       }
 
       if (surface->front_wl_buffer) {
          wl_buffer_destroy(surface->front_wl_buffer->wl_buffer);
          free(surface->front_wl_buffer);
+         surface->front_wl_buffer = 0;
       }
 #endif
    }
