@@ -37,14 +37,13 @@ typedef struct string_pair_t
 static MMAL_STATUS_T parse_enum(int *dest, string_pair_t *pairs, size_t n_pairs, const char *str)
 {
    size_t i;
-   for (i=0; i<n_pairs; i++)
+   for (i=0; i<n_pairs; i+=2)
    {
       if (vcos_strcasecmp(str, pairs[i].string) == 0)
       {
          *dest = pairs[i].value;
          return MMAL_SUCCESS;
       }
-      i++;
    }
    return MMAL_EINVAL;
 }
