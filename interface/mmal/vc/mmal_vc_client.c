@@ -96,24 +96,24 @@ static void init_once(void)
   */
 static MMAL_STATUS_T create_waitpool(MMAL_WAITPOOL_T *waitpool)
 {
-   MMAL_STATUS_T status;
+   VCOS_STATUS_T status;
    int i;
 
    status = vcos_semaphore_create(&waitpool->sem, VCOS_FUNCTION,
                                   MAX_WAITERS);
-   if (status != MMAL_SUCCESS)
-      return status;
+   if (status != VCOS_SUCCESS)
+      return status==VCOS_SUCCESS ? MMAL_SUCCESS : MMAL_ENOSPC;
 
    for (i=0; i<MAX_WAITERS; i++)
    {
       waitpool->waiters[i].inuse = 0;
       status = vcos_semaphore_create(&waitpool->waiters[i].sem,
                                      "mmal waiter", 0);
-      if (status != MMAL_SUCCESS)
+      if (status != VCOS_SUCCESS)
          break;
    }
 
-   if (status != MMAL_SUCCESS)
+   if (status != VCOS_SUCCESS)
    {
       /* clean up */
       i--;
@@ -124,7 +124,7 @@ static MMAL_STATUS_T create_waitpool(MMAL_WAITPOOL_T *waitpool)
       }
       vcos_semaphore_delete(&waitpool->sem);
    }
-   return status;
+   return status==VCOS_SUCCESS ? MMAL_SUCCESS : MMAL_ENOSPC;
 }
 
 static void destroy_waitpool(MMAL_WAITPOOL_T *waitpool)
