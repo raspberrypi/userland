@@ -25,8 +25,6 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "bcm_host.h"
-
 #include "mmal.h"
 #include "util/mmal_connection.h"
 #include "util/mmal_default_components.h"
@@ -80,8 +78,6 @@ int main(int argc, char **argv)
       fprintf(stderr, "invalid arguments\n");
       return -1;
    }
-
-   bcm_host_init();
 
    vcos_semaphore_create(&context.semaphore, "example", 1);
 
