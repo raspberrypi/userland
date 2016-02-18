@@ -170,7 +170,7 @@ static OMX_ERRORTYPE mmalomx_parameter_get_xlat(MMALOMX_COMPONENT_T *component,
 
    if (xlat->fn.custom)
    {
-      return mmalil_error_to_mmal(xlat->fn.custom(MMALOMX_PARAM_MAPPING_TO_OMX, xlat, mmal_header,
+      return mmalil_error_to_omx(xlat->fn.custom(MMALOMX_PARAM_MAPPING_TO_OMX, xlat, mmal_header,
          pParam, mmal_port));
    }
 
@@ -554,14 +554,14 @@ OMX_ERRORTYPE mmalomx_parameter_set(MMALOMX_COMPONENT_T *component,
          port->mmal->format->es->video.par.num = param->nX;
          port->mmal->format->es->video.par.den = param->nY;
          mmal_rational_simplify(&port->mmal->format->es->video.par);
-         return mmalil_error_to_mmal(mmal_port_format_commit(port->mmal));
+         return mmalil_error_to_omx(mmal_port_format_commit(port->mmal));
       }
    case OMX_IndexParamColorSpace:
       {
          OMX_PARAM_COLORSPACETYPE *param = (OMX_PARAM_COLORSPACETYPE *)pParam;
          PARAM_GET_PORT(port, component, param->nPortIndex);
          port->mmal->format->es->video.color_space = mmalil_omx_color_space_to_mmal(param->eColorSpace);
-         return mmalil_error_to_mmal(mmal_port_format_commit(port->mmal));
+         return mmalil_error_to_omx(mmal_port_format_commit(port->mmal));
       }
    case OMX_IndexParamBrcmVideoCroppingDisable:
       {
