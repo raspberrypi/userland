@@ -281,7 +281,7 @@ static OMX_ERRORTYPE mmalomx_ComponentGetParameter(
       {
          OMX_PARAM_PORTDEFINITIONTYPE *param = (OMX_PARAM_PORTDEFINITIONTYPE *)pParam;
          PARAM_GET_PORT(port, component, param->nPortIndex);
-         return mmalil_error_to_mmal(mmalomx_get_port_settings(port, param));
+         return mmalil_error_to_omx(mmalomx_get_port_settings(port, param));
       }
       return OMX_ErrorNone;
       break;
@@ -475,7 +475,7 @@ static OMX_ERRORTYPE mmalomx_ComponentSetParameter(
       {
          OMX_PARAM_PORTDEFINITIONTYPE *param = (OMX_PARAM_PORTDEFINITIONTYPE *)pParam;
          PARAM_GET_PORT(port, component, param->nPortIndex);
-         return mmalil_error_to_mmal(mmalomx_set_port_settings(port, param));
+         return mmalil_error_to_omx(mmalomx_set_port_settings(port, param));
       }
       return OMX_ErrorNone;
       break;

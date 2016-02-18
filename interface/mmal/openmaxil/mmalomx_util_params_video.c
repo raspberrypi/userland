@@ -56,11 +56,11 @@ static MMAL_STATUS_T mmalomx_param_mapping_displayregion(MMALOMX_PARAM_MAPPING_D
       mmal->set = omx->set;
       mmal->display_num = omx->num;
       mmal->fullscreen = omx->fullscreen;
-      mmal->transform = omx->transform;
+      mmal->transform = (MMAL_DISPLAYTRANSFORM_T)omx->transform;
       rect_to_mmal(&mmal->dest_rect, &omx->dest_rect);
       rect_to_mmal(&mmal->src_rect, &omx->src_rect);
       mmal->noaspect = omx->noaspect;
-      mmal->mode = omx->mode;
+      mmal->mode = (MMAL_DISPLAYMODE_T)omx->mode;
       mmal->pixel_x = omx->pixel_x;
       mmal->pixel_y = omx->pixel_y;
       mmal->layer = omx->layer;
@@ -72,11 +72,11 @@ static MMAL_STATUS_T mmalomx_param_mapping_displayregion(MMALOMX_PARAM_MAPPING_D
       omx->set        = mmal->set;
       omx->num        = mmal->display_num;
       omx->fullscreen = mmal->fullscreen;
-      omx->transform  = mmal->transform;
+      omx->transform  = (OMX_DISPLAYTRANSFORMTYPE)mmal->transform;
       rect_to_omx(&omx->dest_rect, &mmal->dest_rect);
       rect_to_omx(&omx->src_rect, &mmal->src_rect);
       omx->noaspect   = mmal->noaspect;
-      omx->mode       = mmal->mode;
+      omx->mode       = (OMX_DISPLAYMODETYPE)mmal->mode;
       omx->pixel_x    = mmal->pixel_x;
       omx->pixel_y    = mmal->pixel_y;
       omx->layer      = mmal->layer;
