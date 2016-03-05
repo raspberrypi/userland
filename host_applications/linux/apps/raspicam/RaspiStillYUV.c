@@ -1376,6 +1376,10 @@ int main(int argc, const char **argv)
                {
                   rename_file(&state, output_file, final_filename, use_filename, frame);
                }
+               else
+               {
+                  fflush(output_file);
+               }
             }
 
             if (use_filename)
