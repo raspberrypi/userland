@@ -27,7 +27,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <stdlib.h>
 
-#include "vchost_config.h"
+#include "vchost_platform_config.h"
 #include "vchost.h"
 
 #include "interface/vcos/vcos.h"
