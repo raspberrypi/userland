@@ -106,6 +106,8 @@ add_subdirectory(interface/usbdk)
 
 # add linux apps
 add_subdirectory(host_applications/linux)
+add_subdirectory(opensrc/helpers/libfdt)
+add_subdirectory(helpers/dtoverlay)
 
 set(vmcs_host_apps_VERSION_MAJOR 1)
 set(vmcs_host_apps_VERSION_MINOR 0)
