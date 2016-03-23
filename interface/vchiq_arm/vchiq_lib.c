@@ -1505,7 +1505,7 @@ completion_thread(void *arg)
 
    while (1)
    {
-      int ret, i;
+      int count, i;
 
       while ((unsigned int)args.msgbufcount < vcos_countof(msgbufs))
       {
@@ -1521,12 +1521,12 @@ completion_thread(void *arg)
          }
       }
 
-      RETRY(ret, ioctl(instance->fd, VCHIQ_IOC_AWAIT_COMPLETION, &args));
+      RETRY(count, ioctl(instance->fd, VCHIQ_IOC_AWAIT_COMPLETION, &args));
 
-      if (ret <= 0)
+      if (count <= 0)
          break;
 
-      for (i = 0; i < ret; i++)
+      for (i = 0; i < count; i++)
       {
          VCHIQ_COMPLETION_DATA_T *completion = &completions[i];
          VCHIQ_SERVICE_T *service = (VCHIQ_SERVICE_T *)completion->service_userdata;
@@ -1548,6 +1548,7 @@ completion_thread(void *arg)
          if ((completion->reason == VCHIQ_SERVICE_CLOSED) &&
              instance->use_close_delivered)
          {
+            int ret;
             RETRY(ret,ioctl(service->fd, VCHIQ_IOC_CLOSE_DELIVERED, service->handle));
          }
       }
