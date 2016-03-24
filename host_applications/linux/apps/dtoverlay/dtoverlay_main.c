@@ -353,7 +353,8 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay)
     int rmpos;
     int i;
 
-    chdir(work_dir);
+    if (chdir(work_dir) != 0)
+	return error("chdir to %s failed", work_dir);
 
     overlay_dir = sprintf_dup("%s/%s", dt_overlays_dir, overlay);
     if (!dir_exists(overlay_dir))
@@ -633,7 +634,8 @@ static int overlay_applied(const char *overlay_dir)
     FILE *fp = fopen(status_path, "r");
     if (fp)
     {
-	fread(status, sizeof(status), 1, fp);
+	int bytes __attribute__((unused));
+	bytes = fread(status, sizeof(status), 1, fp);
 	fclose(fp);
     }
     free_string(status_path);
