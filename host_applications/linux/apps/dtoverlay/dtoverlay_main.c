@@ -30,7 +30,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <unistd.h>
 #include <stdarg.h>
-#include <glob.h>
 #include <sys/stat.h>
 #include <dirent.h>
 #include <errno.h>
@@ -503,7 +502,7 @@ static int dtoverlay_list_all(STATE_T *state)
 	char *str;
 	int idx;
 
-	sprintf(suffix, " [%d]", i + 1);
+	snprintf(suffix, 16," [%d]", i + 1);
 	left = strchr(state->namelist[i]->d_name, '_');
 	if (!left)
 	    return error("Internal error");
