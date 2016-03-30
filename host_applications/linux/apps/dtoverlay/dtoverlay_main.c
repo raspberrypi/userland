@@ -631,13 +631,15 @@ static int overlay_applied(const char *overlay_dir)
     char status[7] = { '\0' };
     const char *status_path = sprintf_dup("%s/status", overlay_dir);
     FILE *fp = fopen(status_path, "r");
+    int bytes = 0;
     if (fp)
     {
-	(void)fread(status, sizeof(status), 1, fp);
+	bytes = fread(status, sizeof(status), 1, fp);
 	fclose(fp);
     }
     free_string(status_path);
-    return memcmp(status, "applied", sizeof(status)) == 0;
+    return (bytes == sizeof(status)) &&
+	(memcmp(status, "applied", sizeof(status)) == 0);
 }
 
 int seq_filter(const struct dirent *de)
