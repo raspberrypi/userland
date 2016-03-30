@@ -20,4 +20,6 @@ endif ()
 add_library (dtovl ${SHARED}
              dtoverlay.c)
 
+target_link_libraries(dtovl fdt)
+
 install (TARGETS dtovl DESTINATION lib)
