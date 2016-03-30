@@ -30,7 +30,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <unistd.h>
 #include <stdarg.h>
-#include <glob.h>
 #include <sys/stat.h>
 #include <dirent.h>
 #include <errno.h>
@@ -353,7 +352,8 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay)
     int rmpos;
     int i;
 
-    chdir(work_dir);
+    if (chdir(work_dir) != 0)
+	fatal_error("Failed to chdir to '%s'", work_dir);
 
     overlay_dir = sprintf_dup("%s/%s", dt_overlays_dir, overlay);
     if (!dir_exists(overlay_dir))
@@ -503,7 +503,7 @@ static int dtoverlay_list_all(STATE_T *state)
 	char *str;
 	int idx;
 
-	sprintf(suffix, " [%d]", i + 1);
+	snprintf(suffix, sizeof(suffix), " [%d]", i + 1);
 	left = strchr(state->namelist[i]->d_name, '_');
 	if (!left)
 	    return error("Internal error");
@@ -633,7 +633,7 @@ static int overlay_applied(const char *overlay_dir)
     FILE *fp = fopen(status_path, "r");
     if (fp)
     {
-	fread(status, sizeof(status), 1, fp);
+	(void)fread(status, sizeof(status), 1, fp);
 	fclose(fp);
     }
     free_string(status_path);
