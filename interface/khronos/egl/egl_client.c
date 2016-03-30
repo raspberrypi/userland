@@ -2342,6 +2342,9 @@ EGLAPI EGLBoolean EGLAPIENTRY eglSwapBuffers(EGLDisplay dpy, EGLSurface surf)
                      surface->back_wl_buffer = buffer;
                   }
 
+                  glFlush();
+                  glFinish();
+
                   RPC_CALL7(eglIntSwapBuffers_impl,
                         thread,
                         EGLINTSWAPBUFFERS_ID_V2,
@@ -2353,6 +2356,8 @@ EGLAPI EGLBoolean EGLAPIENTRY eglSwapBuffers(EGLDisplay dpy, EGLSurface surf)
                         RPC_UINT(khrn_platform_get_window_position(surface->win)),
                         RPC_INT(surface->back_wl_buffer->resource));
 
+                  RPC_FLUSH(thread);
+
                   surface->front_wl_buffer->in_use = 1;
                   wl_surface_attach(wl_egl_window->wl_surface,
                                     surface->front_wl_buffer->wl_buffer,
@@ -2360,11 +2365,13 @@ EGLAPI EGLBoolean EGLAPIENTRY eglSwapBuffers(EGLDisplay dpy, EGLSurface surf)
                   wl_surface_damage(wl_egl_window->wl_surface, 0, 0,
                                     surface->width, surface->height);
                   wl_surface_commit(wl_egl_window->wl_surface);
+                  wl_display_flush(wl_display);
 
                   while(ret != -1 && surface->back_wl_buffer->in_use)
                      ret = wl_display_dispatch_queue(wl_display, process->wl_queue);
                } else
 #endif
+               {
                RPC_CALL6(eglIntSwapBuffers_impl,
                      thread,
                      EGLINTSWAPBUFFERS_ID,
@@ -2376,6 +2383,7 @@ EGLAPI EGLBoolean EGLAPIENTRY eglSwapBuffers(EGLDisplay dpy, EGLSurface surf)
                      RPC_UINT(khrn_platform_get_window_position(surface->win)));
 
                RPC_FLUSH(thread);
+               }
 
 #ifdef ANDROID
                CLIENT_UNLOCK();
