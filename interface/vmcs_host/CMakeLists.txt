@@ -15,7 +15,7 @@ set(VCHOSTIF_SOURCE
 #            ${VMCS_TARGET}/vmcs_main.c
 #  vc_vchi_haud.c
 
-add_library(vchostif ${VCHOSTIF_SOURCE})
+add_library(vchostif SHARED ${VCHOSTIF_SOURCE})
 
 #add_library(bufman            vc_vchi_bufman.c            )
 set(INSTALL_TARGETS vchostif)
