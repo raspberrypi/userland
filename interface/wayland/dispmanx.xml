@@ -118,6 +118,16 @@
       <arg name="buffer" type="object" interface="wl_buffer"/>
       <arg name="handle" type="uint"/>
     </event>
+
+    <request name="wrap_buffer">
+      <arg name="id" type="new_id" interface="wl_buffer"/>
+      <arg name="handle" type="uint"/>
+      <arg name="width" type="int"/>
+      <arg name="height" type="int"/>
+      <arg name="stride" type="uint"/>
+      <arg name="buffer_height" type="uint"/>
+      <arg name="format" type="uint"/>
+    </request>
   </interface>
 
 </protocol>

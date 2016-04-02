@@ -133,8 +133,50 @@ dispmanx_create_buffer(struct wl_client *client, struct wl_resource *resource,
                                      buffer->handle);
 }
 
+static void
+dispmanx_wrap_buffer(struct wl_client *client, struct wl_resource *resource,
+                     uint32_t id, uint32_t handle, int32_t width, int32_t height,
+                     uint32_t stride, uint32_t buffer_height, uint32_t format)
+{
+   struct wl_dispmanx_server_buffer *buffer;
+   VC_IMAGE_TYPE_T vc_format = get_vc_format(format);
+   uint32_t dummy;
+
+   if(vc_format == VC_IMAGE_MIN) {
+      wl_resource_post_error(resource,
+                             WL_DISPMANX_ERROR_INVALID_FORMAT,
+                             "invalid format");
+      return;
+   }
+
+   buffer = calloc(1, sizeof *buffer);
+   if (buffer == NULL) {
+      wl_resource_post_no_memory(resource);
+      return;
+   }
+
+   buffer->handle = handle;
+   buffer->width = width;
+   buffer->height = height;
+   buffer->format = format;
+
+   buffer->resource = wl_resource_create(resource->client, &wl_buffer_interface,
+                                         1, id);
+   if (!buffer->resource) {
+      wl_resource_post_no_memory(resource);
+      vc_dispmanx_resource_delete(buffer->handle);
+      free(buffer);
+      return;
+   }
+
+   wl_resource_set_implementation(buffer->resource,
+				       (void (**)(void)) &dispmanx_buffer_interface,
+				       buffer, destroy_buffer);
+}
+
 static const struct wl_dispmanx_interface dispmanx_interface = {
    dispmanx_create_buffer,
+   dispmanx_wrap_buffer,
 };
 
 static void
