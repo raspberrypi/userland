@@ -605,6 +605,8 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
       target_path = fdt_getprop(overlay_dtb->fdt, frag_off, "target-path", &len);
       if (target_path)
       {
+         if (target_path[0] != '/')
+            target_path = dtoverlay_get_alias(base_dtb, target_path);
          target_off = dtoverlay_create_node(base_dtb, target_path, len - 1);
          if (target_off < 0)
          {
