@@ -15,7 +15,6 @@ include_directories (
 )
 
 add_executable(dtoverlay dtoverlay_main.c utils.c)
-target_link_libraries(dtoverlay dtovl debug_sym vcos)
+target_link_libraries(dtoverlay dtovl)
 
 install(TARGETS dtoverlay RUNTIME DESTINATION bin)
-
