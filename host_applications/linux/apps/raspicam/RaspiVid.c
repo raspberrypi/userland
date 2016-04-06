@@ -150,6 +150,7 @@ struct RASPIVID_STATE_S
    int timeout;                        /// Time taken before frame is grabbed and app then shuts down. Units are milliseconds
    int width;                          /// Requested width of image
    int height;                         /// requested height of image
+   MMAL_FOURCC_T encoding;             /// Requested codec video encoding (MJPEG or H264)
    int bitrate;                        /// Requested bitrate
    int framerate;                      /// Requested frame rate (fps)
    int intraperiod;                    /// Intra-refresh period (key frame rate)
@@ -266,6 +267,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandIntraRefreshType 27
 #define CommandFlush        28
 #define CommandSavePTS      29
+#define CommandCodec        30
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -299,6 +301,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandIntraRefreshType,"-irefresh", "if", "Set intra refresh type", 1},
    { CommandFlush,         "-flush",      "fl",  "Flush buffers in order to decrease latency", 0 },
    { CommandSavePTS,       "-save-pts",   "pts","Save Timestamps to file for mkvmerge", 1 },
+   { CommandCodec,         "-codec",      "cd", "Specify the codec to use - H264 (default) or MJPEG", 1 },
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -341,6 +344,7 @@ static void default_status(RASPIVID_STATE *state)
    state->timeout = 5000;     // 5s delay before take image
    state->width = 1920;       // Default to 1080p
    state->height = 1080;
+   state->encoding = MMAL_ENCODING_H264;
    state->bitrate = 17000000; // This is a decent default bitrate for 1080p
    state->framerate = VIDEO_FRAME_RATE_NUM;
    state->intraperiod = -1;    // Not set
@@ -752,6 +756,23 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
             vcos_assert(state->pts_file);
             if (state->pts_file)
                strncpy(state->pts_file, argv[i + 1], len+1);
+            i++;
+         }
+         else
+            valid = 0;
+         break;
+      }
+      case CommandCodec:  // codec type
+      {
+         int len = strlen(argv[i + 1]);
+         if (len)
+         {
+            if (len==4 && !strncmp("H264", argv[i+1], 4))
+               state->encoding = MMAL_ENCODING_H264;
+            else  if (len==5 && !strncmp("MJPEG", argv[i+1], 5))
+               state->encoding = MMAL_ENCODING_MJPEG;
+            else
+               valid = 0;
             i++;
          }
          else
@@ -1609,11 +1630,15 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
    mmal_format_copy(encoder_output->format, encoder_input->format);
 
    // Only supporting H264 at the moment
-   encoder_output->format->encoding = MMAL_ENCODING_H264;
+   encoder_output->format->encoding = state->encoding;
 
    encoder_output->format->bitrate = state->bitrate;
 
-   encoder_output->buffer_size = encoder_output->buffer_size_recommended;
+   if (state->encoding == MMAL_ENCODING_H264)
+      encoder_output->buffer_size = encoder_output->buffer_size_recommended;
+   else
+      encoder_output->buffer_size = 256<<10;
+
 
    if (encoder_output->buffer_size < encoder_output->buffer_size_min)
       encoder_output->buffer_size = encoder_output->buffer_size_min;
@@ -1650,7 +1675,8 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
 
    }
 
-   if (state->intraperiod != -1)
+   if (state->encoding == MMAL_ENCODING_H264 &&
+       state->intraperiod != -1)
    {
       MMAL_PARAMETER_UINT32_T param = {{ MMAL_PARAMETER_INTRAPERIOD, sizeof(param)}, state->intraperiod};
       status = mmal_port_parameter_set(encoder_output, &param.hdr);
@@ -1661,7 +1687,8 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
       }
    }
 
-   if (state->quantisationParameter)
+   if (state->encoding == MMAL_ENCODING_H264 &&
+       state->quantisationParameter)
    {
       MMAL_PARAMETER_UINT32_T param = {{ MMAL_PARAMETER_VIDEO_ENCODE_INITIAL_QUANT, sizeof(param)}, state->quantisationParameter};
       status = mmal_port_parameter_set(encoder_output, &param.hdr);
@@ -1689,6 +1716,7 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
 
    }
 
+   if (state->encoding == MMAL_ENCODING_H264)
    {
       MMAL_PARAMETER_VIDEO_PROFILE_T  param;
       param.hdr.id = MMAL_PARAMETER_PROFILE;
@@ -1719,14 +1747,16 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
    }
 
    //set INLINE VECTORS flag to request motion vector estimates
-   if (mmal_port_parameter_set_boolean(encoder_output, MMAL_PARAMETER_VIDEO_ENCODE_INLINE_VECTORS, state->inlineMotionVectors) != MMAL_SUCCESS)
+   if (state->encoding == MMAL_ENCODING_H264 &&
+       mmal_port_parameter_set_boolean(encoder_output, MMAL_PARAMETER_VIDEO_ENCODE_INLINE_VECTORS, state->inlineMotionVectors) != MMAL_SUCCESS)
    {
       vcos_log_error("failed to set INLINE VECTORS parameters");
       // Continue rather than abort..
    }
 
    // Adaptive intra refresh settings
-   if (state->intra_refresh_type != -1)
+   if (state->encoding == MMAL_ENCODING_H264 &&
+       state->intra_refresh_type != -1)
    {
       MMAL_PARAMETER_VIDEO_INTRA_REFRESH_T  param;
       param.hdr.id = MMAL_PARAMETER_VIDEO_INTRA_REFRESH;
