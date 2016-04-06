@@ -1,11 +1,15 @@
-#/bin/bash
+#!/bin/bash
 
-if [ "armv6l" = `arch` ]; then
+if [ "armv6l" = `arch` ] || [ "armv7l" = `arch` ]; then
 	# Native compile on the Raspberry Pi
 	mkdir -p build/raspberry/release
 	pushd build/raspberry/release
 	cmake -DCMAKE_BUILD_TYPE=Release ../../..
-	make
+	if [ "armv6l" = `arch` ]; then
+		make
+	else
+		make -j4
+	fi
 	if [ "$1" != "" ]; then
 	 sudo make install DESTDIR=$1
 	else

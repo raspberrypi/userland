@@ -377,7 +377,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
          if (sscanf(argv[i + 1], "%u", &state->timeout) == 1)
          {
             // Ensure that if previously selected CommandKeypress we don't overwrite it
-            if (state->timeout == 0 && state->frameNextMethod != FRAME_NEXT_KEYPRESS)
+            if (state->timeout == 0 && state->frameNextMethod == FRAME_NEXT_SINGLE)
                state->frameNextMethod = FRAME_NEXT_FOREVER;
 
             i++;
@@ -527,6 +527,10 @@ static void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
          }
          break;
       }
+   }
+   else if (buffer->cmd == MMAL_EVENT_ERROR)
+   {
+      vcos_log_error("No data received from sensor. Check all connections, including the Sunny one on the camera board");
    }
    else
    {

@@ -44,11 +44,9 @@ int32_t graphics_get_display_size( const uint16_t display_number,
    DISPMANX_MODEINFO_T mode_info;
    int32_t success = -1;
 
-   if (display_handle == 0) {
-      // Display must be opened first.
-      display_handle = vc_dispmanx_display_open(display_number);
-      vcos_assert(display_handle);
-   }
+   // Display must be opened first.
+   display_handle = vc_dispmanx_display_open(display_number);
+
    if (display_handle) {
       success = vc_dispmanx_display_get_info(display_handle, &mode_info);
          
@@ -64,10 +62,6 @@ int32_t graphics_get_display_size( const uint16_t display_number,
             *height = mode_info.height;
          }
       }
-   }
-      
-   if ( display_handle )
-   {
       vc_dispmanx_display_close(display_handle);
       display_handle = 0;
    }
@@ -136,6 +130,39 @@ void bcm_host_deinit(void)
 void wfc_stream_await_buffer(void * stream)
 {
    vcos_assert(0);
+}
+
+static unsigned get_dt_ranges(const char *filename, unsigned offset)
+{
+   unsigned address = ~0;
+   FILE *fp = fopen(filename, "rb");
+   if (fp)
+   {
+      unsigned char buf[4];
+      fseek(fp, offset, SEEK_SET);
+      if (fread(buf, 1, sizeof buf, fp) == sizeof buf)
+         address = buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3] << 0;
+      fclose(fp);
+   }
+   return address;
+}
+
+unsigned bcm_host_get_peripheral_address(void)
+{
+   unsigned address = get_dt_ranges("/proc/device-tree/soc/ranges", 4);
+   return address == ~0 ? 0x20000000 : address;
+}
+
+unsigned bcm_host_get_peripheral_size(void)
+{
+   unsigned address = get_dt_ranges("/proc/device-tree/soc/ranges", 8);
+   return address == ~0 ? 0x01000000 : address;
+}
+
+unsigned bcm_host_get_sdram_address(void)
+{
+   unsigned address = get_dt_ranges("/proc/device-tree/axi/vc_mem/reg", 8);
+   return address == ~0 ? 0x40000000 : address;
 }
 
 

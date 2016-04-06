@@ -138,6 +138,8 @@ typedef struct
    int cameraNum;                      /// Camera number
    int burstCaptureMode;               /// Enable burst mode
    int sensor_mode;                     /// Sensor mode. 0=auto. Check docs/forum for modes selected by other values.
+   int datetime;                       /// Use DateTime instead of frame#
+   int timestamp;                      /// Use timestamp instead of frame#
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -190,6 +192,8 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandCamSelect    20
 #define CommandBurstMode    21
 #define CommandSensorMode   22
+#define CommandDateTime     23
+#define CommandTimeStamp    24
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -216,6 +220,8 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandCamSelect, "-camselect","cs", "Select camera <number>. Default 0", 1 },
    { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},
    { CommandSensorMode,"-mode",     "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
+   { CommandDateTime,  "-datetime",  "dt", "Replace frame number in file name with DateTime (YearMonthDayHourMinSec)", 0},
+   { CommandTimeStamp, "-timestamp", "ts", "Replace frame number in file name with unix timestamp (seconds since 1900)", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -295,6 +301,8 @@ static void default_status(RASPISTILL_STATE *state)
    state->cameraNum = 0;
    state->burstCaptureMode=0;
    state->sensor_mode = 0;
+   state->datetime = 0;
+   state->timestamp = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -483,13 +491,19 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
       case CommandVerbose: // display lots of data during run
          state->verbose = 1;
          break;
+      case CommandDateTime: // use datetime
+         state->datetime = 1;
+         break;
+      case CommandTimeStamp: // use timestamp
+         state->timestamp = 1;
+         break;
 
       case CommandTimeout: // Time to run viewfinder for before taking picture, in seconds
       {
          if (sscanf(argv[i + 1], "%u", &state->timeout) == 1)
          {
             // Ensure that if previously selected CommandKeypress we don't overwrite it
-            if (state->timeout == 0 && state->frameNextMethod != FRAME_NEXT_KEYPRESS)
+            if (state->timeout == 0 && state->frameNextMethod == FRAME_NEXT_SINGLE)
                state->frameNextMethod = FRAME_NEXT_FOREVER;
 
             i++;
@@ -749,6 +763,10 @@ static void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
          break;
       }
    }
+   else if (buffer->cmd == MMAL_EVENT_ERROR)
+   {
+      vcos_log_error("No data received from sensor. Check all connections, including the Sunny one on the camera board");
+   }
    else
       vcos_log_error("Received unexpected camera control callback event, 0x%08x", buffer->cmd);
 
@@ -844,6 +862,16 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
    if (status != MMAL_SUCCESS)
    {
       vcos_log_error("Failed to create camera component");
+      goto error;
+   }
+
+   status = raspicamcontrol_set_stereo_mode(camera->output[0], &state->camera_parameters.stereo_mode);
+   status += raspicamcontrol_set_stereo_mode(camera->output[1], &state->camera_parameters.stereo_mode);
+   status += raspicamcontrol_set_stereo_mode(camera->output[2], &state->camera_parameters.stereo_mode);
+
+   if (status != MMAL_SUCCESS)
+   {
+      vcos_log_error("Could not set stereo mode : error %d", status);
       goto error;
    }
 
@@ -1772,6 +1800,29 @@ int main(int argc, const char **argv)
             while (keep_looping)
             {
             	keep_looping = wait_for_next_frame(&state, &frame);
+
+                if (state.datetime)
+                {
+                   time_t rawtime;
+                   struct tm *timeinfo;
+
+                   time(&rawtime);
+                   timeinfo = localtime(&rawtime);
+
+                   frame = timeinfo->tm_mon+1;
+                   frame *= 100;
+                   frame += timeinfo->tm_mday;
+                   frame *= 100;
+                   frame += timeinfo->tm_hour;
+                   frame *= 100;
+                   frame += timeinfo->tm_min;
+                   frame *= 100;
+                   frame += timeinfo->tm_sec;
+                }
+                if (state.timestamp)
+                {
+                   frame = (int)time(NULL);
+                }
 
                // Open the file
                if (state.filename)

@@ -120,7 +120,7 @@ static void show_usage( void )
 {
    LOG_STD( "Usage: tvservice [OPTION]..." );
    LOG_STD( "  -p, --preferred                   Power on HDMI with preferred settings" );
-   LOG_STD( "  -e, --explicit=\"GROUP MODE DRIVE\" Power on HDMI with explicit GROUP (CEA, DMT, CEA_3D_SBS, CEA_3D_TB)\n"
+   LOG_STD( "  -e, --explicit=\"GROUP MODE DRIVE\" Power on HDMI with explicit GROUP (CEA, DMT, CEA_3D_SBS, CEA_3D_TB, CEA_3D_FP, CEA_3D_FS)\n"
             "                                      MODE (see --modes) and DRIVE (HDMI, DVI)" );
    LOG_STD( "  -t, --ntsc                        Use NTSC frequency for HDMI mode (e.g. 59.94Hz rather than 60Hz)" );
    LOG_STD( "  -c, --sdtvon=\"MODE ASPECT\"        Power on SDTV with MODE (PAL or NTSC) and ASPECT (4:3 14:9 or 16:9)" );
@@ -343,6 +343,10 @@ static const char *status_mode( TV_DISPLAY_STATE_T *tvstate ) {
             tmp = status_sprintf(mode_str, MAX_STATUS_STR_LENGTH, &offset, " 3D SbS"); break;
          case HDMI_3D_FORMAT_TB_HALF:
             tmp = status_sprintf(mode_str, MAX_STATUS_STR_LENGTH, &offset, " 3D T&B"); break;
+         case HDMI_3D_FORMAT_FRAME_PACKING:
+            tmp = status_sprintf(mode_str, MAX_STATUS_STR_LENGTH, &offset, " 3D FP"); break;
+         case HDMI_3D_FORMAT_FRAME_SEQUENTIAL:
+            tmp = status_sprintf(mode_str, MAX_STATUS_STR_LENGTH, &offset, " 3D FS"); break;
          default: break;
          }
       }
@@ -423,6 +427,8 @@ static const char *status_mode( TV_DISPLAY_STATE_T *tvstate ) {
       }
       //This is the format's aspect ratio
       tmp = status_sprintf(mode_str, MAX_STATUS_STR_LENGTH, &offset, " %s", aspect_ratio_str(tvstate->display.sdtv.display_options.aspect));
+   } else if (tvstate->state & VC_LCD_ATTACHED_DEFAULT) {
+      status_sprintf(mode_str, MAX_STATUS_STR_LENGTH, &offset, "LCD");
    } else {
       status_sprintf(mode_str, MAX_STATUS_STR_LENGTH, &offset, "TV is off");
    }
@@ -784,6 +790,16 @@ int main( int argc, char **argv )
                power_on_explicit_group = HDMI_RES_GROUP_CEA;
                opt_3d = 2;
             }
+            else if ( vcos_strcasecmp( "CEA_3D_FP", group_str ) == 0 )
+            {
+               power_on_explicit_group = HDMI_RES_GROUP_CEA;
+               opt_3d = 3;
+            }
+            else if ( vcos_strcasecmp( "CEA_3D_FS", group_str ) == 0 )
+            {
+               power_on_explicit_group = HDMI_RES_GROUP_CEA;
+               opt_3d = 4;
+            }
             else
             {
                LOG_ERR( "Invalid group '%s'", group_str );
@@ -1008,6 +1024,10 @@ int main( int argc, char **argv )
 
    if ( opt_preferred == 1 )
    {
+      if(set_property( HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_NONE, 0) != 0)
+      {
+         goto err_stop_service;
+      }
       if ( power_on_preferred() != 0 )
       {
          goto err_stop_service;
@@ -1016,11 +1036,23 @@ int main( int argc, char **argv )
    else if ( opt_explicit == 1 )
    {
       //Distinguish between turning on 3D side by side and 3D top/bottom
-      if(opt_3d == 1 && set_property( HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_SBS_HALF, 0) != 0)
+      if(opt_3d == 0 && set_property( HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_NONE, 0) != 0)
+      {
+         goto err_stop_service;
+      }
+      else if(opt_3d == 1 && set_property( HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_SBS_HALF, 0) != 0)
       {
          goto err_stop_service;
       }
       else if(opt_3d == 2 && set_property( HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_TB_HALF, 0) != 0)
+      {
+         goto err_stop_service;
+      }
+      else if(opt_3d == 3 && set_property( HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_FRAME_PACKING, 0) != 0)
+      {
+         goto err_stop_service;
+      }
+      else if(opt_3d == 4 && set_property( HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_FRAME_SEQUENTIAL, 0) != 0)
       {
          goto err_stop_service;
       }

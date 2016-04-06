@@ -139,8 +139,16 @@ void mmalil_buffer_header_to_omx(OMX_BUFFERHEADERTYPE *omx, MMAL_BUFFER_HEADER_T
    omx->nTimeStamp = omx_ticks_from_s64(mmal->pts);
    if (mmal->pts == MMAL_TIME_UNKNOWN)
    {
-      omx->nFlags |= OMX_BUFFERFLAG_TIME_UNKNOWN;
-      omx->nTimeStamp = omx_ticks_from_s64(0);
+      if (mmal->dts == MMAL_TIME_UNKNOWN)
+      {
+         omx->nTimeStamp = omx_ticks_from_s64(0);
+         omx->nFlags |= OMX_BUFFERFLAG_TIME_UNKNOWN;
+      }
+      else
+      {
+        omx->nTimeStamp = omx_ticks_from_s64(mmal->dts);
+        omx->nFlags |= OMX_BUFFERFLAG_TIME_IS_DTS;
+      }
    }
 }
 
@@ -151,10 +159,21 @@ void mmalil_buffer_header_to_mmal(MMAL_BUFFER_HEADER_T *mmal, OMX_BUFFERHEADERTY
    mmal->alloc_size = omx->nAllocLen;
    mmal->length = omx->nFilledLen;
    mmal->offset = omx->nOffset;
-   mmal->pts = omx_ticks_to_s64(omx->nTimeStamp);
-   if (omx->nFlags & OMX_BUFFERFLAG_TIME_UNKNOWN)
-      mmal->pts = MMAL_TIME_UNKNOWN;
-   mmal->dts = MMAL_TIME_UNKNOWN;
+   if (omx->nFlags & OMX_BUFFERFLAG_TIME_IS_DTS)
+   {
+     mmal->dts = omx_ticks_to_s64(omx->nTimeStamp);
+     mmal->pts = MMAL_TIME_UNKNOWN;
+   }
+   else if (omx->nFlags & OMX_BUFFERFLAG_TIME_UNKNOWN)
+   {
+     mmal->dts = MMAL_TIME_UNKNOWN;
+     mmal->pts = MMAL_TIME_UNKNOWN;
+   }
+   else
+   {
+     mmal->dts = MMAL_TIME_UNKNOWN;
+     mmal->pts = omx_ticks_to_s64(omx->nTimeStamp);
+   }
    mmal->flags = mmalil_buffer_flags_to_mmal(omx->nFlags);
 }
 
@@ -585,6 +604,7 @@ static struct {
 } mmal_omx_video_coding_table[] =
 {
    {MMAL_ENCODING_H264,           OMX_VIDEO_CodingAVC},
+   {MMAL_ENCODING_MVC,            OMX_VIDEO_CodingMVC},
    {MMAL_ENCODING_MP4V,           OMX_VIDEO_CodingMPEG4},
    {MMAL_ENCODING_MP2V,           OMX_VIDEO_CodingMPEG2},
    {MMAL_ENCODING_MP1V,           OMX_VIDEO_CodingMPEG2},
@@ -689,6 +709,11 @@ static struct {
    {MMAL_ENCODING_ARGB,           OMX_COLOR_Format32bitBGRA8888},
    {MMAL_ENCODING_RGBA,           OMX_COLOR_Format32bitABGR8888},
    {MMAL_ENCODING_EGL_IMAGE,      OMX_COLOR_FormatBRCMEGL},
+   {MMAL_ENCODING_BAYER_SBGGR8,   OMX_COLOR_FormatRawBayer8bit},
+   {MMAL_ENCODING_BAYER_SBGGR10P, OMX_COLOR_FormatRawBayer10bit},
+   {MMAL_ENCODING_BAYER_SBGGR12P, OMX_COLOR_FormatRawBayer12bit},
+   {MMAL_ENCODING_BAYER_SBGGR16,  OMX_COLOR_FormatRawBayer16bit},
+   {MMAL_ENCODING_BAYER_SBGGR10DPCM8,OMX_COLOR_FormatRawBayer8bitcompressed},
    {MMAL_ENCODING_OPAQUE,         OMX_COLOR_FormatBRCMOpaque},
    {MMAL_ENCODING_UNKNOWN,        OMX_COLOR_FormatUnused}
 };

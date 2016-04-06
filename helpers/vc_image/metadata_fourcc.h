@@ -89,9 +89,7 @@ typedef enum {
    METADATA_STILL_AREA_A     = ( 'S'<<24)+('T'<<16)+('L'<<8)+('A'), // 'STLA' : FLAT_AREA_METADATA_T defined in /middleware/camplus/sw/perceptual/stillarea.h
    METADATA_DDITHER_A        = ( 'D'<<24)+('D'<<16)+('T'<<8)+('A'), // 'DDTA' : DDITHER_METADATA_T defined in /middleware/camplus/sw/perceptual/...
    
-#ifdef CONFIG_VC_IMAGE_LINKED_MULTICHANN
    METADATA_LINKED_MULTICHANN = ( 'I'<<24)+('L'<<16)+('M'<<8)+('C'), // 'ILMC' : VC_IMAGE_LINKED_MULTICHANN_T defined in /helpers/vc_image/vc_image.h
-#endif
 
    METADATA_HDR              = ( 0 <<24)+( 'H'<<16)+('D'<<8)+('R'), // 'HDR' : HDR_METADATA_T defined in /middleware/camplus/sw/hdr/hdr_metadata.h
    METADATA_FOCUS_STATS_PREPROC   = ('F'<<24)+('S'<<16)+('P'<<8)+('M'), // 'FSPM' : FOCUS_STATS_PREPROC_METADATA defined in /middleware/camplus/sw/hdr/focus_stats_preproc/focus_stats_preproc.h

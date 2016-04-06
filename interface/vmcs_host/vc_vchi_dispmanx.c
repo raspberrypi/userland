@@ -25,6 +25,7 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 #include <string.h>
+#include <stdlib.h>
 
 #include "vchost_config.h"
 #include "vchost.h"
@@ -510,6 +511,13 @@ VCHPRE_ int VCHPOST_ vc_dispmanx_resource_write_data_handle( DISPMANX_RESOURCE_H
  ***********************************************************/
 VCHPRE_ DISPMANX_DISPLAY_HANDLE_T VCHPOST_ vc_dispmanx_display_open( uint32_t device ) {
    uint32_t display_handle;
+   char *env = getenv("VC_DISPLAY");
+
+   if (device == 0 && env)
+   {
+      device = atoi(env);
+   }
+
    device = VC_HTOV32(device);
    display_handle = dispmanx_get_handle(EDispmanDisplayOpen,
                                                  &device, sizeof(device));
@@ -1290,7 +1298,7 @@ static void *dispmanx_notify_func( void *arg ) {
       if (success != 0)
          continue;
 
-      handle = (DISPMANX_UPDATE_HANDLE_T)dispmanx_client.notify_buffer[1];
+      handle = (DISPMANX_UPDATE_HANDLE_T)dispmanx_client.notify_buffer[0];
       if (handle) {
          // This is the response to an update submit
          // Decrement the use count - the corresponding "use" is in vc_dispmanx_update_submit.
