@@ -83,20 +83,6 @@ int dtoverlay_apply_override(DTBLOB_T *dtb, const char *override_name,
                              const char *override_data, int data_len,
                              const char *override_value);
 
-int dtoverlay_extract_override(const char *override_name,
-                               const char **data_ptr, int *len_ptr,
-                               const char **namep, int *namelenp, int *offp,
-                               int *sizep);
-
-int dtoverlay_apply_integer_override(DTBLOB_T *dtb, int phandle,
-                                     const char *prop_name, int name_len,
-                                     int override_off, int override_size,
-                                     uint64_t override_val);
-
-int dtoverlay_apply_string_override(DTBLOB_T *dtb, int phandle,
-                                    const char *prop_name, int name_len,
-                                    const char *override_str);
-
 int dtoverlay_set_synonym(DTBLOB_T *dtb, const char *dst, const char *src);
 
 int dtoverlay_dup_property(DTBLOB_T *dtb, const char *node_name,
