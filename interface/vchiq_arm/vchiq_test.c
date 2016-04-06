@@ -130,6 +130,7 @@ static int setup_auto_kill(int timeout_ms);
 #ifdef __linux__
 
 #include <fcntl.h>
+#include <sys/ioctl.h>
 #include "interface/vmcs_host/vc_cma.h"
 
 static void reserve_test(int reserve, int delay)
@@ -1316,6 +1317,7 @@ static VCHIQ_STATUS_T
 clnt_callback(VCHIQ_REASON_T reason, VCHIQ_HEADER_T *header,
    VCHIQ_SERVICE_HANDLE_T service, void *bulk_userdata)
 {
+   int data;
    vcos_mutex_lock(&g_mutex);
    if (reason == VCHIQ_MESSAGE_AVAILABLE)
    {
@@ -1323,7 +1325,7 @@ clnt_callback(VCHIQ_REASON_T reason, VCHIQ_HEADER_T *header,
          vchiq_release_message(service, header);
       else
       /* Responses of length 0 are not sync points */
-      if ((header->size >= 4) && (*(int *)header->data == MSG_ECHO))
+      if ((header->size >= 4) && (memcpy(&data, header->data, sizeof(data)), data == MSG_ECHO))
       {
          /* This is a complete echoed packet */
          if (g_params.verify && (mem_check(header->data, bulk_tx_data[ctrl_received % NUM_BULK_BUFS], g_params.blocksize) != 0))
