@@ -67,7 +67,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # else
 #  define PAGE_SIZE   4096
 # endif
-#define PAGE_MASK   (~(PAGE_SIZE - 1))
+#endif
+#ifndef PAGE_MASK
+# define PAGE_MASK   (~(PAGE_SIZE - 1))
 #endif
 
 // Offset within the videocore memory map to get the address of the symbol

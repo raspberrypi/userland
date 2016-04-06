@@ -268,7 +268,7 @@ static void dump_status(RASPISTILLYUV_STATE *state)
    for (i=0;i<next_frame_description_size;i++)
    {
       if (state->frameNextMethod == next_frame_description[i].nextFrameMethod)
-         fprintf(stderr, next_frame_description[i].description);
+         fprintf(stderr, "%s", next_frame_description[i].description);
    }
    fprintf(stderr, "\n\n");
 
@@ -481,10 +481,10 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
  */
 static void display_valid_parameters(char *app_name)
 {
-   fprintf(stderr, "Runs camera for specific time, and take uncompressed YUV capture at end if requested\n\n");
-   fprintf(stderr, "usage: %s [options]\n\n", app_name);
+   fprintf(stdout, "Runs camera for specific time, and take uncompressed YUV capture at end if requested\n\n");
+   fprintf(stdout, "usage: %s [options]\n\n", app_name);
 
-   fprintf(stderr, "Image parameter commands\n\n");
+   fprintf(stdout, "Image parameter commands\n\n");
 
    raspicli_display_help(cmdline_commands, cmdline_commands_size);
 
@@ -494,7 +494,7 @@ static void display_valid_parameters(char *app_name)
    // Now display any help information from the camcontrol code
    raspicamcontrol_display_help();
 
-   fprintf(stderr, "\n");
+   fprintf(stdout, "\n");
 
    return;
 }
@@ -1193,7 +1193,7 @@ int main(int argc, const char **argv)
    // Do we have any parameters
    if (argc == 1)
    {
-      fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
+      fprintf(stdout, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
 
       display_valid_parameters(basename(argv[0]));
       exit(EX_USAGE);
@@ -1376,6 +1376,10 @@ int main(int argc, const char **argv)
                if (output_file != stdout)
                {
                   rename_file(&state, output_file, final_filename, use_filename, frame);
+               }
+               else
+               {
+                  fflush(output_file);
                }
             }
 

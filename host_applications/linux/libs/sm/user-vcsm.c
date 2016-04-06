@@ -313,7 +313,7 @@ unsigned int vcsm_malloc_cache( unsigned int size, VCSM_CACHE_TYPE_T cache, char
 */
 unsigned int vcsm_malloc( unsigned int size, char *name )
 {
-   return vcsm_malloc_cache( size, VMCS_SM_CACHE_NONE, name );
+   return vcsm_malloc_cache( size, VCSM_CACHE_TYPE_NONE, name );
 }
 
 /* Shares an allocated block of memory.
@@ -336,7 +336,7 @@ unsigned int vcsm_malloc_share( unsigned int handle )
    void *usr_ptr = NULL;
    int rc;
 
-   if ( (vcsm_handle == VCSM_INVALID_HANDLE) )
+   if ( vcsm_handle == VCSM_INVALID_HANDLE )
    {
       vcos_log_error( "[%s]: [%d]: NULL size or invalid device!",
                       __func__,

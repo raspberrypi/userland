@@ -99,6 +99,8 @@ enum {
    MMAL_PARAMETER_VIDEO_RENDER_STATS,           /**< Take a @ref MMAL_PARAMETER_VIDEO_RENDER_STATS_T. */
    MMAL_PARAMETER_VIDEO_INTERLACE_TYPE,           /**< Take a @ref MMAL_PARAMETER_VIDEO_INTERLACE_TYPE_T. */
    MMAL_PARAMETER_VIDEO_INTERPOLATE_TIMESTAMPS,         /**< Takes a @ref MMAL_PARAMETER_BOOLEAN_T */
+   MMAL_PARAMETER_VIDEO_ENCODE_SPS_TIMING,         /**< Take a @ref MMAL_PARAMETER_BOOLEAN_T */
+   MMAL_PARAMETER_VIDEO_MAX_NUM_CALLBACKS,         /**< Take a @ref MMAL_PARAMETER_UINT32_T */
 };
 
 /** Display transformations.
@@ -425,7 +427,7 @@ typedef struct MMAL_PARAMETER_VIDEO_EEDE_LOSSRATE_T {
    uint32_t loss_rate;
 } MMAL_PARAMETER_VIDEO_EEDE_LOSSRATE_T;
 
-/** Structure for setting inital DRM parameters */
+/** Structure for setting initial DRM parameters */
 typedef struct MMAL_PARAMETER_VIDEO_DRM_INIT_INFO_T {
    MMAL_PARAMETER_HEADER_T hdr;
 

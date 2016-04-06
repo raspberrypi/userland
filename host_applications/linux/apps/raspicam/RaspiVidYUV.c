@@ -106,8 +106,6 @@ const int ABORT_INTERVAL = 100; // ms
 /// Run/record forever
 #define WAIT_METHOD_FOREVER        4
 
-extern FILE *stderr, *stdout;
-
 int mmal_status_to_int(MMAL_STATUS_T status);
 static void signal_handler(int signal_number);
 
@@ -302,7 +300,7 @@ static void dump_status(RASPIVIDYUV_STATE *state)
    for (i=0;i<wait_method_description_size;i++)
    {
       if (state->waitMethod == wait_method_description[i].nextWaitMethod)
-         fprintf(stderr, wait_method_description[i].description);
+         fprintf(stderr, "%s", wait_method_description[i].description);
    }
    fprintf(stderr, "\nInitial state '%s'\n", raspicli_unmap_xref(state->bCapturing, initial_map, initial_map_size));
    fprintf(stderr, "\n\n");
@@ -555,23 +553,23 @@ static int parse_cmdline(int argc, const char **argv, RASPIVIDYUV_STATE *state)
  */
 static void display_valid_parameters(char *app_name)
 {
-   fprintf(stderr, "Display camera output to display, and optionally saves an uncompressed YUV420 file \n\n");
-   fprintf(stderr, "NOTE: High resolutions and/or frame rates may exceed the bandwidth of the system due\n");
-   fprintf(stderr, "to the large amounts of data being moved to the SD card. This will result in undefined\n");
-   fprintf(stderr, "results in the subsequent file.\n");
-   fprintf(stderr, "The raw file produced contains all the files. Each image in the files will be of size\n");
-   fprintf(stderr, "width*height*1.5, unless width and/or height are not divisible by 16. Use the image size\n");
-   fprintf(stderr, "displayed during the run (in verbose mode) for an accurate value\n");
+   fprintf(stdout, "Display camera output to display, and optionally saves an uncompressed YUV420 file \n\n");
+   fprintf(stdout, "NOTE: High resolutions and/or frame rates may exceed the bandwidth of the system due\n");
+   fprintf(stdout, "to the large amounts of data being moved to the SD card. This will result in undefined\n");
+   fprintf(stdout, "results in the subsequent file.\n");
+   fprintf(stdout, "The raw file produced contains all the files. Each image in the files will be of size\n");
+   fprintf(stdout, "width*height*1.5, unless width and/or height are not divisible by 16. Use the image size\n");
+   fprintf(stdout, "displayed during the run (in verbose mode) for an accurate value\n");
 
-   fprintf(stderr, "The Linux split command can be used to split up the file to individual frames\n");
+   fprintf(stdout, "The Linux split command can be used to split up the file to individual frames\n");
 
-   fprintf(stderr, "\nusage: %s [options]\n\n", app_name);
+   fprintf(stdout, "\nusage: %s [options]\n\n", app_name);
 
-   fprintf(stderr, "Image parameter commands\n\n");
+   fprintf(stdout, "Image parameter commands\n\n");
 
    raspicli_display_help(cmdline_commands, cmdline_commands_size);
 
-   fprintf(stderr, "\n");
+   fprintf(stdout, "\n");
 
    // Help for preview options
    raspipreview_display_help();
@@ -579,7 +577,7 @@ static void display_valid_parameters(char *app_name)
    // Now display any help information from the camcontrol code
    raspicamcontrol_display_help();
 
-   fprintf(stderr, "\n");
+   fprintf(stdout, "\n");
 
    return;
 }
@@ -1204,7 +1202,7 @@ int main(int argc, const char **argv)
    // Do we have any parameters
    if (argc == 1)
    {
-      fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
+      fprintf(stdout, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
 
       display_valid_parameters(basename(argv[0]));
       exit(EX_USAGE);

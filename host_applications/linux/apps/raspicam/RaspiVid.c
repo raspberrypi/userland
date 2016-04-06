@@ -401,7 +401,7 @@ static void dump_status(RASPIVID_STATE *state)
    for (i=0;i<wait_method_description_size;i++)
    {
       if (state->waitMethod == wait_method_description[i].nextWaitMethod)
-         fprintf(stderr, wait_method_description[i].description);
+         fprintf(stderr, "%s", wait_method_description[i].description);
    }
    fprintf(stderr, "\nInitial state '%s'\n", raspicli_unmap_xref(state->bCapturing, initial_map, initial_map_size));
    fprintf(stderr, "\n\n");
@@ -783,32 +783,32 @@ static void display_valid_parameters(char *app_name)
 {
    int i;
 
-   fprintf(stderr, "Display camera output to display, and optionally saves an H264 capture at requested bitrate\n\n");
-   fprintf(stderr, "\nusage: %s [options]\n\n", app_name);
+   fprintf(stdout, "Display camera output to display, and optionally saves an H264 capture at requested bitrate\n\n");
+   fprintf(stdout, "\nusage: %s [options]\n\n", app_name);
 
-   fprintf(stderr, "Image parameter commands\n\n");
+   fprintf(stdout, "Image parameter commands\n\n");
 
    raspicli_display_help(cmdline_commands, cmdline_commands_size);
 
    // Profile options
-   fprintf(stderr, "\n\nH264 Profile options :\n%s", profile_map[0].mode );
+   fprintf(stdout, "\n\nH264 Profile options :\n%s", profile_map[0].mode );
 
    for (i=1;i<profile_map_size;i++)
    {
-      fprintf(stderr, ",%s", profile_map[i].mode);
+      fprintf(stdout, ",%s", profile_map[i].mode);
    }
 
-   fprintf(stderr, "\n");
+   fprintf(stdout, "\n");
 
    // Intra refresh options
-   fprintf(stderr, "\n\nH264 Intra refresh options :\n%s", intra_refresh_map[0].mode );
+   fprintf(stdout, "\n\nH264 Intra refresh options :\n%s", intra_refresh_map[0].mode );
 
    for (i=1;i<intra_refresh_map_size;i++)
    {
-      fprintf(stderr, ",%s", intra_refresh_map[i].mode);
+      fprintf(stdout, ",%s", intra_refresh_map[i].mode);
    }
 
-   fprintf(stderr, "\n");
+   fprintf(stdout, "\n");
 
    // Help for preview options
    raspipreview_display_help();
@@ -816,7 +816,7 @@ static void display_valid_parameters(char *app_name)
    // Now display any help information from the camcontrol code
    raspicamcontrol_display_help();
 
-   fprintf(stderr, "\n");
+   fprintf(stdout, "\n");
 
    return;
 }
@@ -1958,7 +1958,7 @@ int main(int argc, const char **argv)
    // Do we have any parameters
    if (argc == 1)
    {
-      fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
+      fprintf(stdout, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
 
       display_valid_parameters(basename(argv[0]));
       exit(EX_USAGE);

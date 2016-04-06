@@ -51,6 +51,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include <string.h>
 #include <memory.h>
 #include <unistd.h>
@@ -121,6 +122,7 @@ typedef struct
    int wantRAW;                        /// Flag for whether the JPEG metadata also contains the RAW bayer image
    char *filename;                     /// filename of output file
    char *linkname;                     /// filename of output file
+   int frameStart;                     /// First number of frame output counter
    MMAL_PARAM_THUMBNAIL_CONFIG_T thumbnailConfig;
    int verbose;                        /// !0 if want detailed run information
    int demoMode;                       /// Run app in demo mode
@@ -194,6 +196,7 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandSensorMode   22
 #define CommandDateTime     23
 #define CommandTimeStamp    24
+#define CommandFrameStart   25
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -220,8 +223,9 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandCamSelect, "-camselect","cs", "Select camera <number>. Default 0", 1 },
    { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},
    { CommandSensorMode,"-mode",     "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
-   { CommandDateTime,  "-datetime",  "dt", "Replace frame number in file name with DateTime (YearMonthDayHourMinSec)", 0},
+   { CommandDateTime,  "-datetime",  "dt", "Replace frame number in file name with DateTime (MonthDayHourMinSec)", 0},
    { CommandTimeStamp, "-timestamp", "ts", "Replace frame number in file name with unix timestamp (seconds since 1900)", 0},
+   { CommandFrameStart,"-framestart","fs",  "Starting frame number in output pattern", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -277,6 +281,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->wantRAW = 0;
    state->filename = NULL;
    state->linkname = NULL;
+   state->frameStart = 0;
    state->verbose = 0;
    state->thumbnailConfig.enable = 1;
    state->thumbnailConfig.width = 64;
@@ -351,7 +356,7 @@ static void dump_status(RASPISTILL_STATE *state)
    for (i=0;i<next_frame_description_size;i++)
    {
       if (state->frameNextMethod == next_frame_description[i].nextFrameMethod)
-         fprintf(stderr, next_frame_description[i].description);
+         fprintf(stderr, "%s", next_frame_description[i].description);
    }
    fprintf(stderr, "\n\n");
 
@@ -461,6 +466,25 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          int len = strlen(argv[i + 1]);
          if (len)
          {
+            //We use sprintf to append the frame number for timelapse mode
+            //Ensure that any %<char> is either %% or %d.
+            const char *percent = argv[i+1];
+            while(valid && *percent && (percent=strchr(percent, '%')) != NULL)
+            {
+               int digits=0;
+               percent++;
+               while(isdigit(*percent))
+               {
+                 percent++;
+                 digits++;
+               }
+               if(!((*percent == '%' && !digits) || *percent == 'd'))
+               {
+                  valid = 0;
+                  fprintf(stderr, "Filename contains %% characters, but not %%d or %%%% - sorry, will fail\n");
+               }
+               percent++;
+            }
             state->filename = malloc(len + 10); // leave enough space for any timelapse generated changes to filename
             vcos_assert(state->filename);
             if (state->filename)
@@ -488,6 +512,18 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          break;
 
       }
+
+      case CommandFrameStart:  // use a staring value != 0
+      {
+         if (sscanf(argv[i + 1], "%u", &state->frameStart) == 1)
+         {
+           i++;
+         }
+         else
+            valid = 0;
+         break;
+      }
+
       case CommandVerbose: // display lots of data during run
          state->verbose = 1;
          break;
@@ -713,10 +749,10 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
  */
 static void display_valid_parameters(char *app_name)
 {
-   fprintf(stderr, "Runs camera for specific time, and take JPG capture at end if requested\n\n");
-   fprintf(stderr, "usage: %s [options]\n\n", app_name);
+   fprintf(stdout, "Runs camera for specific time, and take JPG capture at end if requested\n\n");
+   fprintf(stdout, "usage: %s [options]\n\n", app_name);
 
-   fprintf(stderr, "Image parameter commands\n\n");
+   fprintf(stdout, "Image parameter commands\n\n");
 
    raspicli_display_help(cmdline_commands, cmdline_commands_size);
 
@@ -729,7 +765,7 @@ static void display_valid_parameters(char *app_name)
    // Now display GL preview help
    raspitex_display_help();
 
-   fprintf(stderr, "\n");
+   fprintf(stdout, "\n");
 
    return;
 }
@@ -1795,7 +1831,7 @@ int main(int argc, const char **argv)
             char *use_filename = NULL;      // Temporary filename while image being written
             char *final_filename = NULL;    // Name that file gets once writing complete
 
-            frame = 0;
+            frame = state.frameStart;
 
             while (keep_looping)
             {

@@ -2,6 +2,12 @@ cmake_minimum_required(VERSION 2.8)
 
 project(vmcs_host_apps)
 
+SET(PROJECT_VER_MAJOR 1)
+SET(PROJECT_VER_MINOR 0)
+SET(PROJECT_VER_PATCH 0)
+SET(PROJECT_VER "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}.${PROJECT_VER_PATCH}")
+SET(PROJECT_APIVER "${PROJECT_VER}")
+
 set(BUILD_MMAL TRUE)
 set(BUILD_MMAL_APPS TRUE)
 set(vmcs_root ${PROJECT_SOURCE_DIR})
@@ -103,6 +109,8 @@ endif()
 
 # add linux apps
 add_subdirectory(host_applications/linux)
+add_subdirectory(opensrc/helpers/libfdt)
+add_subdirectory(helpers/dtoverlay)
 
 set(vmcs_host_apps_VERSION_MAJOR 1)
 set(vmcs_host_apps_VERSION_MINOR 0)
