@@ -1258,7 +1258,7 @@ FUNCTION
    Send a vc_FILESYS_RESET command. This will return immediately.
 
 RETURNS
-   Succesful completion: FILESERV_RESP_OK
+   Successful completion: FILESERV_RESP_OK
    Otherwise: -
 ******************************************************************************/
 
@@ -1743,7 +1743,7 @@ SYNOPSIS
    int vc_filesys_errno(void)
 
 FUNCTION
-   Returns the error code of the last file system error that occured.
+   Returns the error code of the last file system error that occurred.
 
 RETURNS
    Error code

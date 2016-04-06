@@ -293,7 +293,7 @@ bool egl_config_check_attribs(const EGLint *attrib_list, bool *use_red, bool *us
    this is the sum of EGL RED SIZE, EGL GREEN SIZE, EGL BLUE SIZE,
    and EGL ALPHA SIZE; for a luminance color buffer, the sum of
    EGL LUMINANCE SIZE and EGL ALPHA SIZE) [3]. If the requested number
-   of bits in attrib list for a particular color component is 0 or EGL DONT CARE,
+   of bits in attrib list for a particular color component is 0 or EGL_DONT_CARE,
    then the number of bits for that component is not considered.
    4. Smaller EGL BUFFER SIZE.
    5. Smaller EGL SAMPLE BUFFERS.

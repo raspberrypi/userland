@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /* VideoCore Shared Memory - user interface library.
 **
 ** This library provides all the necessary abstraction for any application to
-** make use of the shared memory service which is distributed accross a kernel
+** make use of the shared memory service which is distributed across a kernel
 ** driver and a videocore service.
 **
 ** It is an application design decision to choose or not to use this service.

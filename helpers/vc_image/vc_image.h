@@ -845,7 +845,7 @@ void *vc_image_pixel_addr_gl(VC_IMAGE_BUF_T *image, int x, int y, int miplevel);
                             int smooth_flag);
 
    /* RGB565 resize. Pitch must be 32-byte aligned, dimensions need not be.
-      XXX kept YUV and RGB565 version seperate to avoid unnecessary linking.
+      XXX kept YUV and RGB565 version separate to avoid unnecessary linking.
       However if we're going down the DLL route they ought to be combined.   */
 
    void vc_image_resize_rgb565(VC_IMAGE_BUF_T * dest,

@@ -282,8 +282,8 @@ unrecognized or out of range.
 All attribute names in attrib list are immediately followed by the corresponding
 desired value. The list is terminated with EGL NONE. If an attribute is not specified
 in attrib list, then the default value (listed in Table 3.4) is used (it is said to be
-specified implicitly). If EGL DONT CARE is specified as an attribute value, then the
-attribute will not be checked. EGL DONT CARE may be specified for all attributes
+specified implicitly). If EGL_DONT_CARE is specified as an attribute value, then the
+attribute will not be checked. EGL_DONT_CARE may be specified for all attributes
 except EGL LEVEL. If attrib list is NULL or empty (first attribute is EGL NONE),
 then selection and sorting of EGLConfigs is done according to the default criteria
 in Tables 3.4 and 3.1, as described below under Selection and Sorting.

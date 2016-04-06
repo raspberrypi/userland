@@ -838,7 +838,7 @@ void raspicamcontrol_dump_parameters(const RASPICAM_CAMERA_PARAMETERS *params)
  * ALso displays a fault if code is not success
  *
  * @param status The error code to convert
- * @return 0 if status is sucess, 1 otherwise
+ * @return 0 if status is success, 1 otherwise
  */
 int mmal_status_to_int(MMAL_STATUS_T status)
 {

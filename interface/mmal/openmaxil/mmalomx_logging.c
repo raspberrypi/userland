@@ -166,7 +166,7 @@ const char *mmalomx_error_to_string(OMX_ERRORTYPE error)
     "OMX_ErrorFormatNotDetected", "OMX_ErrorContentPipeOpenFailed",
     "OMX_ErrorContentPipeCreationFailed", "OMX_ErrorSeperateTablesUsed",
     "OMX_ErrorTunnelingUnsupported",
-    "OMX_Error unkown"
+    "OMX_Error unknown"
   };
 
   if(error == OMX_ErrorNone) return "OMX_ErrorNone";

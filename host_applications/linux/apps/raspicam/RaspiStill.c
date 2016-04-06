@@ -392,7 +392,7 @@ static void dump_status(RASPISTILL_STATE *state)
 static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
 {
    // Parse the command line arguments.
-   // We are looking for --<something> or -<abreviation of something>
+   // We are looking for --<something> or -<abbreviation of something>
 
    int valid = 1;
    int i;
@@ -879,7 +879,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 /**
  * Create the camera component, set up its ports
  *
- * @param state Pointer to state control struct. camera_component member set to the created camera_component if successfull.
+ * @param state Pointer to state control struct. camera_component member set to the created camera_component if successful.
  *
  * @return MMAL_SUCCESS if all OK, something else otherwise
  *
@@ -1041,7 +1041,7 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
       goto error;
    }
 
-   // Set the same format on the video  port (which we dont use here)
+   // Set the same format on the video  port (which we don't use here)
    mmal_format_full_copy(video_port->format, format);
    status = mmal_port_format_commit(video_port);
 
@@ -1145,7 +1145,7 @@ static void destroy_camera_component(RASPISTILL_STATE *state)
 /**
  * Create the encoder component, set up its ports
  *
- * @param state Pointer to state control struct. encoder_component member set to the created camera_component if successfull.
+ * @param state Pointer to state control struct. encoder_component member set to the created camera_component if successful.
  *
  * @return a MMAL_STATUS, MMAL_SUCCESS if all OK, something else otherwise
  */
