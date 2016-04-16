@@ -44,6 +44,7 @@ add_definitions(-DUSE_VCHIQ_ARM -DVCHI_BULK_ALIGN=1 -DVCHI_BULK_GRANULARITY=1)
 add_definitions(-DOMX_SKIP64BIT)
 add_definitions(-DEGL_SERVER_DISPMANX)
 add_definitions(-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64)
+add_definitions(-D_GNU_SOURCE)
 
 # do we actually need this?
 add_definitions(-D__VIDEOCORE4__)
@@ -85,10 +86,6 @@ add_subdirectory(middleware/openmaxil)
 #if(ENABLE_3D_TESTS)
 #   add_subdirectory(thirdparty/applications/test)
 #endif()
-
-# FIXME: this directory needs a more sensible name and better
-# platform factoring
-add_subdirectory(interface/usbdk)
 
 # FIXME: we should use a pre-packaged version of freetype
 # rather than the one included in the repo.
