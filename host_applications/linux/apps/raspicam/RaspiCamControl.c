@@ -814,7 +814,7 @@ void raspicamcontrol_display_help()
 
 
 /**
- * Dump contents of camera parameter structure to stdout for debugging/verbose logging
+ * Dump contents of camera parameter structure to stderr for debugging/verbose logging
  *
  * @param params Const pointer to parameters structure to dump
  */
