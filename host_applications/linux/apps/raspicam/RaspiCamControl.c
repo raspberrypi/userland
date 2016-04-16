@@ -809,7 +809,7 @@ void raspicamcontrol_display_help()
       fprintf(stdout, ",%s", drc_mode_map[i].mode);
    }
 
-   fprintf(stderr, "\n");
+   fprintf(stdout, "\n");
 }
 
 
