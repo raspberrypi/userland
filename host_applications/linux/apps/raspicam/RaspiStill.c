@@ -223,7 +223,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},
    { CommandSensorMode,"-mode",     "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
    { CommandDateTime,  "-datetime",  "dt", "Replace frame number in file name with DateTime (MonthDayHourMinSec)", 0},
-   { CommandTimeStamp, "-timestamp", "ts", "Replace frame number in file name with unix timestamp (seconds since 1900)", 0},
+   { CommandTimeStamp, "-timestamp", "ts", "Replace frame number in file name with unix timestamp (seconds since 1970)", 0},
    { CommandFrameStart,"-framestart","fs",  "Starting frame number in output pattern", 1},
 };
 
