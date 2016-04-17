@@ -180,7 +180,7 @@ ILCS_SERVICE_T *ilcs_init(VCHIQ_STATE_T *state, void **connection, ILCS_CONFIG_T
       goto fail_timer;
 
    // create the queue of incoming messages
-   if(!vchiu_queue_init(&st->queue, 64))
+   if(!vchiu_queue_init(&st->queue, 256))
       goto fail_queue;
 
    // create the bulk receive event
