@@ -155,7 +155,10 @@ int main(int argc, char **argv)
    }
 
    if (!err)
+   {
+      dtoverlay_pack_dtb(base_dtb);
       err = dtoverlay_save_dtb(base_dtb, merged_file);
+   }
 
    dtoverlay_free_dtb(base_dtb);
 
