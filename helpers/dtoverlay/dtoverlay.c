@@ -54,9 +54,6 @@ static int dtoverlay_extract_override(const char *override_name,
 static void dtoverlay_stdio_logging(dtoverlay_logging_type_t type,
                                     const char *fmt, va_list args);
 
-static void dtoverlay_error(const char *fmt, ...);
-static void dtoverlay_debug(const char *fmt, ...);
-
 #define phandle_debug if (0) dtoverlay_debug
 
 static DTOVERLAY_LOGGING_FUNC *dtoverlay_logging_func = dtoverlay_stdio_logging;
@@ -781,6 +778,18 @@ int dtoverlay_apply_override(DTBLOB_T *dtb, const char *override_name,
 {
    int err = 0;
    int target_phandle = 0;
+   char *data;
+
+   /* Copy the override data in case it moves */
+   data = malloc(data_len);
+   if (!data)
+   {
+      dtoverlay_error("  out of memory");
+      return NON_FATAL(FDT_ERR_NOSPACE);
+   }
+
+   memcpy(data, override_data, data_len);
+   override_data = data;
 
    while (err == 0)
    {
@@ -819,7 +828,8 @@ int dtoverlay_apply_override(DTBLOB_T *dtb, const char *override_name,
          if (!prop_name)
          {
             dtoverlay_error("  out of memory");
-            return NON_FATAL(FDT_ERR_NOSPACE);
+            err = NON_FATAL(FDT_ERR_NOSPACE);
+            break;
          }
          memcpy(prop_name, target_prop, name_len);
          prop_name[name_len] = '\0';
@@ -1007,6 +1017,8 @@ int dtoverlay_apply_override(DTBLOB_T *dtb, const char *override_name,
       if (prop_name)
          free(prop_name);
    }
+
+   free(data);
 
    return err;
 }
@@ -1444,7 +1456,7 @@ void dtoverlay_enable_debug(int enable)
    dtoverlay_debug_enabled = enable;
 }
 
-static void dtoverlay_error(const char *fmt, ...)
+void dtoverlay_error(const char *fmt, ...)
 {
    va_list args;
    va_start(args, fmt);
@@ -1452,7 +1464,7 @@ static void dtoverlay_error(const char *fmt, ...)
    va_end(args);
 }
 
-static void dtoverlay_debug(const char *fmt, ...)
+void dtoverlay_debug(const char *fmt, ...)
 {
    va_list args;
    if (dtoverlay_debug_enabled)

@@ -42,14 +42,14 @@ typedef enum
    DTOVERLAY_DEBUG
 } dtoverlay_logging_type_t;
 
-typedef struct
+typedef struct dtoverlay_struct
 {
    const char *param;
    int len;
    const char *b;
 } DTOVERLAY_PARAM_T;
 
-typedef struct
+typedef struct dtblob_struct
 {
    void *fdt;
    int fdt_is_malloced;
@@ -134,5 +134,9 @@ const char *dtoverlay_get_alias(DTBLOB_T *dt, const char *alias_name);
 void dtoverlay_set_logging_func(DTOVERLAY_LOGGING_FUNC *func);
 
 void dtoverlay_enable_debug(int enable);
+
+void dtoverlay_error(const char *fmt, ...);
+
+void dtoverlay_debug(const char *fmt, ...);
 
 #endif
