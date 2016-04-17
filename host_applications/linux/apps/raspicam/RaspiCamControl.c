@@ -809,12 +809,12 @@ void raspicamcontrol_display_help()
       fprintf(stdout, ",%s", drc_mode_map[i].mode);
    }
 
-   fprintf(stderr, "\n");
+   fprintf(stdout, "\n");
 }
 
 
 /**
- * Dump contents of camera parameter structure to stdout for debugging/verbose logging
+ * Dump contents of camera parameter structure to stderr for debugging/verbose logging
  *
  * @param params Const pointer to parameters structure to dump
  */
