@@ -385,6 +385,22 @@ static int ilcs_callback(VCHIQ_REASON_T reason, VCHIQ_HEADER_T *header, void *se
 #endif
 
    case VCHIQ_MESSAGE_AVAILABLE:
+#ifndef _VIDEOCORE
+      {
+	 static int queue_warn = 0;
+	 int queue_len = st->queue.write - st->queue.read;
+	 if (!queue_warn)
+	    queue_warn = getenv("ILCS_WARN") ? (st->queue.size/2) : st->queue.size;
+	 if (queue_len >= queue_warn)
+	 {
+	    if (queue_len == st->queue.size)
+	       VCOS_ALERT("ILCS queue full");
+	    else
+	       VCOS_ALERT("ILCS queue len = %d", queue_len);
+	    queue_warn = queue_warn + (st->queue.size - queue_warn)/2;
+	 }
+      }
+#endif
       vchiu_queue_push(&st->queue, header);
       break;
 
