@@ -304,11 +304,7 @@ extern "C" {
 // These fields are subject to change / being moved around
    typedef struct vc_image_extra_tf_s {
 signed int mipmap_levels        : 8;
-#ifdef __BCM2707A0__
-unsigned int cube_stride_brcm2s : 23;
-#else
 unsigned int xxx                : 23;
-#endif
 unsigned int cube_map           : 1;
       void *palette;
    } VC_IMAGE_EXTRA_TF_T;
