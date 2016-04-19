@@ -48,6 +48,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define DT_OVERLAYS_SUBDIR "device-tree/overlays"
 #define DTOVERLAY_PATH_MAX 128
 
+#define DTC_FLAGS "-W no-avoid_default_addr_size"
+
 
 enum {
     OPT_ADD,
@@ -84,7 +86,7 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay, int and_later);
 static int dtoverlay_list(STATE_T *state);
 static int dtoverlay_list_all(STATE_T *state);
 static void usage(void);
-static void overlay_help(const char *overlay);
+static void overlay_help(const char *overlay, const char **params);
 
 static int apply_overlay(const char *overlay_file, const char *overlay);
 static int overlay_applied(const char *overlay_dir);
@@ -102,7 +104,9 @@ int main(int argc, const char **argv)
 {
     int argn = 1;
     int opt = OPT_ADD;
+    int is_dtparam;
     const char *overlay = NULL;
+    const char **params = NULL;
     int ret = 0;
     STATE_T *state = NULL;
     const char *cfg_dir;
@@ -110,6 +114,7 @@ int main(int argc, const char **argv)
     cmd_name = argv[0];
     if (strrchr(cmd_name, '/'))
         cmd_name = strrchr(cmd_name, '/') + 1;
+    is_dtparam = (strcmp(cmd_name, "dtparam") == 0);
 
     while ((argn < argc) && (argv[argn][0] == '-'))
     {
@@ -171,11 +176,23 @@ int main(int argc, const char **argv)
     {
 	if (argn == argc)
 	    usage();
-	overlay = argv[argn++];
+	if (is_dtparam &&
+	    ((opt == OPT_ADD) || (opt == OPT_HELP)))
+	    overlay = "dtparam";
+	else
+	    overlay = argv[argn++];
+    }
+
+    if ((opt == OPT_HELP) && (argn < argc))
+    {
+	params = &argv[argn];
+	argn = argc;
     }
 
     if ((opt != OPT_ADD) && (argn != argc))
 	usage();
+
+    dtoverlay_enable_debug(opt_verbose);
 
     if (!overlay_src_dir)
     {
@@ -198,7 +215,7 @@ int main(int argc, const char **argv)
 
     if (opt == OPT_HELP)
     {
-	overlay_help(overlay);
+	overlay_help(overlay, params);
 	goto orderly_exit;
     }
 
@@ -211,7 +228,7 @@ int main(int argc, const char **argv)
     cfg_dir = CFG_DIR_1;
     if (!dir_exists(cfg_dir))
     {
-	cfg_dir = CFG_DIR_2; 
+	cfg_dir = CFG_DIR_2;
 	if (!dir_exists(cfg_dir))
 	{
 	    if (run_cmd("sudo mkdir %s", cfg_dir) != 0)
@@ -261,29 +278,109 @@ orderly_exit:
     return ret;
 }
 
+struct dtparam_state
+{
+    STRING_VEC_T *used_props;
+    const char *override_value;
+};
+
+int dtparam_callback(int override_type,
+		     DTBLOB_T *dtb, int node_off,
+		     const char *prop_name, int target_phandle,
+		     int target_off, int target_size,
+		     void *callback_value)
+{
+    struct dtparam_state *state = callback_value;
+    char prop_id[80];
+    int err;
+
+    err = dtoverlay_override_one_target(override_type,
+					dtb, node_off,
+					prop_name, target_phandle,
+					target_off, target_size,
+					(void *)state->override_value);
+
+    if ((err == 0) && (target_phandle != 0))
+    {
+	if (snprintf(prop_id, sizeof(prop_id), "%08x%s", target_phandle,
+		     prop_name) < 0)
+	    err = FDT_ERR_INTERNAL;
+	else if (string_vec_find(state->used_props, prop_id, 0) < 0)
+	    string_vec_add(state->used_props, prop_id, 0);
+    }
+
+    return err;
+}
+
+
+// Returns 0 on success, -ve for fatal errors and +ve for non-fatal errors
+int dtparam_apply(DTBLOB_T *dtb, const char *override_name,
+		  const char *override_data, int data_len,
+		  const char *override_value, STRING_VEC_T *used_props)
+{
+    struct dtparam_state state;
+    void *data;
+    int err;
+
+    state.used_props = used_props;
+    state.override_value = override_value;
+
+    /* Copy the override data in case it moves */
+    data = malloc(data_len);
+    if (data)
+    {
+	memcpy(data, override_data, data_len);
+	err = dtoverlay_foreach_override_target(dtb, override_name,
+						data, data_len,
+						dtparam_callback,
+						(void *)&state);
+	free(data);
+    }
+    else
+    {
+	dtoverlay_error("out of memory");
+	err = NON_FATAL(FDT_ERR_NOSPACE);
+    }
+
+    return err;
+}
+
 static int dtoverlay_add(STATE_T *state, const char *overlay,
 			 int argc, const char **argv)
 {
     const char *overlay_name;
     const char *overlay_file;
     char *param_string = NULL;
-    void *overlay_fdt;
+    int is_dtparam;
+    DTBLOB_T *base_dtb = NULL;
+    DTBLOB_T *overlay_dtb;
+    STRING_VEC_T used_props;
+    int err;
     int len;
     int i;
 
     len = strlen(overlay) - 5;
-    if (strcmp(overlay + len, ".dtbo") == 0)
+    is_dtparam = (strcmp(overlay, "dtparam") == 0);
+    if (is_dtparam)
+    {
+        /* Convert /proc/device-tree to a .dtb and load it */
+	overlay_file = sprintf_dup("%s/%s", work_dir, "base.dtb");
+	if (run_cmd("dtc -I fs -O dtb -o %s " DTC_FLAGS " /proc/device-tree",
+		    overlay_file) != 0)
+           return error("Failed to read active DTB");
+    }
+    else if ((len > 0) && (strcmp(overlay + len, ".dtbo") == 0))
     {
 	const char *p;
 	overlay_file = overlay;
 	p = strrchr(overlay, '/');
 	if (p)
 	{
-	    overlay = p;
-	    len = strlen(p) - 5;
+	    overlay = p + 1;
+	    len = strlen(overlay) - 5;
 	}
 
-	overlay = sprintf_dup("%*s", len, overlay);
+	overlay = sprintf_dup("%.*s", len, overlay);
     }
     else
     {
@@ -291,9 +388,15 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
     }
 
     overlay_name = sprintf_dup("%d_%s", state->count, overlay);
-    overlay_fdt = dtoverlay_load_dtb(overlay_file, DTOVERLAY_PADDING(4096));
-    if (!overlay_fdt)
+    overlay_dtb = dtoverlay_load_dtb(overlay_file, DTOVERLAY_PADDING(4096));
+    if (!overlay_dtb)
 	return error("Failed to read '%s'", overlay_file);
+
+    if (is_dtparam)
+    {
+        base_dtb = overlay_dtb;
+	string_vec_init(&used_props);
+    }
 
     /* Apply any parameters next */
     for (i = 0; i < argc; i++)
@@ -317,19 +420,21 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
 	    param_val = "true";
 	}
 
-	override = dtoverlay_find_override(overlay_fdt, param, &override_len);
+	override = dtoverlay_find_override(overlay_dtb, param, &override_len);
 
-	if (override)
-	{
-	    if (dtoverlay_apply_override(overlay_fdt, param,
-					 override, override_len,
-					 param_val) != 0)
-		return error("Failed to set %s=%s", param, param_val);
-	}
-	else
-	{
+	if (!override)
 	    return error("Unknown parameter '%s'", param);
-	}
+
+	if (is_dtparam)
+	    err = dtparam_apply(overlay_dtb, param,
+				override, override_len,
+				param_val, &used_props);
+	else
+	    err = dtoverlay_apply_override(overlay_dtb, param,
+					   override, override_len,
+					   param_val);
+	if (err != 0)
+	    return error("Failed to set %s=%s", param, param_val);
 
 	param_string = sprintf_dup("%s %s=%s",
 				   param_string ? param_string : "",
@@ -338,20 +443,47 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
 	free_string(p);
     }
 
+    if (is_dtparam)
+    {
+        /* Build an overlay DTB */
+        overlay_dtb = dtoverlay_create_dtb(2048 + 256 * used_props.num_strings);
+
+        for (i = 0; i < used_props.num_strings; i++)
+        {
+            int phandle, node_off, prop_len;
+            const char *str, *prop_name;
+            const void *prop_data;
+
+            str = used_props.strings[i];
+            sscanf(str, "%8x", &phandle);
+            prop_name = str + 8;
+            node_off = dtoverlay_find_phandle(base_dtb, phandle);
+
+            prop_data = dtoverlay_get_property(base_dtb, node_off,
+                                               prop_name, &prop_len);
+            err = dtoverlay_create_prop_fragment(overlay_dtb, i, phandle,
+                                   prop_name, prop_data, prop_len);
+        }
+
+        dtoverlay_free_dtb(base_dtb);
+    }
+
     if (param_string)
-	dtoverlay_dtb_set_trailer(overlay_fdt, param_string,
+	dtoverlay_dtb_set_trailer(overlay_dtb, param_string,
 				  strlen(param_string) + 1);
 
     /* Create a filename with the sequence number */
     overlay_file = sprintf_dup("%s/%s.dtbo", work_dir, overlay_name);
 
     /* then write the overlay to the file */
-    dtoverlay_save_dtb(overlay_fdt, overlay_file);
-    free(overlay_fdt);
+    dtoverlay_save_dtb(overlay_dtb, overlay_file);
+    dtoverlay_free_dtb(overlay_dtb);
 
     if (!apply_overlay(overlay_file, overlay_name))
     {
-	unlink(overlay_file);
+	const char *error_file = sprintf_dup("%s/%s", work_dir, "error.dtb");
+	rename(overlay_file, error_file);
+	free_string(error_file);
 	return 1;
     }
 
@@ -365,6 +497,7 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay, int and_later)
     const char *dir_name = NULL;
     char *end;
     int overlay_len;
+    int count = state->count;
     int rmpos;
     int i;
 
@@ -376,12 +509,12 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay, int and_later)
     rmpos = strtoul(overlay, &end, 10);
     if (end && (*end == '\0'))
     {
-	if (rmpos >= state->count)
+	if (rmpos >= count)
 	    return error("Overlay index (%d) too large", rmpos);
 	dir_name = state->namelist[rmpos]->d_name;
     }
     /* Locate the most recent reference to the overlay */
-    else for (rmpos = state->count - 1; rmpos >= 0; rmpos--)
+    else for (rmpos = count - 1; rmpos >= 0; rmpos--)
     {
         const char *left, *right;
 	dir_name = state->namelist[rmpos]->d_name;
@@ -409,13 +542,10 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay, int and_later)
     if (!dir_exists(overlay_dir))
         return error("Overlay '%s' is not loaded", overlay);
 
-
-    if (rmpos < state->count)
+    if (rmpos < count)
     {
-	int fillpos;
-
 	/* Unload it and all subsequent overlays in reverse order */
-	for (i = state->count - 1; i >= rmpos; i--)
+	for (i = count - 1; i >= rmpos; i--)
 	{
 	    const char *left, *right;
 	    left = state->namelist[i]->d_name;
@@ -428,10 +558,11 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay, int and_later)
 
 	/* Replay the sequence, deleting files for the specified overlay,
 	   and renumbering and reloading all other overlays. */
-	for (i = rmpos, fillpos = rmpos; i < state->count; i++)
+	for (i = rmpos, state->count = rmpos; i < count; i++)
 	{
 	    const char *left, *right;
 	    const char *filename = state->namelist[i]->d_name;
+
 	    left = strchr(filename, '_');
 	    if (!left)
 		return error("Internal error");
@@ -440,21 +571,93 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay, int and_later)
 	    if (!right)
 		return error("Internal error");
 
-	    if (and_later || (i == rmpos))
-	    {
-		/* This one is being deleted */
-		unlink(filename);
-	    }
-	    else
-	    {
-		/* Keep this one - renumber and reload */
-		char *new_name = sprintf_dup("%d_%.*s", fillpos,
-					     right - left, left);
+            if (and_later || (i == rmpos))
+            {
+                /* This one is being deleted */
+                unlink(filename);
+            }
+            else
+            {
+                /* Keep this one - renumber and reload */
+                int len = right - left;
+                char *new_name = sprintf_dup("%d_%.*s", state->count,
+					     len, left);
 		char *new_file = sprintf_dup("%s.dtbo", new_name);
-		rename(filename, new_file);
-		if (!apply_overlay(new_file, new_name))
-		    return 1;
-		fillpos++;
+		int ret = 0;
+
+                if ((len == 7) && (memcmp(left, "dtparam", 7) == 0))
+		{
+		    /* Regenerate the overlay in case multiple overlays target
+                       different parts of the same property. */
+
+		    DTBLOB_T *dtb;
+		    char *params;
+		    const char **paramv;
+		    int paramc;
+		    int j;
+		    char *p;
+
+                    /* Extract the parameters */
+		    dtb = dtoverlay_load_dtb(filename, 0);
+		    unlink(filename);
+
+		    if (!dtb)
+		    {
+			error("Failed to re-apply dtparam");
+			continue;
+		    }
+
+		    params = (char *)dtoverlay_dtb_trailer(dtb);
+		    if (!params)
+		    {
+			error("Failed to re-apply dtparam");
+			dtoverlay_free_dtb(dtb);
+			continue;
+		    }
+
+		    /* Count and NUL-separate the params */
+		    p = params;
+		    paramc = 0;
+		    while (*p)
+		    {
+			int paramlen;
+			*(p++) = '\0';
+			paramlen = strcspn(p, " ");
+			paramc++;
+			p += paramlen;
+		    }
+
+		    paramv = malloc((paramc + 1) * sizeof(const char *));
+		    if (!paramv)
+		    {
+			error("out of memory re-applying dtparam");
+			dtoverlay_free_dtb(dtb);
+			continue;
+		    }
+
+		    for (j = 0, p = params + 1; j < paramc; j++)
+		    {
+			paramv[j] = p;
+			p += strlen(p) + 1;
+		    }
+		    paramv[j] = NULL;
+
+		    /* Create the new overlay */
+		    ret = dtoverlay_add(state, "dtparam", paramc, paramv);
+		    free(paramv);
+		    dtoverlay_free_dtb(dtb);
+		}
+		else
+		{
+		    rename(filename, new_file);
+		    ret = !apply_overlay(new_file, new_name);
+		}
+		if (ret != 0)
+		{
+		    error("Failed to re-apply dtparam");
+		    continue;
+		}
+		state->count++;
 	    }
 	}
     }
@@ -517,23 +720,22 @@ static int dtoverlay_list_all(STATE_T *state)
     while ((de = readdir(dh)) != NULL)
     {
 	int len = strlen(de->d_name) - 5;
-	if (strcmp(de->d_name + len, ".dtbo") == 0)
-	{
-	    string_vec_add(&strings, de->d_name, len);
-	}
+	if ((len >= 0) && strcmp(de->d_name + len, ".dtbo") == 0)
+        {
+	    char *str = string_vec_add(&strings, de->d_name, len + 2);
+            str[len] = '\0';
+            str[len + 1] = ' ';
+        }
     }
     closedir(dh);
 
-    /* Merge in active overlays, appending load order, taking care to
-     * avoid duplication */
+    /* Merge in active overlays, marking them */
     for (i = 0; i < state->count; i++)
     {
 	const char *left, *right;
-	char suffix[16];
 	char *str;
-	int idx;
+	int len, idx;
 
-	snprintf(suffix, sizeof(suffix), " [%d]", i + 1);
 	left = strchr(state->namelist[i]->d_name, '_');
 	if (!left)
 	    return error("Internal error");
@@ -542,17 +744,21 @@ static int dtoverlay_list_all(STATE_T *state)
 	if (!right)
 	    return error("Internal error");
 
-	idx = string_vec_find(&strings, left, right - left);
+        len = right - left;
+        if ((len == 7) && (memcmp(left, "dtparam", 7) == 0))
+            continue;
+	idx = string_vec_find(&strings, left, len);
 	if (idx >= 0)
 	{
 	    str = strings.strings[idx];
-	    str = realloc(str, strlen(str) + 1 + strlen(suffix));
-	    strings.strings[idx] = str;
+            len = strlen(str);
 	}
 	else
-	    str = string_vec_add(&strings, left,
-				 (right - left) + strlen(suffix));
-	strcat(str, suffix);
+        {
+	    str = string_vec_add(&strings, left, len + 2);
+            str[len] = '\0';
+        }
+	str[len + 1] = '*';
     }
 
     if (strings.num_strings == 0)
@@ -565,11 +771,12 @@ static int dtoverlay_list_all(STATE_T *state)
 	string_vec_sort(&strings);
 
 	/* Display */
-	printf("All overlays - [n]=load order:\n");
+	printf("All overlays (* = loaded):\n");
 
 	for (i = 0; i < strings.num_strings; i++)
 	{
-	    printf("  %s\n", strings.strings[i]);
+            const char *str = strings.strings[i];
+	    printf("%c %s\n", str[strlen(str)+1], str);
 	}
     }
 
@@ -581,15 +788,32 @@ static int dtoverlay_list_all(STATE_T *state)
 static void usage(void)
 {
     printf("Usage:\n");
+    if (strcmp(cmd_name, "dtparam") == 0)
+    {
+    printf("  %s <param>=<val>...\n", cmd_name);
+    printf("  %*s                Add an overlay (with parameters)\n", (int)strlen(cmd_name), "");
+    printf("  %s -r <idx>       Remove an overlay (index)\n", cmd_name);
+    printf("  %s -R <overlay>   Remove from an overlay (index)\n",
+	   cmd_name);
+    printf("  %s -l             List active overlays/dtparams\n", cmd_name);
+    printf("  %s -a             List all overlays/dtparams (marking the active)\n", cmd_name);
+    printf("  %s -h             Show this usage message\n", cmd_name);
+    printf("  %s -h <param>...  Display help the listed dtparams\n", cmd_name);
+    }
+    else
+    {
     printf("  %s <overlay> [<param>=<val>...]\n", cmd_name);
     printf("  %*s                Add an overlay (with parameters)\n", (int)strlen(cmd_name), "");
     printf("  %s -r <overlay>   Remove an overlay (name or index)\n", cmd_name);
     printf("  %s -R <overlay>   Remove from an overlay (name or index)\n",
 	   cmd_name);
-    printf("  %s -l             List active overlays\n", cmd_name);
+    printf("  %s -l             List active overlays/params\n", cmd_name);
     printf("  %s -a             List all overlays (marking the active)\n", cmd_name);
     printf("  %s -h             Show this usage message\n", cmd_name);
     printf("  %s -h <overlay>   Display help on an overlay\n", cmd_name);
+    printf("  %s -h <overlay> <param>..  Or its parameters\n", cmd_name);
+    printf("    where <overlay> is the name of an overlay or 'dtparam' for dtparams\n");
+    }
     printf("Options applicable to most variants:\n");
     printf("    -d <dir>    Specify an alternate location for the overlays\n");
     printf("                (defaults to /boot/overlays or /flash/overlays)\n");
@@ -599,7 +823,7 @@ static void usage(void)
     exit(1);
 }
 
-static void overlay_help(const char *overlay)
+static void overlay_help(const char *overlay, const char **params)
 {
     OVERLAY_HELP_STATE_T *state;
     const char *readme_path = sprintf_dup("%s/%s", overlay_src_dir,
@@ -610,12 +834,50 @@ static void overlay_help(const char *overlay)
 
     if (state)
     {
+	if (strcmp(overlay, "dtparam") == 0)
+	    overlay = "<The base DTB>";
+
 	if (overlay_help_find(state, overlay))
 	{
-	    printf("Name:   %s\n\n", overlay);
-	    overlay_help_print_field(state, "Info", "Info:", 8, 0);
-	    overlay_help_print_field(state, "Load", "Usage:", 8, 0);
-	    overlay_help_print_field(state, "Params", "Params:", 8, 0);
+	    if (params && overlay_help_find_field(state, "Params"))
+	    {
+		int in_param = 0;
+
+		while (1)
+		{
+		    const char *line = overlay_help_field_data(state);
+		    if (!line)
+			break;
+		    if (line[0] == '\0')
+			continue;
+		    if (line[0] != ' ')
+		    {
+			/* This is a parameter name */
+			int param_len = strcspn(line, " ");
+			const char **p = params;
+			in_param = 0;
+			while (*p)
+			{
+			    if ((param_len == strlen(*p)) &&
+				(memcmp(line, *p, param_len) == 0))
+			    {
+				in_param = 1;
+				break;
+			    }
+			    p++;
+			}
+		    }
+		    if (in_param)
+			printf("%s\n", line);
+		}
+	    }
+	    else
+	    {
+		printf("Name:   %s\n\n", overlay);
+		overlay_help_print_field(state, "Info", "Info:", 8, 0);
+		overlay_help_print_field(state, "Load", "Usage:", 8, 0);
+		overlay_help_print_field(state, "Params", "Params:", 8, 0);
+	    }
 	}
 	else
 	{
@@ -706,7 +968,7 @@ static STATE_T *read_state(const char *dir)
     	if (i != num)
     	    error("Overlay sequence error");
     }
-    return state;   
+    return state;
 }
 
 static void free_state(STATE_T *state)
