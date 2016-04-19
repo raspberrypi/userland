@@ -101,7 +101,10 @@ int main(int argc, char **argv)
    else
    {
       overlay_dtb = dtoverlay_load_dtb(overlay_file, max_dtb_size);
-      err = dtoverlay_fixup_overlay(base_dtb, overlay_dtb);
+      if (overlay_dtb)
+	  err = dtoverlay_fixup_overlay(base_dtb, overlay_dtb);
+      else
+	  err = -1;
    }
 
    while (!err && (argn < argc))
