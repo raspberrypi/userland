@@ -160,7 +160,7 @@ bool vc_uri_find_query( VC_URI_PARTS_T *p_uri, uint32_t *p_index, const char *na
  *
  * \param p_uri The parsed URI.
  * \param scheme Pointer to the new scheme string, or NULL.
- * \return True if succesful, false on memory allocation failure. */
+ * \return True if successful, false on memory allocation failure. */
 bool vc_uri_set_scheme( VC_URI_PARTS_T *p_uri, const char *scheme );
 
 /** Sets the userinfo of the URI.
@@ -170,7 +170,7 @@ bool vc_uri_set_scheme( VC_URI_PARTS_T *p_uri, const char *scheme );
  *
  * \param p_uri The parsed URI.
  * \param userinfo Pointer to the new userinfo string, or NULL.
- * \return True if succesful, false on memory allocation failure. */
+ * \return True if successful, false on memory allocation failure. */
 bool vc_uri_set_userinfo( VC_URI_PARTS_T *p_uri, const char *userinfo );
 
 /** Sets the host of the URI.
@@ -180,7 +180,7 @@ bool vc_uri_set_userinfo( VC_URI_PARTS_T *p_uri, const char *userinfo );
  *
  * \param p_uri The parsed URI.
  * \param host Pointer to the new host string, or NULL.
- * \return True if succesful, false on memory allocation failure. */
+ * \return True if successful, false on memory allocation failure. */
 bool vc_uri_set_host( VC_URI_PARTS_T *p_uri, const char *host );
 
 /** Sets the port of the URI.
@@ -190,7 +190,7 @@ bool vc_uri_set_host( VC_URI_PARTS_T *p_uri, const char *host );
  *
  * \param p_uri The parsed URI.
  * \param port Pointer to the new port string, or NULL.
- * \return True if succesful, false on memory allocation failure. */
+ * \return True if successful, false on memory allocation failure. */
 bool vc_uri_set_port( VC_URI_PARTS_T *p_uri, const char *port );
 
 /** Sets the path of the URI.
@@ -200,7 +200,7 @@ bool vc_uri_set_port( VC_URI_PARTS_T *p_uri, const char *port );
  *
  * \param p_uri The parsed URI.
  * \param path Pointer to the new path string, or NULL.
- * \return True if succesful, false on memory allocation failure. */
+ * \return True if successful, false on memory allocation failure. */
 bool vc_uri_set_path( VC_URI_PARTS_T *p_uri, const char *path );
 
 /** Sets the fragment of the URI.
@@ -210,7 +210,7 @@ bool vc_uri_set_path( VC_URI_PARTS_T *p_uri, const char *path );
  *
  * \param p_uri The parsed URI.
  * \param fragment Pointer to the new fragment string, or NULL.
- * \return True if succesful, false on memory allocation failure. */
+ * \return True if successful, false on memory allocation failure. */
 bool vc_uri_set_fragment( VC_URI_PARTS_T *p_uri, const char *fragment );
 
 /** Adds an query to the array.

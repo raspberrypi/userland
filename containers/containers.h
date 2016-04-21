@@ -390,7 +390,7 @@ typedef struct VC_CONTAINER_T
    unsigned int tracks_num;           /**< Number of tracks available */
    /** Pointer to an array of pointers to track elements.
     * The reasoning for using a pointer to pointers here is to allow us to extend
-    * VC_CONTAINER_TRACK_T without loosing binary backward compatibility. */
+    * VC_CONTAINER_TRACK_T without losing binary backward compatibility. */
    VC_CONTAINER_TRACK_T **tracks;
 
    unsigned int meta_num;             /**< Number of metadata elements associated with the container */

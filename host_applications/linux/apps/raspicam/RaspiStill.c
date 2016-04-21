@@ -213,7 +213,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandDemoMode,"-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 0},
    { CommandEncoding,"-encoding",   "e",  "Encoding to use for output file (jpg, bmp, gif, png)", 1},
    { CommandExifTag, "-exif",       "x",  "EXIF tag to apply to captures (format as 'key=value') or none", 1},
-   { CommandTimelapse,"-timelapse", "tl", "Timelapse mode. Takes a picture every <t>ms", 1},
+   { CommandTimelapse,"-timelapse", "tl", "Timelapse mode. Takes a picture every <t>ms. %d == frame number (Try: -o img_%04d.jpg)", 1},
    { CommandFullResPreview,"-fullpreview","fp", "Run the preview using the still capture resolution (may reduce preview fps)", 0},
    { CommandKeypress,"-keypress",   "k",  "Wait between captures for a ENTER, X then ENTER to exit", 0},
    { CommandSignal,  "-signal",     "s",  "Wait between captures for a SIGUSR1 from another process", 0},
@@ -223,9 +223,9 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandCamSelect, "-camselect","cs", "Select camera <number>. Default 0", 1 },
    { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},
    { CommandSensorMode,"-mode",     "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
-   { CommandDateTime,  "-datetime",  "dt", "Replace frame number in file name with DateTime (MonthDayHourMinSec)", 0},
-   { CommandTimeStamp, "-timestamp", "ts", "Replace frame number in file name with unix timestamp (seconds since 1900)", 0},
-   { CommandFrameStart,"-framestart","fs",  "Starting frame number in output pattern", 1},
+   { CommandDateTime,  "-datetime",  "dt", "Replace output pattern (%d) with DateTime (MonthDayHourMinSec)", 0},
+   { CommandTimeStamp, "-timestamp", "ts", "Replace output pattern (%d) with unix timestamp (seconds since 1970)", 0},
+   { CommandFrameStart,"-framestart","fs",  "Starting frame number in output pattern(%d)", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -393,7 +393,7 @@ static void dump_status(RASPISTILL_STATE *state)
 static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
 {
    // Parse the command line arguments.
-   // We are looking for --<something> or -<abreviation of something>
+   // We are looking for --<something> or -<abbreviation of something>
 
    int valid = 1;
    int i;
@@ -880,7 +880,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 /**
  * Create the camera component, set up its ports
  *
- * @param state Pointer to state control struct. camera_component member set to the created camera_component if successfull.
+ * @param state Pointer to state control struct. camera_component member set to the created camera_component if successful.
  *
  * @return MMAL_SUCCESS if all OK, something else otherwise
  *
@@ -1042,7 +1042,7 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
       goto error;
    }
 
-   // Set the same format on the video  port (which we dont use here)
+   // Set the same format on the video  port (which we don't use here)
    mmal_format_full_copy(video_port->format, format);
    status = mmal_port_format_commit(video_port);
 
@@ -1146,7 +1146,7 @@ static void destroy_camera_component(RASPISTILL_STATE *state)
 /**
  * Create the encoder component, set up its ports
  *
- * @param state Pointer to state control struct. encoder_component member set to the created camera_component if successfull.
+ * @param state Pointer to state control struct. encoder_component member set to the created camera_component if successful.
  *
  * @return a MMAL_STATUS, MMAL_SUCCESS if all OK, something else otherwise
  */
@@ -1535,7 +1535,7 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
          if (this_delay_ms < 0)
          {
             // We are already past the next exposure time
-            if (-this_delay_ms < -state->timelapse/2)
+            if (-this_delay_ms < state->timelapse/2)
             {
                // Less than a half frame late, take a frame and hope to catch up next time
                next_frame_ms += state->timelapse;

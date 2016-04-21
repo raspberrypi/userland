@@ -835,7 +835,7 @@ extern void mem_unretain(
    MEM_HANDLE_T handle);
 
 /*
-   A version of mem_lock which adds an indication that an aggresive compaction
+   A version of mem_lock which adds an indication that an aggressive compaction
    should not wait for the block to be unlocked.
 */
 
@@ -843,7 +843,7 @@ extern void *mem_lock_perma(
    MEM_HANDLE_T handle);
 
 /*
-   A version of mem_unlock which removes an indication that an aggresive
+   A version of mem_unlock which removes an indication that an aggressive
    compaction should not wait for the block to be unlocked.
 */
 
@@ -1051,7 +1051,7 @@ extern int mem_register_callback(mem_callback_func_t func, uintptr_t context);
 /* Defines the threshold in bytes at which the
  * MEM_CALLBACK_REASON_LOW_MEMORY will be invoked.
  */
-extern void mem_set_low_mem_threshold(uint32_t theshold);
+extern void mem_set_low_mem_threshold(uint32_t threshold);
 
 extern void mem_unregister_callback(mem_callback_func_t func, uintptr_t context);
 

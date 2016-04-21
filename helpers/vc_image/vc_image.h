@@ -304,11 +304,7 @@ extern "C" {
 // These fields are subject to change / being moved around
    typedef struct vc_image_extra_tf_s {
 signed int mipmap_levels        : 8;
-#ifdef __BCM2707A0__
-unsigned int cube_stride_brcm2s : 23;
-#else
 unsigned int xxx                : 23;
-#endif
 unsigned int cube_map           : 1;
       void *palette;
    } VC_IMAGE_EXTRA_TF_T;
@@ -845,7 +841,7 @@ void *vc_image_pixel_addr_gl(VC_IMAGE_BUF_T *image, int x, int y, int miplevel);
                             int smooth_flag);
 
    /* RGB565 resize. Pitch must be 32-byte aligned, dimensions need not be.
-      XXX kept YUV and RGB565 version seperate to avoid unnecessary linking.
+      XXX kept YUV and RGB565 version separate to avoid unnecessary linking.
       However if we're going down the DLL route they ought to be combined.   */
 
    void vc_image_resize_rgb565(VC_IMAGE_BUF_T * dest,

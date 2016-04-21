@@ -466,7 +466,7 @@ static int32_t cecservice_wait_for_bulk_receive(void *buffer, uint32_t max_lengt
  *
  * Arguments: command, parameter buffer, parameter legnth, has reply? (non-zero means yes)
  *
- * Description: send a command and optionally wait for its single value reponse (TV_GENERAL_RESP_T)
+ * Description: send a command and optionally wait for its single value response (TV_GENERAL_RESP_T)
  *
  * Returns: < 0 if there is VCHI error, if tranmission is successful, value
  *          returned is the response from CEC server (which will be VC_CEC_ERROR_T (>= 0))
@@ -512,7 +512,7 @@ static int32_t cecservice_send_command(  uint32_t command, const void *buffer, u
  *
  * Arguments: command, parameter buffer, parameter legnth, reply buffer, buffer length
  *
- * Description: send a command and wait for its non-single value reponse (in a buffer)
+ * Description: send a command and wait for its non-single value response (in a buffer)
  *
  * Returns: error code, host app is responsible to do endian translation
  *

@@ -116,7 +116,7 @@ VC_CONTAINER_STATUS_T vc_packetizer_push( VC_PACKETIZER_T *context,
 /** Pop a packet of data from the packetizer.
  * This allows the client to retrieve consumed data from the packetizer. Packets returned by
  * the packetizer in this manner can then be released / recycled by the client.
- * It is possible for the client to retreive non-consumed data by passing the
+ * It is possible for the client to retrieve non-consumed data by passing the
  * VC_PACKETIZER_FLAG_FORCE_RELEASE_INPUT flag. This will however trigger some internal buffering
  * inside the packetizer and thus is less efficient.
  *
@@ -124,7 +124,7 @@ VC_CONTAINER_STATUS_T vc_packetizer_push( VC_PACKETIZER_T *context,
  * \param  packet    Pointer used to return a consumed packet
  * \param  flags     Miscellaneous flags controlling the operation
  *
- * \return           VC_CONTAINER_SUCCESS if a consumed packet was retreived,
+ * \return           VC_CONTAINER_SUCCESS if a consumed packet was retrieved,
  *                   VC_CONTAINER_ERROR_INCOMPLETE_DATA if none is available.
  */
 VC_CONTAINER_STATUS_T vc_packetizer_pop( VC_PACKETIZER_T *context,

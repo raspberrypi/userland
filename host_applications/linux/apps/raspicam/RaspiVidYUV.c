@@ -320,7 +320,7 @@ static void dump_status(RASPIVIDYUV_STATE *state)
 static int parse_cmdline(int argc, const char **argv, RASPIVIDYUV_STATE *state)
 {
    // Parse the command line arguments.
-   // We are looking for --<something> or -<abreviation of something>
+   // We are looking for --<something> or -<abbreviation of something>
 
    int valid = 1;
    int i;
@@ -392,7 +392,7 @@ static int parse_cmdline(int argc, const char **argv, RASPIVIDYUV_STATE *state)
       {
          if (sscanf(argv[i + 1], "%u", &state->timeout) == 1)
          {
-            // Ensure that if previously selected a waitMethod we dont overwrite it
+            // Ensure that if previously selected a waitMethod we don't overwrite it
             if (state->timeout == 0 && state->waitMethod == WAIT_METHOD_NONE)
                state->waitMethod = WAIT_METHOD_FOREVER;
 

@@ -506,7 +506,7 @@ static void dump_ancestors(Window w)
    Window grandparent,parent = w, child = 0;
    unsigned int rlayer = ~0;
    bool bidirectional;
-   vcos_log_trace("walking back up heirarchy");
+   vcos_log_trace("walking back up hierarchy");
    while(parent)
    {
       bidirectional = false;
@@ -584,7 +584,7 @@ uint32_t khrn_platform_get_window_position(EGLNativeWindowType win)
       {
          vcos_log_error("EGL window isn't child of root", i);
 
-         //to try and find out where this window has gone, let us walk back up the heirarchy
+         //to try and find out where this window has gone, let us walk back up the hierarchy
          dump_ancestors(w);
          return ~0;
       }

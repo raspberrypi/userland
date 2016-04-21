@@ -116,7 +116,7 @@ MMAL_STATUS_T mmalomx_param_mapping_generic(MMALOMX_PARAM_MAPPING_DIRECTION dir,
    if (((uint8_t *)omx_param) + omx_header->nSize !=
          omx_data + size)
    {
-      VCOS_ALERT("mmalomx_param_mapping_generic: mismatch between mmal and omx paramters for (%u)",
+      VCOS_ALERT("mmalomx_param_mapping_generic: mismatch between mmal and omx parameters for (%u)",
                  (unsigned int)mmal_param->id);
       return MMAL_EINVAL;
    }

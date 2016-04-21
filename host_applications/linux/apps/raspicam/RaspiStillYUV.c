@@ -287,7 +287,7 @@ static void dump_status(RASPISTILLYUV_STATE *state)
 static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state)
 {
    // Parse the command line arguments.
-   // We are looking for --<something> or -<abreviation of something>
+   // We are looking for --<something> or -<abbreviation of something>
 
    int valid = 1; // set 0 if we have a bad parameter
    int i;
@@ -761,7 +761,7 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
       goto error;
    }
 
-   // Set the same format on the video  port (which we dont use here)
+   // Set the same format on the video  port (which we don't use here)
    mmal_format_full_copy(video_port->format, format);
    status = mmal_port_format_commit(video_port);
 

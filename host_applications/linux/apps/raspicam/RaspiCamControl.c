@@ -809,12 +809,12 @@ void raspicamcontrol_display_help()
       fprintf(stdout, ",%s", drc_mode_map[i].mode);
    }
 
-   fprintf(stderr, "\n");
+   fprintf(stdout, "\n");
 }
 
 
 /**
- * Dump contents of camera parameter structure to stdout for debugging/verbose logging
+ * Dump contents of camera parameter structure to stderr for debugging/verbose logging
  *
  * @param params Const pointer to parameters structure to dump
  */
@@ -838,7 +838,7 @@ void raspicamcontrol_dump_parameters(const RASPICAM_CAMERA_PARAMETERS *params)
  * ALso displays a fault if code is not success
  *
  * @param status The error code to convert
- * @return 0 if status is sucess, 1 otherwise
+ * @return 0 if status is success, 1 otherwise
  */
 int mmal_status_to_int(MMAL_STATUS_T status)
 {

@@ -141,6 +141,7 @@ typedef struct
    int  header_wptr;
    FILE *imv_file_handle;               /// File handle to write inline motion vectors to.
    int  flush_buffers;
+   FILE *pts_file_handle;               /// File timestamps
 } PORT_USERDATA;
 
 /** Structure containing all state information for the current run
@@ -150,6 +151,7 @@ struct RASPIVID_STATE_S
    int timeout;                        /// Time taken before frame is grabbed and app then shuts down. Units are milliseconds
    int width;                          /// Requested width of image
    int height;                         /// requested height of image
+   MMAL_FOURCC_T encoding;             /// Requested codec video encoding (MJPEG or H264)
    int bitrate;                        /// Requested bitrate
    int framerate;                      /// Requested frame rate (fps)
    int intraperiod;                    /// Intra-refresh period (key frame rate)
@@ -171,7 +173,7 @@ struct RASPIVID_STATE_S
    int segmentWrap;                    /// Point at which to wrap segment counter
    int segmentNumber;                  /// Current segment counter
    int splitNow;                       /// Split at next possible i-frame if set to 1.
-   int splitWait;                      /// Switch if user wants splited files 
+   int splitWait;                      /// Switch if user wants splited files
 
    RASPIPREVIEW_PARAMETERS preview_parameters;   /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -190,11 +192,15 @@ struct RASPIVID_STATE_S
 
    int inlineMotionVectors;             /// Encoder outputs inline Motion Vectors
    char *imv_filename;                  /// filename of inline Motion Vectors output
-   
    int cameraNum;                       /// Camera number
    int settings;                        /// Request settings from the camera
    int sensor_mode;			            /// Sensor mode. 0=auto. Check docs/forum for modes selected by other values.
    int intra_refresh_type;              /// What intra refresh type to use. -1 to not set.
+   int frame;
+   char *pts_file;
+   int save_pts;
+   int64_t starttime;
+   int64_t lasttime;
 };
 
 
@@ -261,6 +267,8 @@ static void display_valid_parameters(char *app_name);
 #define CommandSensorMode   26
 #define CommandIntraRefreshType 27
 #define CommandFlush        28
+#define CommandSavePTS      29
+#define CommandCodec        30
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -293,6 +301,8 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandSensorMode,    "-mode",       "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
    { CommandIntraRefreshType,"-irefresh", "if", "Set intra refresh type", 1},
    { CommandFlush,         "-flush",      "fl",  "Flush buffers in order to decrease latency", 0 },
+   { CommandSavePTS,       "-save-pts",   "pts","Save Timestamps to file for mkvmerge", 1 },
+   { CommandCodec,         "-codec",      "cd", "Specify the codec to use - H264 (default) or MJPEG", 1 },
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -335,6 +345,7 @@ static void default_status(RASPIVID_STATE *state)
    state->timeout = 5000;     // 5s delay before take image
    state->width = 1920;       // Default to 1080p
    state->height = 1080;
+   state->encoding = MMAL_ENCODING_H264;
    state->bitrate = 17000000; // This is a decent default bitrate for 1080p
    state->framerate = VIDEO_FRAME_RATE_NUM;
    state->intraperiod = -1;    // Not set
@@ -357,12 +368,14 @@ static void default_status(RASPIVID_STATE *state)
    state->splitWait = 0;
 
    state->inlineMotionVectors = 0;
-   
    state->cameraNum = 0;
    state->settings = 0;
    state->sensor_mode = 0;
 
    state->intra_refresh_type = -1;
+
+   state->frame = 0;
+   state->save_pts = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -421,7 +434,7 @@ static void dump_status(RASPIVID_STATE *state)
 static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
 {
    // Parse the command line arguments.
-   // We are looking for --<something> or -<abreviation of something>
+   // We are looking for --<something> or -<abbreviation of something>
 
    int valid = 1;
    int i;
@@ -507,7 +520,7 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
       {
          if (sscanf(argv[i + 1], "%u", &state->timeout) == 1)
          {
-            // Ensure that if previously selected a waitMethod we dont overwrite it
+            // Ensure that if previously selected a waitMethod we don't overwrite it
             if (state->timeout == 0 && state->waitMethod == WAIT_METHOD_NONE)
                state->waitMethod = WAIT_METHOD_FOREVER;
 
@@ -666,7 +679,7 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          break;
       }
 
-      case CommandSplitWait: // split files on restart 
+      case CommandSplitWait: // split files on restart
       {
          // Must enable inline headers for this to work
          state->bInlineHeaders = 1;
@@ -732,6 +745,39 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
       case CommandFlush:
       {
          state->callback_data.flush_buffers = 1;
+         break;
+      }
+      case CommandSavePTS:  // output filename
+      {
+         state->save_pts = 1;
+         int len = strlen(argv[i + 1]);
+         if (len)
+         {
+            state->pts_file = malloc(len + 1);
+            vcos_assert(state->pts_file);
+            if (state->pts_file)
+               strncpy(state->pts_file, argv[i + 1], len+1);
+            i++;
+         }
+         else
+            valid = 0;
+         break;
+      }
+      case CommandCodec:  // codec type
+      {
+         int len = strlen(argv[i + 1]);
+         if (len)
+         {
+            if (len==4 && !strncmp("H264", argv[i+1], 4))
+               state->encoding = MMAL_ENCODING_H264;
+            else  if (len==5 && !strncmp("MJPEG", argv[i+1], 5))
+               state->encoding = MMAL_ENCODING_MJPEG;
+            else
+               valid = 0;
+            i++;
+         }
+         else
+            valid = 0;
          break;
       }
 
@@ -986,6 +1032,33 @@ static FILE *open_imv_filename(RASPIVID_STATE *pState)
    return new_handle;
 }
 
+static FILE *open_pts_filename(RASPIVID_STATE *pState)
+{
+   FILE *new_handle = NULL;
+   char *filename = NULL;
+
+   filename = pState->pts_file;
+
+   if (filename)
+      new_handle = fopen(filename, "wb");
+
+   if (pState->verbose)
+   {
+      if (new_handle)
+         fprintf(stderr, "Opening pts output file \"%s\"\n", filename);
+      else
+         fprintf(stderr, "Failed to open new pts file \"%s\"\n", filename);
+   }
+
+   if (new_handle)
+   {
+      //save header for mkvmerge
+      fprintf(new_handle,"# timecode format v2\n");
+   }
+
+   return new_handle;
+}
+
 /**
  * Update any annotation data specific to the video.
  * This simply passes on the setting from cli, or
@@ -1136,7 +1209,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
             }
          }
       }
-      else 
+      else
       {
          // For segmented record mode, we need to see if we have exceeded our time/size,
          // but also since we have inline headers turned on we need to break when we get one to
@@ -1191,8 +1264,25 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
             }
             else
             {
-               bytes_written = fwrite(buffer->data, 1, buffer->length, pData->file_handle);            
+               bytes_written = fwrite(buffer->data, 1, buffer->length, pData->file_handle);
                if(pData->flush_buffers) fflush(pData->file_handle);
+
+               if(pData->pstate->save_pts &&
+                  (buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END ||
+                   buffer->flags == 0 ||
+                   buffer->flags & MMAL_BUFFER_HEADER_FLAG_KEYFRAME) &&
+                  !(buffer->flags & MMAL_BUFFER_HEADER_FLAG_CONFIG))
+               {
+                  if(buffer->pts != MMAL_TIME_UNKNOWN && buffer->pts != pData->pstate->lasttime)
+                  {
+                    int64_t pts;
+                    if(pData->pstate->frame==0)pData->pstate->starttime=buffer->pts;
+                    pData->pstate->lasttime=buffer->pts;
+                    pts = buffer->pts - pData->pstate->starttime;
+                    fprintf(pData->pts_file_handle,"%d.%03d\n", pts/1000, pts%1000);
+                    pData->pstate->frame++;
+                  }
+               }
             }
 
             mmal_buffer_header_mem_unlock(buffer);
@@ -1335,7 +1425,7 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
          .num_preview_video_frames = 3,
          .stills_capture_circular_buffer_height = 0,
          .fast_preview_resume = 0,
-         .use_stc_timestamp = MMAL_PARAM_TIMESTAMP_MODE_RESET_STC
+         .use_stc_timestamp = MMAL_PARAM_TIMESTAMP_MODE_RAW_STC
       };
       mmal_port_parameter_set(camera->control, &cam_config.hdr);
    }
@@ -1365,14 +1455,14 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
 
    //enable dynamic framerate if necessary
    if (state->camera_parameters.shutter_speed)
-   {   
+   {
       if (state->framerate > 1000000./state->camera_parameters.shutter_speed)
       {
          state->framerate=0;
          if (state->verbose)
             fprintf(stderr, "Enable dynamic frame rate to fulfil shutter speed requirement\n");
       }
-   } 
+   }
 
    format->encoding = MMAL_ENCODING_OPAQUE;
    format->es->video.width = VCOS_ALIGN_UP(state->width, 32);
@@ -1541,11 +1631,15 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
    mmal_format_copy(encoder_output->format, encoder_input->format);
 
    // Only supporting H264 at the moment
-   encoder_output->format->encoding = MMAL_ENCODING_H264;
+   encoder_output->format->encoding = state->encoding;
 
    encoder_output->format->bitrate = state->bitrate;
 
-   encoder_output->buffer_size = encoder_output->buffer_size_recommended;
+   if (state->encoding == MMAL_ENCODING_H264)
+      encoder_output->buffer_size = encoder_output->buffer_size_recommended;
+   else
+      encoder_output->buffer_size = 256<<10;
+
 
    if (encoder_output->buffer_size < encoder_output->buffer_size_min)
       encoder_output->buffer_size = encoder_output->buffer_size_min;
@@ -1582,7 +1676,8 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
 
    }
 
-   if (state->intraperiod != -1)
+   if (state->encoding == MMAL_ENCODING_H264 &&
+       state->intraperiod != -1)
    {
       MMAL_PARAMETER_UINT32_T param = {{ MMAL_PARAMETER_INTRAPERIOD, sizeof(param)}, state->intraperiod};
       status = mmal_port_parameter_set(encoder_output, &param.hdr);
@@ -1593,7 +1688,8 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
       }
    }
 
-   if (state->quantisationParameter)
+   if (state->encoding == MMAL_ENCODING_H264 &&
+       state->quantisationParameter)
    {
       MMAL_PARAMETER_UINT32_T param = {{ MMAL_PARAMETER_VIDEO_ENCODE_INITIAL_QUANT, sizeof(param)}, state->quantisationParameter};
       status = mmal_port_parameter_set(encoder_output, &param.hdr);
@@ -1621,6 +1717,7 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
 
    }
 
+   if (state->encoding == MMAL_ENCODING_H264)
    {
       MMAL_PARAMETER_VIDEO_PROFILE_T  param;
       param.hdr.id = MMAL_PARAMETER_PROFILE;
@@ -1649,16 +1746,18 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
       vcos_log_error("failed to set INLINE HEADER FLAG parameters");
       // Continue rather than abort..
    }
-   
+
    //set INLINE VECTORS flag to request motion vector estimates
-   if (mmal_port_parameter_set_boolean(encoder_output, MMAL_PARAMETER_VIDEO_ENCODE_INLINE_VECTORS, state->inlineMotionVectors) != MMAL_SUCCESS)
+   if (state->encoding == MMAL_ENCODING_H264 &&
+       mmal_port_parameter_set_boolean(encoder_output, MMAL_PARAMETER_VIDEO_ENCODE_INLINE_VECTORS, state->inlineMotionVectors) != MMAL_SUCCESS)
    {
       vcos_log_error("failed to set INLINE VECTORS parameters");
       // Continue rather than abort..
    }
 
    // Adaptive intra refresh settings
-   if (state->intra_refresh_type != -1)
+   if (state->encoding == MMAL_ENCODING_H264 &&
+       state->intra_refresh_type != -1)
    {
       MMAL_PARAMETER_VIDEO_INTRA_REFRESH_T  param;
       param.hdr.id = MMAL_PARAMETER_VIDEO_INTRA_REFRESH;
@@ -2088,6 +2187,27 @@ int main(int argc, const char **argv)
             }
          }
 
+         state.callback_data.pts_file_handle = NULL;
+
+         if (state.pts_file)
+         {
+            if (state.pts_file[0] == '-')
+            {
+               state.callback_data.pts_file_handle = stdout;
+            }
+            else
+            {
+               state.callback_data.pts_file_handle = open_pts_filename(&state);
+            }
+
+            if (!state.callback_data.pts_file_handle)
+            {
+               // Notify user, carry on but discarding encoded output buffers
+               fprintf(stderr, "Error opening output file: %s\nNo output file will be generated\n",state.pts_file);
+               state.save_pts=0;
+            }
+         }
+
          if(state.bCircularBuffer)
          {
             if(state.bitrate == 0)
@@ -2189,7 +2309,7 @@ int main(int argc, const char **argv)
                         vcos_log_error("Unable to send a buffer to encoder output port (%d)", q);
                   }
                }
-               
+
                int initialCapturing=state.bCapturing;
                while (running)
                {
@@ -2215,7 +2335,7 @@ int main(int argc, const char **argv)
                      else
                         fprintf(stderr, "Pausing video capture\n");
                   }
-                  
+
                   if(state.splitWait)
                   {
                      if(state.bCapturing)
@@ -2228,7 +2348,7 @@ int main(int argc, const char **argv)
                      else
                      {
                         if(!initialCapturing)
-                           state.splitNow=1;   
+                           state.splitNow=1;
                      }
                      initialCapturing=0;
                   }
@@ -2300,6 +2420,8 @@ error:
          fclose(state.callback_data.file_handle);
       if (state.callback_data.imv_file_handle && state.callback_data.imv_file_handle != stdout)
          fclose(state.callback_data.imv_file_handle);
+      if (state.callback_data.pts_file_handle && state.callback_data.pts_file_handle != stdout)
+         fclose(state.callback_data.pts_file_handle);
 
       /* Disable components */
       if (state.encoder_component)

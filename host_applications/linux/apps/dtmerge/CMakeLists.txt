@@ -14,9 +14,7 @@ include_directories (
    ${VIDEOCORE_ROOT}/helpers/dtoverlay
 )
 
-add_executable(dtoverlay dtoverlay_main.c utils.c)
-target_link_libraries(dtoverlay dtovl)
-install(TARGETS dtoverlay RUNTIME DESTINATION bin)
+add_executable(dtmerge dtmerge.c)
+target_link_libraries(dtmerge dtovl)
 
-add_custom_command(TARGET dtoverlay POST_BUILD COMMAND ln;-sf;dtoverlay;dtparam)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/dtparam DESTINATION bin)
+install(TARGETS dtmerge RUNTIME DESTINATION bin)

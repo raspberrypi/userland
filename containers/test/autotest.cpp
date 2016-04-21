@@ -1018,7 +1018,7 @@ private:
                   // not its own PTS. This should mean next time we seek to that PTS we'll get this packet.
                   index_positions[stream].insert(std::make_pair(target_pts, expected_packet->second));
 
-                  // Check whether the time on the packet is reasonable - it ought to be close to the time acheived.
+                  // Check whether the time on the packet is reasonable - it ought to be close to the time achieved.
                   check_seek_tolerance(packet, actual_pts);
 
                   // Now we've found a packet from this stream we're done with it, so note we don't care about it any more.
@@ -1848,7 +1848,7 @@ private:
    // Check whether a packet is close enough to the PTS supplied. Used after a seek.
    void check_seek_tolerance(const PACKET_DATA_T& packet, PTS_T actual_pts)
    {
-      // Check whether the time on the packet is reasonable - it ought to be close to the time acheived.
+      // Check whether the time on the packet is reasonable - it ought to be close to the time achieved.
       if (packet.info.track == video_stream)
       {
          if ((packet.info.pts + configuration.tolerance_video_early) < actual_pts)

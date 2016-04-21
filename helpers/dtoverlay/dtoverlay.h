@@ -42,14 +42,14 @@ typedef enum
    DTOVERLAY_DEBUG
 } dtoverlay_logging_type_t;
 
-typedef struct
+typedef struct dtoverlay_struct
 {
    const char *param;
    int len;
    const char *b;
 } DTOVERLAY_PARAM_T;
 
-typedef struct
+typedef struct dtblob_struct
 {
    void *fdt;
    int fdt_is_malloced;
@@ -64,10 +64,20 @@ typedef struct
 typedef void DTOVERLAY_LOGGING_FUNC(dtoverlay_logging_type_t type,
                                     const char *fmt, va_list args);
 
+typedef int (*override_callback_t)(int override_type,
+				   DTBLOB_T *dtb, int node_off,
+				   const char *prop_name, int target_phandle,
+				   int target_off, int target_size,
+				   void *callback_value);
+
 /* Return values: -ve = fatal error, positive = non-fatal error */
 int dtoverlay_create_node(DTBLOB_T *dtb, const char *node_name, int path_len);
 
 int dtoverlay_delete_node(DTBLOB_T *dtb, const char *node_name, int path_len);
+
+int dtoverlay_create_prop_fragment(DTBLOB_T *dtb, int idx, int target_phandle,
+                                   const char *prop_name, const void *prop_data,
+                                   int prop_len);
 
 int dtoverlay_fixup_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb);
 
@@ -79,30 +89,33 @@ int dtoverlay_merge_params(DTBLOB_T *dtb, const DTOVERLAY_PARAM_T *params,
 const char *dtoverlay_find_override(DTBLOB_T *dtb, const char *override_name,
                                     int *data_len);
 
+int dtoverlay_override_one_target(int override_type,
+                                  DTBLOB_T *dtb, int node_off,
+                                  const char *prop_name, int target_phandle,
+                                  int target_off, int target_size,
+                                  void *callback_value);
+
+int dtoverlay_foreach_override_target(DTBLOB_T *dtb, const char *override_name,
+                                      const char *override_data, int data_len,
+                                      override_callback_t callback,
+                		      void *callback_value);
+
 int dtoverlay_apply_override(DTBLOB_T *dtb, const char *override_name,
                              const char *override_data, int data_len,
                              const char *override_value);
 
-int dtoverlay_extract_override(const char *override_name,
-                               const char **data_ptr, int *len_ptr,
-                               const char **namep, int *namelenp, int *offp,
-                               int *sizep);
-
-int dtoverlay_apply_integer_override(DTBLOB_T *dtb, int phandle,
-                                     const char *prop_name, int name_len,
-                                     int override_off, int override_size,
-                                     uint64_t override_val);
-
-int dtoverlay_apply_string_override(DTBLOB_T *dtb, int phandle,
-                                    const char *prop_name, int name_len,
-                                    const char *override_str);
+int dtoverlay_override_one_target(int override_type,
+				  DTBLOB_T *dtb, int node_off,
+				  const char *prop_name, int target_phandle,
+				  int target_off, int target_size,
+				  void *callback_value);
 
 int dtoverlay_set_synonym(DTBLOB_T *dtb, const char *dst, const char *src);
 
 int dtoverlay_dup_property(DTBLOB_T *dtb, const char *node_name,
                            const char *dst, const char *src);
 
-DTBLOB_T *dtoverlay_create_dtb(void *fdt, int max_size);
+DTBLOB_T *dtoverlay_create_dtb(int max_size);
 
 DTBLOB_T *dtoverlay_load_dtb_from_fp(FILE *fp, int max_size);
 
@@ -139,14 +152,22 @@ static inline void dtoverlay_dtb_set_trailer(DTBLOB_T *dtb,
     dtb->trailer_is_malloced = 0;
 }
 
-int dtoverlay_find_matching_node(DTBLOB_T *dt, const char **node_names, int pos);
+int dtoverlay_find_phandle(DTBLOB_T *dtb, int phandle);
 
-const void *dtoverlay_get_property(DTBLOB_T *dt, int pos, const char *prop_name, int *prop_len);
+int dtoverlay_find_matching_node(DTBLOB_T *dtb, const char **node_names,
+                                 int pos);
 
-const char *dtoverlay_get_alias(DTBLOB_T *dt, const char *alias_name);
+const void *dtoverlay_get_property(DTBLOB_T *dtb, int pos,
+                                   const char *prop_name, int *prop_len);
+
+const char *dtoverlay_get_alias(DTBLOB_T *dtb, const char *alias_name);
 
 void dtoverlay_set_logging_func(DTOVERLAY_LOGGING_FUNC *func);
 
 void dtoverlay_enable_debug(int enable);
+
+void dtoverlay_error(const char *fmt, ...);
+
+void dtoverlay_debug(const char *fmt, ...);
 
 #endif

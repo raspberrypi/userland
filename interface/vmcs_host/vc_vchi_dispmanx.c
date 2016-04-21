@@ -1181,7 +1181,7 @@ static int32_t dispmanx_wait_for_reply(void *response, uint32_t max_length) {
  *
  * Arguments: command, parameter buffer, parameter legnth
  *
- * Description: send a command and wait for its reponse (int)
+ * Description: send a command and wait for its response (int)
  *
  * Returns: response
  *
@@ -1217,7 +1217,7 @@ int32_t vc_dispmanx_send_command (uint32_t command, void *buffer,
  *
  * Arguments: command, parameter buffer, parameter legnth, reply buffer, buffer length
  *
- * Description: send a command and wait for its reponse (in a buffer)
+ * Description: send a command and wait for its response (in a buffer)
  *
  * Returns: error code
  *
