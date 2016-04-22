@@ -42,10 +42,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define CFG_DIR_1 "/sys/kernel/config"
 #define CFG_DIR_2 "/config"
+#define DT_SUBDIR "/device-tree"
 #define WORK_DIR "/tmp/.dtoverlays"
 #define OVERLAY_SRC_SUBDIR "overlays"
 #define README_FILE "README"
-#define DT_OVERLAYS_SUBDIR "device-tree/overlays"
+#define DT_OVERLAYS_SUBDIR "overlays"
 #define DTOVERLAY_PATH_MAX 128
 
 #define DTC_FLAGS "-W no-avoid_default_addr_size"
@@ -86,6 +87,8 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay, int and_later);
 static int dtoverlay_list(STATE_T *state);
 static int dtoverlay_list_all(STATE_T *state);
 static void usage(void);
+static void root_check(void);
+
 static void overlay_help(const char *overlay, const char **params);
 
 static int apply_overlay(const char *overlay_file, const char *overlay);
@@ -99,6 +102,7 @@ const char *cmd_name;
 const char *work_dir = WORK_DIR;
 const char *overlay_src_dir;
 const char *dt_overlays_dir;
+const char *sudo = "";
 
 int main(int argc, const char **argv)
 {
@@ -230,20 +234,23 @@ int main(int argc, const char **argv)
 	    fatal_error("Failed to create '%s' - %d", work_dir, errno);
     }
 
-    cfg_dir = CFG_DIR_1;
+    cfg_dir = CFG_DIR_1 DT_SUBDIR;
     if (!dir_exists(cfg_dir))
     {
+	root_check();
+
 	cfg_dir = CFG_DIR_2;
 	if (!dir_exists(cfg_dir))
 	{
-	    if (run_cmd("sudo mkdir %s", cfg_dir) != 0)
+	    if (run_cmd("%s mkdir %s", sudo, cfg_dir) != 0)
 		fatal_error("Failed to create '%s' - %d", cfg_dir, errno);
 	}
-    }
 
-    if (!dir_exists(cfg_dir) &&
-	(run_cmd("sudo mount -t configfs none %s", cfg_dir) != 0))
+	cfg_dir = CFG_DIR_2 DT_SUBDIR;
+	if (!dir_exists(cfg_dir) &&
+	    (run_cmd("%s mount -t configfs none %s", sudo, cfg_dir) != 0))
 	    fatal_error("Failed to mount configfs - %d", errno);
+    }
 
     dt_overlays_dir = sprintf_dup("%s/%s", cfg_dir, DT_OVERLAYS_SUBDIR);
     if (!dir_exists(dt_overlays_dir))
@@ -317,7 +324,6 @@ int dtparam_callback(int override_type,
     return err;
 }
 
-
 // Returns 0 on success, -ve for fatal errors and +ve for non-fatal errors
 int dtparam_apply(DTBLOB_T *dtb, const char *override_name,
 		  const char *override_data, int data_len,
@@ -363,6 +369,8 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
     int err;
     int len;
     int i;
+
+    root_check();
 
     len = strlen(overlay) - 5;
     is_dtparam = (strcmp(overlay, "dtparam") == 0);
@@ -506,6 +514,8 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay, int and_later)
     int rmpos;
     int i;
 
+    root_check();
+
     if (chdir(work_dir) != 0)
 	fatal_error("Failed to chdir to '%s'", work_dir);
 
@@ -568,7 +578,7 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay, int and_later)
 	    if (!right)
 		return error("Internal error");
 
-	    run_cmd("sudo rmdir %s/%.*s", dt_overlays_dir, right - left, left);
+	    run_cmd("%s rmdir %s/%.*s", sudo, dt_overlays_dir, right - left, left);
 	}
 
 	/* Replay the sequence, deleting files for the specified overlay,
@@ -835,8 +845,18 @@ static void usage(void)
     printf("                (defaults to /boot/overlays or /flash/overlays)\n");
     printf("    -n          Dry run - show what would be executed\n");
     printf("    -v          Verbose operation\n");
+    printf("\n");
+    printf("Adding or removing overlays and parameters requires root privileges.\n");
 
     exit(1);
+}
+
+static void root_check(void)
+{
+    if (getenv("DTOVERLAY_AUTO_SUDO"))
+	sudo = "sudo";
+    else if (getuid() != 0)
+	fatal_error("Must be run as root - try 'sudo %s ...'", cmd_name);
 }
 
 static void overlay_help(const char *overlay, const char **params)
@@ -916,13 +936,13 @@ static int apply_overlay(const char *overlay_file, const char *overlay)
 	error("Overlay '%s' is already loaded", overlay);
 	ret = 0;
     }
-    else if (run_cmd("sudo mkdir %s", overlay_dir) == 0)
+    else if (run_cmd("%s mkdir %s", sudo, overlay_dir) == 0)
     {
-	run_cmd("sudo cp %s %s/dtbo", overlay_file, overlay_dir);
+	run_cmd("%s cp %s %s/dtbo", sudo, overlay_file, overlay_dir);
 
 	if (!overlay_applied(overlay_dir))
 	{
-	    run_cmd("sudo rmdir %s", overlay_dir);
+	    run_cmd("%s rmdir %s", sudo, overlay_dir);
 	    error("Failed to apply overlay '%s'", overlay);
 	    ret = 0;
 	}
