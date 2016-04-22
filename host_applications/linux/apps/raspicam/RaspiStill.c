@@ -70,6 +70,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/mmal/util/mmal_util_params.h"
 #include "interface/mmal/util/mmal_default_components.h"
 #include "interface/mmal/util/mmal_connection.h"
+#include "interface/mmal/mmal_parameters_camera.h"
 
 
 #include "RaspiCamControl.h"
@@ -117,6 +118,7 @@ typedef struct
    int timeout;                        /// Time taken before frame is grabbed and app then shuts down. Units are milliseconds
    int width;                          /// Requested width of image
    int height;                         /// requested height of image
+   char camera_name[MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN]; // Name of the camera sensor
    int quality;                        /// JPEG quality setting (1-100)
    int wantRAW;                        /// Flag for whether the JPEG metadata also contains the RAW bayer image
    char *filename;                     /// filename of output file
@@ -260,6 +262,55 @@ static struct
 
 static int next_frame_description_size = sizeof(next_frame_description) / sizeof(next_frame_description[0]);
 
+static void set_sensor_defaults(RASPISTILL_STATE *state)
+{
+   MMAL_COMPONENT_T *camera_info;
+   MMAL_STATUS_T status;
+
+   // Default to the OV5647 setup
+   state->width = 2592;
+   state->height = 1944;
+   strncpy(state->camera_name, "OV5647", MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN);
+
+   // Try to get the camera name and maximum supported resolution
+   status = mmal_component_create(MMAL_COMPONENT_DEFAULT_CAMERA_INFO, &camera_info);
+   if (status == MMAL_SUCCESS)
+   {
+      MMAL_PARAMETER_CAMERA_INFO_T param;
+      param.hdr.id = MMAL_PARAMETER_CAMERA_INFO;
+      param.hdr.size = sizeof(param)-4;  // Deliberately undersize to check firmware veresion
+      status = mmal_port_parameter_get(camera_info->control, &param.hdr);
+
+      if (status != MMAL_SUCCESS)
+      {
+         // Running on newer firmware
+         param.hdr.size = sizeof(param);
+         status = mmal_port_parameter_get(camera_info->control, &param.hdr);
+         if (status == MMAL_SUCCESS && param.num_cameras > 0)
+         {
+            // Take the parameters from the first camera listed.
+            state->width = param.cameras[0].max_width;
+            state->height = param.cameras[0].max_height;
+            strncpy(state->camera_name,  param.cameras[0].camera_name, MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN);
+            state->camera_name[MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN-1] = 0;
+         }
+         else
+            vcos_log_error("Cannot read cameara info, keeping the defaults for OV5647");
+      }
+      else
+      {
+         // Older firmware
+         // Nothing to do here, keep the defaults for OV5647
+      }
+
+      mmal_component_destroy(camera_info);
+   }
+   else
+   {
+      vcos_log_error("Failed to create camera_info component");
+   }
+}
+
 /**
  * Assign a default set of parameters to the state passed in
  *
@@ -274,8 +325,6 @@ static void default_status(RASPISTILL_STATE *state)
    }
 
    state->timeout = 5000; // 5s delay before take image
-   state->width = 2592;
-   state->height = 1944;
    state->quality = 85;
    state->wantRAW = 0;
    state->filename = NULL;
@@ -307,6 +356,9 @@ static void default_status(RASPISTILL_STATE *state)
    state->sensor_mode = 0;
    state->datetime = 0;
    state->timestamp = 0;
+
+   // Setup for sensor specific parameters
+   set_sensor_defaults(state);
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -1322,11 +1374,14 @@ static void add_exif_tags(RASPISTILL_STATE *state)
 {
    time_t rawtime;
    struct tm *timeinfo;
+   char model_buf[32];
    char time_buf[32];
    char exif_buf[128];
    int i;
 
-   add_exif_tag(state, "IFD0.Model=RP_OV5647");
+
+   snprintf(model_buf, 32, "IFD0.Model=RP_%s", state->camera_name);
+   add_exif_tag(state, model_buf);
    add_exif_tag(state, "IFD0.Make=RaspberryPi");
 
    time(&rawtime);
