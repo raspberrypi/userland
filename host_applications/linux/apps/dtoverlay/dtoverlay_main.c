@@ -174,12 +174,17 @@ int main(int argc, const char **argv)
     if ((opt == OPT_ADD) || (opt == OPT_REMOVE) ||
 	(opt == OPT_REMOVE_FROM) || (opt == OPT_HELP))
     {
-	if (argn == argc)
+	if ((argn == argc) &&
+	    ((!is_dtparam &&
+	      ((opt == OPT_ADD) || (opt == OPT_HELP))) ||
+	     (is_dtparam && (opt == OPT_HELP))))
 	    usage();
+	if (is_dtparam && (opt == OPT_ADD) && (argn == argc))
+	    opt = OPT_HELP;
 	if (is_dtparam &&
 	    ((opt == OPT_ADD) || (opt == OPT_HELP)))
 	    overlay = "dtparam";
-	else
+	else if (argn < argc)
 	    overlay = argv[argn++];
     }
 
@@ -504,35 +509,45 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay, int and_later)
     if (chdir(work_dir) != 0)
 	fatal_error("Failed to chdir to '%s'", work_dir);
 
-    overlay_len = strlen(overlay);
-
-    rmpos = strtoul(overlay, &end, 10);
-    if (end && (*end == '\0'))
+    if (overlay)
     {
-	if (rmpos >= count)
-	    return error("Overlay index (%d) too large", rmpos);
+	overlay_len = strlen(overlay);
+
+	rmpos = strtoul(overlay, &end, 10);
+	if (end && (*end == '\0'))
+	{
+	    if (rmpos >= count)
+		return error("Overlay index (%d) too large", rmpos);
+	    dir_name = state->namelist[rmpos]->d_name;
+	}
+	/* Locate the most recent reference to the overlay */
+	else for (rmpos = count - 1; rmpos >= 0; rmpos--)
+	{
+	    const char *left, *right;
+	    dir_name = state->namelist[rmpos]->d_name;
+	    left = strchr(dir_name, '_');
+	    if (!left)
+		return error("Internal error");
+	    left++;
+	    right = strchr(left, '.');
+	    if (!right)
+		return error("Internal error");
+	    if (((right - left) == overlay_len) &&
+		(memcmp(overlay, left, overlay_len) == 0))
+		break;
+	    dir_name = NULL;
+	}
+
+	if (rmpos < 0)
+	    return error("Overlay '%s' is not loaded", overlay);
+    }
+    else
+    {
+	if (!count)
+	    return error("No overlays loaded");
+	rmpos = and_later ? 0 : (count - 1);
 	dir_name = state->namelist[rmpos]->d_name;
     }
-    /* Locate the most recent reference to the overlay */
-    else for (rmpos = count - 1; rmpos >= 0; rmpos--)
-    {
-        const char *left, *right;
-	dir_name = state->namelist[rmpos]->d_name;
-	left = strchr(dir_name, '_');
-	if (!left)
-	    return error("Internal error");
-	left++;
-	right = strchr(left, '.');
-	if (!right)
-	    return error("Internal error");
-	if (((right - left) == overlay_len) &&
-	    (memcmp(overlay, left, overlay_len) == 0))
-	    break;
-	dir_name = NULL;
-    }
-
-    if (rmpos < 0)
-        return error("Overlay '%s' is not loaded", overlay);
 
     end = strchr(dir_name, '.');
     i = end ? (end - dir_name) : strlen(dir_name);
@@ -540,7 +555,7 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay, int and_later)
     overlay_len = strlen(overlay_name);
     overlay_dir = sprintf_dup("%s/%s", dt_overlays_dir, overlay_name);
     if (!dir_exists(overlay_dir))
-        return error("Overlay '%s' is not loaded", overlay);
+        return error("Overlay '%s' is not loaded", overlay_name);
 
     if (rmpos < count)
     {
@@ -790,22 +805,23 @@ static void usage(void)
     printf("Usage:\n");
     if (strcmp(cmd_name, "dtparam") == 0)
     {
+    printf("  %s                Display help on all parameters\n", cmd_name);
     printf("  %s <param>=<val>...\n", cmd_name);
     printf("  %*s                Add an overlay (with parameters)\n", (int)strlen(cmd_name), "");
-    printf("  %s -r <idx>       Remove an overlay (index)\n", cmd_name);
-    printf("  %s -R <overlay>   Remove from an overlay (index)\n",
+    printf("  %s -r [<idx>]     Remove an overlay (by index, or the last)\n", cmd_name);
+    printf("  %s -R [<idx>]     Remove from an overlay (by index, or all)\n",
 	   cmd_name);
     printf("  %s -l             List active overlays/dtparams\n", cmd_name);
     printf("  %s -a             List all overlays/dtparams (marking the active)\n", cmd_name);
     printf("  %s -h             Show this usage message\n", cmd_name);
-    printf("  %s -h <param>...  Display help the listed dtparams\n", cmd_name);
+    printf("  %s -h <param>...  Display help on the listed parameters\n", cmd_name);
     }
     else
     {
     printf("  %s <overlay> [<param>=<val>...]\n", cmd_name);
     printf("  %*s                Add an overlay (with parameters)\n", (int)strlen(cmd_name), "");
-    printf("  %s -r <overlay>   Remove an overlay (name or index)\n", cmd_name);
-    printf("  %s -R <overlay>   Remove from an overlay (name or index)\n",
+    printf("  %s -r [<overlay>] Remove an overlay (by name, index or the last)\n", cmd_name);
+    printf("  %s -R [<overlay>] Remove from an overlay (by name, index or all)\n",
 	   cmd_name);
     printf("  %s -l             List active overlays/params\n", cmd_name);
     printf("  %s -a             List all overlays (marking the active)\n", cmd_name);
