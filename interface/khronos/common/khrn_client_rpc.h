@@ -350,6 +350,8 @@ extern void rpc_flush(CLIENT_THREAD_STATE_T *thread);
 extern void rpc_high_priority_begin(CLIENT_THREAD_STATE_T *thread);
 extern void rpc_high_priority_end(CLIENT_THREAD_STATE_T *thread);
 
+extern uint64_t rpc_get_client_id(CLIENT_THREAD_STATE_T *thread);
+
 static INLINE uint32_t rpc_pad_ctrl(uint32_t len) { return (len + 0x3) & ~0x3; }
 static INLINE uint32_t rpc_pad_bulk(uint32_t len) { return len; }
 
