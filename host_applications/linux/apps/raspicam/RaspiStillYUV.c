@@ -791,8 +791,8 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
    // Set our stills format on the stills  port
    if (state->useRGB)
    {
-      format->encoding = MMAL_ENCODING_BGR24;
-      format->encoding_variant = MMAL_ENCODING_BGR24;
+      format->encoding = mmal_util_rgb_order_fixed(still_port) ? MMAL_ENCODING_RGB24 : MMAL_ENCODING_BGR24;
+      format->encoding_variant = 0;  //Irrelevant when not in opaque mode
    }
    else
    {

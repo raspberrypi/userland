@@ -362,3 +362,42 @@ char *mmal_4cc_to_string(char *buf, size_t len, uint32_t fourcc)
    return buf;
 }
 
+#define MAX_ENCODINGS_NUM 20
+typedef struct {
+   MMAL_PARAMETER_HEADER_T header;
+   MMAL_FOURCC_T encodings[MAX_ENCODINGS_NUM];
+} MMAL_SUPPORTED_ENCODINGS_T;
+
+
+int mmal_util_rgb_order_fixed(MMAL_PORT_T *port)
+{
+   int new_fw = 0;
+   //Firmware support of RGB24 vs BGR24 colour ordering from camera
+   //and video splitter components has been corrected as of June 2016.
+   //New firmwares always report MMAL_ENCODING_RGB24 before BGR24, and
+   //that is the format we want.
+   //Old firmware reported BGR24 first, and also returned an error on
+   //the still port on querying MMAL_PARAMETER_SUPPORTED_ENCODINGS.
+
+   MMAL_SUPPORTED_ENCODINGS_T sup_encodings = {{MMAL_PARAMETER_SUPPORTED_ENCODINGS, sizeof(sup_encodings)}, {0}};
+   if (mmal_port_parameter_get(port, &sup_encodings.header) == MMAL_SUCCESS)
+   {
+      int i;
+      int num_encodings = (sup_encodings.header.size - sizeof(sup_encodings.header)) /
+          sizeof(sup_encodings.encodings[0]);
+      for (i=0; i<num_encodings; i++)
+      {
+         if (sup_encodings.encodings[i] == MMAL_ENCODING_BGR24)
+         {
+            //Found BGR24 first - old firmware.
+            break;
+         }
+         if (sup_encodings.encodings[i] == MMAL_ENCODING_RGB24)
+         {
+            //Found RGB24 first - new firmware, so use RGB24.
+            new_fw = 1;
+         }
+      }
+   }
+   return new_fw;
+}
