@@ -75,6 +75,12 @@ int dtoverlay_create_node(DTBLOB_T *dtb, const char *node_name, int path_len);
 
 int dtoverlay_delete_node(DTBLOB_T *dtb, const char *node_name, int path_len);
 
+int dtoverlay_find_node(DTBLOB_T *dtb, const char *node_path, int path_len);
+
+int dtoverlay_set_node_properties(DTBLOB_T *dtb, const char *node_path,
+                                  DTOVERLAY_PARAM_T *properties,
+                                  unsigned int num_properties);
+
 int dtoverlay_create_prop_fragment(DTBLOB_T *dtb, int idx, int target_phandle,
                                    const char *prop_name, const void *prop_data,
                                    int prop_len);
@@ -161,6 +167,8 @@ const void *dtoverlay_get_property(DTBLOB_T *dtb, int pos,
                                    const char *prop_name, int *prop_len);
 
 const char *dtoverlay_get_alias(DTBLOB_T *dtb, const char *alias_name);
+
+int dtoverlay_set_alias(DTBLOB_T *dtb, const char *alias_name, const char *value);
 
 void dtoverlay_set_logging_func(DTOVERLAY_LOGGING_FUNC *func);
 
