@@ -94,7 +94,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define VIDEO_OUTPUT_BUFFERS_NUM 3
 
 // Max bitrate we allow for recording
-const int MAX_BITRATE = 25000000; // 25Mbits/s
+const int MAX_BITRATE_MJPEG = 25000000; // 25Mbits/s
+const int MAX_BITRATE_LEVEL4 = 25000000; // 25Mbits/s
+const int MAX_BITRATE_LEVEL42 = 62500000; // 62.5Mbits/s
 
 /// Interval at which we check for an failure abort during capture
 const int ABORT_INTERVAL = 100; // ms
@@ -163,6 +165,7 @@ struct RASPIVID_STATE_S
    int immutableInput;                 /// Flag to specify whether encoder works in place or creates a new buffer. Result is preview can display either
                                        /// the camera output or the encoder output (with compression artifacts)
    int profile;                        /// H264 profile to use for encoding
+   int level;                          /// H264 level to use for encoding
    int waitMethod;                     /// Method for switching between pause and capture
 
    int onTime;                         /// In timed cycle mode, the amount of time the capture is on per cycle
@@ -213,6 +216,17 @@ static XREF_T  profile_map[] =
 };
 
 static int profile_map_size = sizeof(profile_map) / sizeof(profile_map[0]);
+
+/// Structure to cross reference H264 level strings against the MMAL parameter equivalent
+static XREF_T  level_map[] =
+{
+   {"4",           MMAL_VIDEO_LEVEL_H264_4},
+   {"4.1",         MMAL_VIDEO_LEVEL_H264_41},
+   {"4.2",         MMAL_VIDEO_LEVEL_H264_42},
+};
+
+static int level_map_size = sizeof(level_map) / sizeof(level_map[0]);
+
 
 static XREF_T  initial_map[] =
 {
@@ -268,6 +282,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandFlush        28
 #define CommandSavePTS      29
 #define CommandCodec        30
+#define CommandLevel        31
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -302,6 +317,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandFlush,         "-flush",      "fl",  "Flush buffers in order to decrease latency", 0 },
    { CommandSavePTS,       "-save-pts",   "pts","Save Timestamps to file for mkvmerge", 1 },
    { CommandCodec,         "-codec",      "cd", "Specify the codec to use - H264 (default) or MJPEG", 1 },
+   { CommandLevel,         "-level",      "lev","Specify H264 level to use for encoding", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -353,6 +369,7 @@ static void default_status(RASPIVID_STATE *state)
    state->demoInterval = 250; // ms
    state->immutableInput = 1;
    state->profile = MMAL_VIDEO_PROFILE_H264_HIGH;
+   state->level = MMAL_VIDEO_LEVEL_H264_4;
    state->waitMethod = WAIT_METHOD_NONE;
    state->onTime = 5000;
    state->offTime = 5000;
@@ -375,6 +392,7 @@ static void default_status(RASPIVID_STATE *state)
 
    state->frame = 0;
    state->save_pts = 0;
+
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -402,6 +420,7 @@ static void dump_status(RASPIVID_STATE *state)
    fprintf(stderr, "Width %d, Height %d, filename %s\n", state->width, state->height, state->filename);
    fprintf(stderr, "bitrate %d, framerate %d, time delay %d\n", state->bitrate, state->framerate, state->timeout);
    fprintf(stderr, "H264 Profile %s\n", raspicli_unmap_xref(state->profile, profile_map, profile_map_size));
+   fprintf(stderr, "H264 Level %s\n", raspicli_unmap_xref(state->level, level_map, level_map_size));
    fprintf(stderr, "H264 Quantisation level %d, Inline headers %s\n", state->quantisationParameter, state->bInlineHeaders ? "Yes" : "No");
    fprintf(stderr, "H264 Intra refresh type %s, period %d\n", raspicli_unmap_xref(state->intra_refresh_type, intra_refresh_map, intra_refresh_map_size), state->intraperiod);
 
@@ -484,10 +503,6 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
       case CommandBitrate: // 1-100
          if (sscanf(argv[i + 1], "%u", &state->bitrate) == 1)
          {
-            if (state->bitrate > MAX_BITRATE)
-            {
-               state->bitrate = MAX_BITRATE;
-            }
             i++;
          }
          else
@@ -780,6 +795,17 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          break;
       }
 
+      case CommandLevel: // H264 level
+      {
+         state->level = raspicli_map_xref(argv[i + 1], level_map, level_map_size);
+
+         if( state->level == -1)
+            state->level = MMAL_VIDEO_LEVEL_H264_4;
+
+         i++;
+         break;
+      }
+
       default:
       {
          // Try parsing for any image specific parameters
@@ -844,6 +870,14 @@ static void display_valid_parameters(char *app_name)
    }
 
    fprintf(stdout, "\n");
+
+   // Level options
+   fprintf(stdout, "\n\nH264 Level options :\n%s", level_map[0].mode );
+
+   for (i=1;i<level_map_size;i++)
+   {
+      fprintf(stdout, ",%s", level_map[i].mode);
+   }
 
    // Intra refresh options
    fprintf(stdout, "\n\nH264 Intra refresh options :\n%s", intra_refresh_map[0].mode );
@@ -1075,11 +1109,12 @@ static void update_annotation_data(RASPIVID_STATE *state)
       char *text;
       char *refresh = raspicli_unmap_xref(state->intra_refresh_type, intra_refresh_map, intra_refresh_map_size);
 
-      asprintf(&text,  "%dk,%df,%s,%d,%s",
+      asprintf(&text,  "%dk,%df,%s,%d,%s,%s",
             state->bitrate / 1000,  state->framerate,
             refresh ? refresh : "(none)",
             state->intraperiod,
-            raspicli_unmap_xref(state->profile, profile_map, profile_map_size));
+            raspicli_unmap_xref(state->profile, profile_map, profile_map_size),
+            raspicli_unmap_xref(state->level, level_map, level_map_size));
 
       raspicamcontrol_set_annotate(state->camera_component, state->camera_parameters.enable_annotate, text,
                        state->camera_parameters.annotate_text_size,
@@ -1421,7 +1456,7 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
          .one_shot_stills = 0,
          .max_preview_video_w = state->width,
          .max_preview_video_h = state->height,
-         .num_preview_video_frames = 3,
+         .num_preview_video_frames = 3 + vcos_max(0, (state->framerate-30)/10),
          .stills_capture_circular_buffer_height = 0,
          .fast_preview_resume = 0,
          .use_stc_timestamp = MMAL_PARAM_TIMESTAMP_MODE_RAW_STC
@@ -1632,6 +1667,34 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
    // Only supporting H264 at the moment
    encoder_output->format->encoding = state->encoding;
 
+   if(state->encoding == MMAL_ENCODING_H264)
+   {
+      if(state->level == MMAL_VIDEO_LEVEL_H264_4)
+      {
+         if(state->bitrate > MAX_BITRATE_LEVEL4)
+         {
+            fprintf(stderr, "Bitrate too high: Reducing to 25MBit/s\n");
+            state->bitrate = MAX_BITRATE_LEVEL4;
+         }
+      }
+      else
+      {
+         if(state->bitrate > MAX_BITRATE_LEVEL42)
+         {
+            fprintf(stderr, "Bitrate too high: Reducing to 62.5MBit/s\n");
+            state->bitrate = MAX_BITRATE_LEVEL42;
+         }
+      }
+   }
+   else if(state->encoding == MMAL_ENCODING_MJPEG)
+   {
+      if(state->bitrate > MAX_BITRATE_MJPEG)
+      {
+         fprintf(stderr, "Bitrate too high: Reducing to 25MBit/s\n");
+         state->bitrate = MAX_BITRATE_MJPEG;
+      }
+   }
+   
    encoder_output->format->bitrate = state->bitrate;
 
    if (state->encoding == MMAL_ENCODING_H264)
@@ -1723,7 +1786,22 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
       param.hdr.size = sizeof(param);
 
       param.profile[0].profile = state->profile;
-      param.profile[0].level = MMAL_VIDEO_LEVEL_H264_4; // This is the only value supported
+
+      if((VCOS_ALIGN_UP(state->width,16) >> 4) * (VCOS_ALIGN_UP(state->height,16) >> 4) * state->framerate > 245760)
+      {
+         if((VCOS_ALIGN_UP(state->width,16) >> 4) * (VCOS_ALIGN_UP(state->height,16) >> 4) * state->framerate <= 522240)
+         {
+            fprintf(stderr, "Too many macroblocks/s: Increasing H264 Level to 4.2\n");
+            state->level=MMAL_VIDEO_LEVEL_H264_42;
+         }
+         else
+         {
+            vcos_log_error("Too many macroblocks/s requested");
+            goto error;
+         }
+      }
+      
+      param.profile[0].level = state->level;
 
       status = mmal_port_parameter_set(encoder_output, &param.hdr);
       if (status != MMAL_SUCCESS)
