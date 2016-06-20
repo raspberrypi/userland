@@ -181,7 +181,7 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandROI,         "-roi",       "roi","Set region of interest (x,y,w,d as normalised coordinates [0.0-1.0])", 1},
    {CommandShutterSpeed,"-shutter",   "ss", "Set shutter speed in microseconds", 1},
    {CommandAwbGains,    "-awbgains",  "awbg", "Set AWB gains - AWB mode must be off", 1},
-   {CommandDRCLevel,    "-drc",       "drc", "Set DRC Level", 1},
+   {CommandDRCLevel,    "-drc",       "drc", "Set DRC Level (see Notes)", 1},
    {CommandStatsPass,   "-stats",     "st", "Force recomputation of statistics on stills capture pass"},
    {CommandAnnotate,    "-annotate",  "a",  "Enable/Set annotate flags or text", 1},
    {CommandStereoMode,  "-stereo",    "3d", "Select stereoscopic mode", 1},
