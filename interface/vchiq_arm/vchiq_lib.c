@@ -209,6 +209,8 @@ vchiq_shutdown(VCHIQ_INSTANCE_T instance)
 
    vcos_log_trace( "%s returning", __func__ );
 
+   vcos_log_unregister(&vchiq_lib_log_category);
+
    return VCHIQ_SUCCESS;
 }
 
@@ -913,7 +915,7 @@ vchi_msg_dequeue( VCHI_SERVICE_HANDLE_T handle,
 
    if (service->peek_size >= 0)
    {
-      fprintf(stderr, "vchi_msg_dequeue -> using peek buffer\n");
+      vcos_log_error("vchi_msg_dequeue -> using peek buffer\n");
       if ((uint32_t)service->peek_size <= max_data_size_to_read)
       {
          memcpy(data, service->peek_buf, service->peek_size);
@@ -1165,8 +1167,8 @@ vchi_service_open( VCHI_INSTANCE_T instance_handle,
    memset(&params, 0, sizeof(params));
    params.fourcc = setup->service_id;
    params.userdata = setup->callback_param;
-   params.version = setup->version.version;
-   params.version_min = setup->version.version_min;
+   params.version = (short)setup->version.version;
+   params.version_min = (short)setup->version.version_min;
 
    status = create_service((VCHIQ_INSTANCE_T)instance_handle,
       &params,
@@ -1187,8 +1189,8 @@ vchi_service_create( VCHI_INSTANCE_T instance_handle,
    memset(&params, 0, sizeof(params));
    params.fourcc = setup->service_id;
    params.userdata = setup->callback_param;
-   params.version = setup->version.version;
-   params.version_min = setup->version.version_min;
+   params.version = (short)setup->version.version;
+   params.version_min = (short)setup->version.version_min;
 
    status = create_service((VCHIQ_INSTANCE_T)instance_handle,
       &params,
@@ -1516,7 +1518,7 @@ completion_thread(void *arg)
          }
          else
          {
-            fprintf(stderr, "vchiq_lib: failed to allocate a message buffer\n");
+            vcos_log_error("vchiq_lib: failed to allocate a message buffer\n");
             vcos_demand(args.msgbufcount != 0);
          }
       }
@@ -1734,7 +1736,7 @@ alloc_msgbuf(void)
       free_msgbufs = *(void **)msgbuf;
    vcos_mutex_unlock(&vchiq_lib_mutex);
    if (!msgbuf)
-      msgbuf = malloc(MSGBUF_SIZE);
+      msgbuf = vcos_malloc(MSGBUF_SIZE, "alloc_msgbuf");
    return msgbuf;
 }
 
