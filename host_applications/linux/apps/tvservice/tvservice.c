@@ -727,8 +727,8 @@ int main( int argc, char **argv )
    uint32_t         power_on_explicit_mode;
    uint32_t         power_on_explicit_drive = HDMI_MODE_HDMI;
    HDMI_RES_GROUP_T get_modes_group = HDMI_RES_GROUP_INVALID;
-   SDTV_MODE_T sdtvon_mode;
-   SDTV_ASPECT_T sdtvon_aspect;
+   SDTV_MODE_T sdtvon_mode = SDTV_MODE_NTSC;
+   SDTV_ASPECT_T sdtvon_aspect = SDTV_ASPECT_UNKNOWN;
 
    // Initialize VCOS
    vcos_init();
