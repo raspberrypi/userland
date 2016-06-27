@@ -372,7 +372,7 @@ static uint32_t convert_gltype(EGL_CONTEXT_TYPE_T type)
 
 void client_send_make_current(CLIENT_THREAD_STATE_T *thread)
 {
-   uint64_t pid                  = khronos_platform_get_process_id();
+   uint64_t pid                  = rpc_get_client_id(thread);
    uint32_t gltype               = thread->opengl.context ? convert_gltype(thread->opengl.context->type) : 0;
    EGL_GL_CONTEXT_ID_T servergl  = thread->opengl.context ? thread->opengl.context->servercontext : EGL_SERVER_NO_GL_CONTEXT;
    EGL_SURFACE_ID_T servergldraw = thread->opengl.draw    ? thread->opengl.draw->serverbuffer     : EGL_SERVER_NO_SURFACE;
@@ -553,7 +553,7 @@ void client_library_send_make_current(const KHRONOS_FUNC_TABLE_T *func_table)
    CLIENT_THREAD_STATE_T *thread = CLIENT_GET_THREAD_STATE();
    if (thread->opengl.context || thread->openvg.context)
    {
-      uint64_t pid                  = khronos_platform_get_process_id();
+      uint64_t pid                  = rpc_get_client_id(thread);
       uint32_t gltype               = thread->opengl.context ? convert_gltype(thread->opengl.context->type) : 0;
       EGL_GL_CONTEXT_ID_T servergl  = thread->opengl.context ? thread->opengl.context->servercontext : EGL_SERVER_NO_GL_CONTEXT;
       EGL_SURFACE_ID_T servergldraw = thread->opengl.draw    ? thread->opengl.draw->serverbuffer     : EGL_SERVER_NO_SURFACE;

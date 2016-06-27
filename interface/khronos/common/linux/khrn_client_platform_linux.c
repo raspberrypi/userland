@@ -77,7 +77,9 @@ VCOS_STATUS_T khronos_platform_semaphore_create(PLATFORM_SEMAPHORE_T *sem, int n
 
 uint64_t khronos_platform_get_process_id()
 {
-   return vcos_process_id_current();
+   CLIENT_THREAD_STATE_T *thread = CLIENT_GET_THREAD_STATE();
+
+   return rpc_get_client_id(thread);
 }
 
 static bool process_attached = false;
