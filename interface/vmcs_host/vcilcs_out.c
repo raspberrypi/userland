@@ -459,14 +459,14 @@ static void load_eglIntOpenMAXILDoneMarker(void)
     * something explicitly loaded libEGL with RTLD_GLOBAL
     */
    handle = vcos_dlopen(NULL, VCOS_DL_GLOBAL);
-   local_eglIntOpenMAXILDoneMarker = vcos_dlsym(handle, "eglIntOpenMAXILDoneMarker");
+   local_eglIntOpenMAXILDoneMarker = (void * )vcos_dlsym(handle, "eglIntOpenMAXILDoneMarker");
    if (local_eglIntOpenMAXILDoneMarker == NULL)
    {
       vcos_dlclose(handle);
       /* If that failed try to load libEGL.so explicitely */
       handle = vcos_dlopen("libEGL.so", VCOS_DL_LAZY | VCOS_DL_LOCAL);
       vc_assert(handle != NULL);
-      local_eglIntOpenMAXILDoneMarker = vcos_dlsym(handle, "eglIntOpenMAXILDoneMarker");
+      local_eglIntOpenMAXILDoneMarker = (void * )vcos_dlsym(handle, "eglIntOpenMAXILDoneMarker");
       vc_assert(local_eglIntOpenMAXILDoneMarker != NULL);
    }
 }
