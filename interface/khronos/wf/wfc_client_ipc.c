@@ -236,10 +236,10 @@ static VCHIQ_STATUS_T wfc_client_ipc_vchiq_callback(VCHIQ_REASON_T reason,
       }
       break;
    case VCHIQ_SERVICE_OPENED:
-      vcos_log_trace("%s: service %p opened", VCOS_FUNCTION, service);
+      vcos_log_trace("%s: service %x opened", VCOS_FUNCTION, service);
       break;
    case VCHIQ_SERVICE_CLOSED:
-      vcos_log_trace("%s: service %p closed", VCOS_FUNCTION, service);
+      vcos_log_trace("%s: service %x closed", VCOS_FUNCTION, service);
       break;
    default:
       vcos_assert_msg(0, "unexpected message reason");
@@ -476,7 +476,7 @@ bool wfc_client_ipc_deinit(void)
    vchiq_shutdown(wfc_client_ipc_vchiq_instance);
    vcos_log_unregister(VCOS_LOG_CATEGORY);
 
-   wfc_client_ipc.service = NULL;
+   wfc_client_ipc.service = 0;
 
    service_destroyed = true;
 
