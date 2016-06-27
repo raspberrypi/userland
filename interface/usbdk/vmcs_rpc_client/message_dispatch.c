@@ -876,7 +876,7 @@ void sig_handler(int s)
 static int getkey() 
 {
   static int first_time = 1;
-  int character, c;
+  int character = 0, c;
   if (first_time) {
 	  struct termios new_termios;
 
