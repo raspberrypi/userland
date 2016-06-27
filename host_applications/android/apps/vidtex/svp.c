@@ -213,8 +213,6 @@ SVP_T *svp_create(const char *uri, SVP_CALLBACKS_T *callbacks, const SVP_OPTS_T 
    else
    {
       /* Camera preview */
-      MMAL_PARAMETER_CAMERA_CONFIG_T config;
-
       st = mmal_component_create(MMAL_COMPONENT_DEFAULT_CAMERA, &svp->camera);
       CHECK_STATUS(st, "Failed to create camera");
 
