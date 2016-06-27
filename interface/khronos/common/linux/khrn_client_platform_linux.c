@@ -755,7 +755,7 @@ static EGL_DISPMANX_WINDOW_T *check_default(EGLNativeWindowType win)
          VC_RECT_T dst_rect;
          VC_RECT_T src_rect;
 
-         int x, y, width, height, layer;
+         int x = 0, y = 0, width = 0, height = 0, layer = 0;
 
          switch(wid)
          {
