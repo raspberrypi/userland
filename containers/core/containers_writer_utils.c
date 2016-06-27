@@ -32,6 +32,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "containers/core/containers_private.h"
 #include "containers/core/containers_utils.h"
 #include "containers/core/containers_writer_utils.h"
+#include "vcos.h"
 
 #include <stdio.h>
 
@@ -77,7 +78,7 @@ VC_CONTAINER_STATUS_T vc_container_writer_extraio_create_temp(VC_CONTAINER_T *co
 VC_CONTAINER_STATUS_T vc_container_writer_extraio_delete(VC_CONTAINER_T *context, VC_CONTAINER_WRITER_EXTRAIO_T *extraio)
 {
    VC_CONTAINER_STATUS_T status;
-   char *uri = extraio->temp ? strdup(extraio->io->uri) : 0;
+   char *uri = extraio->temp ? vcos_strdup(extraio->io->uri) : 0;
 
    while(extraio->refcount) vc_container_writer_extraio_disable(context, extraio);
    status = vc_container_io_close( extraio->io );

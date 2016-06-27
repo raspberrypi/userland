@@ -98,12 +98,12 @@ int main(int argc, char **argv)
 
       if (psz_out)
       {
-         psz_dump = strdup(psz_out);
+         psz_dump = vcos_strdup(psz_out);
       } else {
          psz_dump = strrchr(psz_in, '\\'); if(psz_dump) psz_dump++;
          if(!psz_dump) {psz_dump = strrchr(psz_in, '/'); if(psz_dump) psz_dump++;}
-         if(!psz_dump) psz_dump = strdup(psz_in);
-         else psz_dump = strdup(psz_dump);
+         if(!psz_dump) psz_dump = vcos_strdup(psz_in);
+         else psz_dump = vcos_strdup(psz_dump);
          psz_dump[strlen(psz_dump)-1] = '1';
       }
       dump_file = fopen(psz_dump, "wb");
