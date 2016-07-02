@@ -61,6 +61,10 @@ add_library(OpenVG ${SHARED} ${VG_SOURCE})
 add_library(WFC ${SHARED} ${WFC_SOURCE})
 add_library(khrn_client ${CLIENT_SOURCE})
 
+set_target_properties(GLESv2 PROPERTIES SOVERSION 2)
+set_target_properties(EGL PROPERTIES SOVERSION 1)
+set_target_properties(OpenVG PROPERTIES SOVERSION 1)
+
 # TODO do we need EGL_static and GLESv2_static now that khrn_static exists?
 add_library(EGL_static STATIC ${EGL_SOURCE})
 add_library(GLESv2_static STATIC ${GLES_SOURCE})
