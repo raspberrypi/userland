@@ -29,6 +29,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define DTOVERLAY_H
 
 #define BE4(x) ((x)>>24)&0xff, ((x)>>16)&0xff, ((x)>>8)&0xff, ((x)>>0)&0xff
+#define GETBE4(p, off) ((((unsigned char *)p)[off + 0]<<24) + (((unsigned char *)p)[off + 1]<<16) + \
+                  (((unsigned char *)p)[off + 2]<<8) + (((unsigned char *)p)[off + 3]<<0))
+#define SETBE4(p, off, x) do { \
+   ((unsigned char *)p)[off + 0] = ((x>>24) & 0xff); \
+   ((unsigned char *)p)[off + 1] = ((x>>16) & 0xff); \
+   ((unsigned char *)p)[off + 2] = ((x>>8) & 0xff); \
+   ((unsigned char *)p)[off + 3] = ((x>>0) & 0xff); \
+} while (0)
 
 #define NON_FATAL(err) (((err) < 0) ? -(err) : (err))
 #define IS_FATAL(err) ((err) < 0)
