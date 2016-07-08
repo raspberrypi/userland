@@ -143,6 +143,7 @@ typedef struct
    int sensor_mode;                     /// Sensor mode. 0=auto. Check docs/forum for modes selected by other values.
    int datetime;                       /// Use DateTime instead of frame#
    int timestamp;                      /// Use timestamp instead of frame#
+   int restart_interval;               /// JPEG restart interval. 0 for none.
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -198,6 +199,7 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandDateTime     23
 #define CommandTimeStamp    24
 #define CommandFrameStart   25
+#define CommandRestartInterval 26
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -227,6 +229,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandDateTime,  "-datetime",  "dt", "Replace output pattern (%d) with DateTime (MonthDayHourMinSec)", 0},
    { CommandTimeStamp, "-timestamp", "ts", "Replace output pattern (%d) with unix timestamp (seconds since 1970)", 0},
    { CommandFrameStart,"-framestart","fs",  "Starting frame number in output pattern(%d)", 1},
+   { CommandRestartInterval, "-restart","rs","JPEG Restart interval (default of 0 for none)", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -356,6 +359,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->sensor_mode = 0;
    state->datetime = 0;
    state->timestamp = 0;
+   state->restart_interval = 0;
 
    // Setup for sensor specific parameters
    set_sensor_defaults(state);
@@ -739,6 +743,16 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          break;
       }
 
+      case CommandRestartInterval:
+      {
+         if (sscanf(argv[i + 1], "%u", &state->restart_interval) == 1)
+         {
+           i++;
+         }
+         else
+            valid = 0;
+         break;
+      }
 
       default:
       {
@@ -1257,6 +1271,15 @@ static MMAL_STATUS_T create_encoder_component(RASPISTILL_STATE *state)
    if (status != MMAL_SUCCESS)
    {
       vcos_log_error("Unable to set JPEG quality");
+      goto error;
+   }
+
+   // Set the JPEG restart interval
+   status = mmal_port_parameter_set_uint32(encoder_output, MMAL_PARAMETER_JPEG_RESTART_INTERVAL, state->restart_interval);
+
+   if (status != MMAL_SUCCESS)
+   {
+      vcos_log_error("Unable to set JPEG restart interval");
       goto error;
    }
 
