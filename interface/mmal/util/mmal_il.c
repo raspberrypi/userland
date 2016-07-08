@@ -82,6 +82,10 @@ OMX_U32 mmalil_buffer_flags_to_omx(uint32_t flags)
       omx_flags |= OMX_BUFFERFLAG_DATACORRUPT;
    if (flags & MMAL_BUFFER_HEADER_FLAG_DECODEONLY)
       omx_flags |= OMX_BUFFERFLAG_DECODEONLY;
+   if (flags & MMAL_BUFFER_HEADER_VIDEO_FLAG_INTERLACED)
+      omx_flags |= OMX_BUFFERFLAG_INTERLACED;
+   if (flags & MMAL_BUFFER_HEADER_VIDEO_FLAG_TOP_FIELD_FIRST)
+     omx_flags |= OMX_BUFFERFLAG_TOP_FIELD_FIRST;
    if (flags & MMAL_BUFFER_HEADER_FLAG_USER0)
       omx_flags |= 1<<28;
    if (flags & MMAL_BUFFER_HEADER_FLAG_USER1)
@@ -116,6 +120,10 @@ uint32_t mmalil_buffer_flags_to_mmal(OMX_U32 flags)
       mmal_flags |= MMAL_BUFFER_HEADER_FLAG_CORRUPTED;
    if (flags & OMX_BUFFERFLAG_DECODEONLY)
       mmal_flags |= MMAL_BUFFER_HEADER_FLAG_DECODEONLY;
+   if (flags & OMX_BUFFERFLAG_INTERLACED)
+      mmal_flags |= MMAL_BUFFER_HEADER_VIDEO_FLAG_INTERLACED;
+   if (flags & OMX_BUFFERFLAG_TOP_FIELD_FIRST)
+      mmal_flags |= MMAL_BUFFER_HEADER_VIDEO_FLAG_TOP_FIELD_FIRST;
    if (flags & 1<<28)
       mmal_flags |= MMAL_BUFFER_HEADER_FLAG_USER0;
    if (flags & 1<<29)
