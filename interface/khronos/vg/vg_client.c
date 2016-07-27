@@ -5122,7 +5122,7 @@ VGU_API_CALL VGUErrorCode VGU_API_ENTRY vguPolygon(
             rpc_send_ctrl_end(thread);
 
             ps_count -= chunk_ps_count;
-            ps += chunk_ps_count;
+            ps += 2 * chunk_ps_count;
             first = false;
          }
       }
