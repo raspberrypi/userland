@@ -693,7 +693,7 @@ MMAL_STATUS_T mmal_vc_release(void)
    return status;
 }
 
-MMAL_STATUS_T mmal_vc_init(void)
+MMAL_STATUS_T mmal_vc_init_fd(int dev_vchiq_fd)
 {
    VCHIQ_SERVICE_PARAMS_T vchiq_params;
    MMAL_BOOL_T vchiq_initialised = 0, waitpool_initialised = 0;
@@ -717,7 +717,7 @@ MMAL_STATUS_T mmal_vc_init(void)
    vcos_log_register("mmalipc", VCOS_LOG_CATEGORY);
 
    /* Initialise a VCHIQ instance */
-   vchiq_status = vchiq_initialise(&mmal_vchiq_instance);
+   vchiq_status = vchiq_initialise_fd(&mmal_vchiq_instance, dev_vchiq_fd);
    if (vchiq_status != VCHIQ_SUCCESS)
    {
       LOG_ERROR("failed to initialise vchiq");
@@ -790,6 +790,11 @@ MMAL_STATUS_T mmal_vc_init(void)
 
    vcos_mutex_unlock(&client.lock);
    return status;
+}
+
+MMAL_STATUS_T mmal_vc_init(void)
+{
+   return mmal_vc_init_fd(-1);
 }
 
 void mmal_vc_deinit(void)

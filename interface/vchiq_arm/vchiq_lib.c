@@ -85,7 +85,7 @@ vcos_static_assert(IS_POWER_2(VCHIQ_MAX_INSTANCE_SERVICES));
 
 /* Local utility functions */
 static VCHIQ_INSTANCE_T
-vchiq_lib_init(void);
+vchiq_lib_init(const int dev_vchiq_fd);
 
 static void *completion_thread(void *);
 
@@ -137,18 +137,30 @@ find_service_by_handle(VCHIQ_SERVICE_HANDLE_T handle)
  * VCHIQ API
  */
 
+// If dev_vchiq_fd == -1 then /dev/vchiq will be opened by this fn (as normal)
+//
+// Otherwise the given fd will be used.  N.B. in this case the fd is duped
+// so the caller will probably want to close whatever fd was passed once
+// this call has returned.  This slightly odd behaviour makes shutdown and
+// error cases much simpler.
 VCHIQ_STATUS_T
-vchiq_initialise(VCHIQ_INSTANCE_T *pinstance)
+vchiq_initialise_fd(VCHIQ_INSTANCE_T *pinstance, int dev_vchiq_fd)
 {
    VCHIQ_INSTANCE_T instance;
 
-   instance = vchiq_lib_init();
+   instance = vchiq_lib_init(dev_vchiq_fd);
 
    vcos_log_trace( "%s: returning instance handle %p", __func__, instance );
 
    *pinstance = instance;
 
    return (instance != NULL) ? VCHIQ_SUCCESS : VCHIQ_ERROR;
+}
+
+VCHIQ_STATUS_T
+vchiq_initialise(VCHIQ_INSTANCE_T *pinstance)
+{
+   vchiq_initialise_fd(pinstance, -1);
 }
 
 VCHIQ_STATUS_T
@@ -1083,7 +1095,7 @@ vchi_initialise( VCHI_INSTANCE_T *instance_handle )
 {
    VCHIQ_INSTANCE_T instance;
 
-   instance = vchiq_lib_init();
+   instance = vchiq_lib_init(-1);
 
    vcos_log_trace( "%s: returning instance handle %p", __func__, instance );
 
@@ -1405,7 +1417,7 @@ VCHIQ_STATUS_T vchiq_dump_phys_mem( VCHIQ_SERVICE_HANDLE_T handle,
  */
 
 static VCHIQ_INSTANCE_T
-vchiq_lib_init(void)
+vchiq_lib_init(const int dev_vchiq_fd)
 {
    static int mutex_initialised = 0;
    static VCOS_MUTEX_T vchiq_lib_mutex;
@@ -1427,7 +1439,9 @@ vchiq_lib_init(void)
 
    if (instance->initialised == 0)
    {
-      instance->fd = open("/dev/vchiq", O_RDWR);
+      instance->fd = dev_vchiq_fd == -1 ?
+         open("/dev/vchiq", O_RDWR) :
+         dup(dev_vchiq_fd);
       if (instance->fd >= 0)
       {
          VCHIQ_GET_CONFIG_T args;
