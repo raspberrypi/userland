@@ -120,6 +120,7 @@ typedef struct
    int settings;                       /// Request settings from the camera
    int cameraNum;                      /// Camera number
    int burstCaptureMode;               /// Enable burst mode
+   int onlyLuma;                       /// Only output the luma / Y plane of the YUV data
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -158,6 +159,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandSignal       12
 #define CommandSettings     13
 #define CommandBurstMode    14
+#define CommandOnlyLuma     15
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -176,6 +178,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandSignal,  "-signal",     "s",  "Wait between captures for a SIGUSR1 from another process", 0},
    { CommandSettings, "-settings",  "set","Retrieve camera settings and write to stdout", 0},
    { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},
+   { CommandOnlyLuma,  "-luma",     "y",  "Only output the luma / Y of the YUV data'", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -224,6 +227,7 @@ static void default_status(RASPISTILLYUV_STATE *state)
    state->frameNextMethod = FRAME_NEXT_SINGLE;
    state->settings = 0;
    state->burstCaptureMode=0;
+   state->onlyLuma = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -402,6 +406,11 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
          break;
 
       case CommandUseRGB: // display lots of data during run
+         if (state->onlyLuma)
+         {
+            fprintf(stderr, "--luma and --rgb are mutually exclusive\n");
+            valid = 0;
+         }
          state->useRGB = 1;
          break;
 
@@ -413,8 +422,8 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
          }
          else
             valid = 0;
-		  break;
-	  }
+        break;
+      }
 
       case CommandFullResPreview:
          state->fullResPreview = 1;
@@ -436,6 +445,15 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
 
       case CommandBurstMode:
          state->burstCaptureMode=1;
+         break;
+
+      case CommandOnlyLuma:
+         if (state->useRGB)
+         {
+            fprintf(stderr, "--luma and --rgb are mutually exclusive\n");
+            valid = 0;
+         }
+         state->onlyLuma = 1;
          break;
 
       default:
@@ -557,21 +575,25 @@ static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buff
 
    if (pData)
    {
-      int bytes_written = buffer->length;
+      int bytes_written = 0;
+      int bytes_to_write = buffer->length;
 
-      if (buffer->length && pData->file_handle)
+      if (pData->pstate->onlyLuma)
+         bytes_to_write = port->format->es->video.width * port->format->es->video.height;
+
+      if (bytes_to_write && pData->file_handle)
       {
          mmal_buffer_header_mem_lock(buffer);
 
-         bytes_written = fwrite(buffer->data, 1, buffer->length, pData->file_handle);
+         bytes_written = fwrite(buffer->data, 1, bytes_to_write, pData->file_handle);
 
          mmal_buffer_header_mem_unlock(buffer);
       }
 
       // We need to check we wrote what we wanted - it's possible we have run out of storage.
-      if (bytes_written != buffer->length)
+      if (buffer->length && bytes_written != bytes_to_write)
       {
-         vcos_log_error("Unable to write buffer to file - aborting");
+         vcos_log_error("Unable to write buffer to file - aborting %d vs %d", bytes_written, bytes_to_write);
          complete = 1;
       }
 
