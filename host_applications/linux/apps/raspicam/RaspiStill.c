@@ -570,7 +570,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
 
       case CommandFrameStart:  // use a staring value != 0
       {
-         if (sscanf(argv[i + 1], "%u", &state->frameStart) == 1)
+         if (sscanf(argv[i + 1], "%d", &state->frameStart) == 1)
          {
            i++;
          }
@@ -1908,7 +1908,7 @@ int main(int argc, const char **argv)
             char *use_filename = NULL;      // Temporary filename while image being written
             char *final_filename = NULL;    // Name that file gets once writing complete
 
-            frame = state.frameStart;
+            frame = state.frameStart - 1;
 
             while (keep_looping)
             {
