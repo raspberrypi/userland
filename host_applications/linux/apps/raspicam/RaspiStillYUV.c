@@ -175,7 +175,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandKeypress,"-keypress",   "k",  "Wait between captures for a ENTER, X then ENTER to exit", 0},
    { CommandSignal,  "-signal",     "s",  "Wait between captures for a SIGUSR1 from another process", 0},
    { CommandSettings, "-settings",  "set","Retrieve camera settings and write to stdout", 0},
-   { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},   
+   { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -230,7 +230,7 @@ static void default_status(RASPISTILLYUV_STATE *state)
 
    // Set up the camera_parameters to default
    raspicamcontrol_set_defaults(&state->camera_parameters);
-   
+
    // Set default camera
    state->cameraNum = 0;
 }
@@ -404,7 +404,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
       case CommandUseRGB: // display lots of data during run
          state->useRGB = 1;
          break;
-      
+
       case CommandCamSelect:  //Select camera input port
       {
          if (sscanf(argv[i + 1], "%u", &state->cameraNum) == 1)
@@ -434,10 +434,10 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
          state->settings = 1;
          break;
 
-      case CommandBurstMode: 
+      case CommandBurstMode:
          state->burstCaptureMode=1;
          break;
-         
+
       default:
       {
          // Try parsing for any image specific parameters
@@ -639,13 +639,13 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
       {{MMAL_PARAMETER_CAMERA_NUM, sizeof(camera_num)}, state->cameraNum};
 
    status = mmal_port_parameter_set(camera->control, &camera_num.hdr);
-   
+
    if (status != MMAL_SUCCESS)
    {
       vcos_log_error("Could not select camera : error %d", status);
       goto error;
    }
-   
+
    if (!camera->output_num)
    {
       status = MMAL_ENOSYS;
@@ -695,7 +695,7 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
          .fast_preview_resume = 0,
          .use_stc_timestamp = MMAL_PARAM_TIMESTAMP_MODE_RESET_STC
       };
-      
+
       if (state->fullResPreview)
       {
          cam_config.max_preview_video_w = state->width;
@@ -1048,19 +1048,19 @@ static int wait_for_next_frame(RASPISTILLYUV_STATE *state, int *frame)
 
    case FRAME_NEXT_KEYPRESS :
    {
-    	int ch;
+	int ch;
 
-    	if (state->verbose)
+	if (state->verbose)
          fprintf(stderr, "Press Enter to capture, X then ENTER to exit\n");
 
-    	ch = getchar();
-    	*frame+=1;
-    	if (ch == 'x' || ch == 'X')
-    	   return 0;
-    	else
-    	{
- 	      return keep_running;
-    	}
+	ch = getchar();
+	*frame+=1;
+	if (ch == 'x' || ch == 'X')
+	   return 0;
+	else
+	{
+	      return keep_running;
+	}
    }
 
    case FRAME_NEXT_IMMEDIATELY :
@@ -1393,7 +1393,7 @@ int main(int argc, const char **argv)
                final_filename = NULL;
             }
          } // end for (frame)
-         
+
          vcos_semaphore_delete(&callback_data.complete_semaphore);
       }
       else

@@ -716,7 +716,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          state->settings = 1;
          break;
 
-         
+
       case CommandCamSelect:  //Select camera input port
       {
          if (sscanf(argv[i + 1], "%u", &state->cameraNum) == 1)
@@ -728,7 +728,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          break;
       }
 
-      case CommandBurstMode: 
+      case CommandBurstMode:
          state->burstCaptureMode=1;
          break;
 
@@ -1053,7 +1053,7 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
 
       mmal_port_parameter_set(camera->control, &cam_config.hdr);
    }
- 
+
    raspicamcontrol_set_all_parameters(camera, &state->camera_parameters);
 
    // Now set up the port formats
