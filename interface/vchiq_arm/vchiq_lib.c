@@ -161,6 +161,7 @@ VCHIQ_STATUS_T
 vchiq_initialise(VCHIQ_INSTANCE_T *pinstance)
 {
    vchiq_initialise_fd(pinstance, -1);
+   return NULL;
 }
 
 VCHIQ_STATUS_T
