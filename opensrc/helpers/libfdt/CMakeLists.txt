@@ -9,5 +9,5 @@ add_library(fdt
             fdt_strerror.c
             fdt_wip.c)
 
-INSTALL(FILES)
+install (TARGETS fdt DESTINATION lib)
 
