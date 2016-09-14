@@ -116,6 +116,27 @@ static struct {
    {MMAL_ENCODING_UNKNOWN, 0, 0}
 };
 
+static struct {
+   uint32_t encoding;
+   uint32_t sliced_encoding;
+} slice_equivalents[] =
+{
+   { MMAL_ENCODING_I420,      MMAL_ENCODING_I420_SLICE   },
+   { MMAL_ENCODING_I422,      MMAL_ENCODING_I422_SLICE   },
+   { MMAL_ENCODING_ARGB,      MMAL_ENCODING_ARGB_SLICE   },
+   { MMAL_ENCODING_RGBA,      MMAL_ENCODING_RGBA_SLICE   },
+   { MMAL_ENCODING_RGB32,     MMAL_ENCODING_RGB32_SLICE  },
+   { MMAL_ENCODING_ABGR,      MMAL_ENCODING_ABGR_SLICE   },
+   { MMAL_ENCODING_BGRA,      MMAL_ENCODING_BGRA_SLICE   },
+   { MMAL_ENCODING_BGR32,     MMAL_ENCODING_BGR32_SLICE  },
+   { MMAL_ENCODING_RGB16,     MMAL_ENCODING_RGB16_SLICE  },
+   { MMAL_ENCODING_RGB24,     MMAL_ENCODING_RGB24_SLICE  },
+   { MMAL_ENCODING_BGR16,     MMAL_ENCODING_BGR16_SLICE  },
+   { MMAL_ENCODING_BGR24,     MMAL_ENCODING_BGR24_SLICE  },
+   { MMAL_ENCODING_UNKNOWN,   MMAL_ENCODING_UNKNOWN      },
+};
+
+
 uint32_t mmal_encoding_stride_to_width(uint32_t encoding, uint32_t stride)
 {
    unsigned int i;
@@ -140,6 +161,16 @@ uint32_t mmal_encoding_width_to_stride(uint32_t encoding, uint32_t width)
       return 0;
 
    return VCOS_ALIGN_UP(pixel_pitch[i].pitch_num * width / pixel_pitch[i].pitch_den, pixel_pitch[i].alignment);
+}
+
+uint32_t mmal_encoding_get_slice_variant(uint32_t encoding)
+{
+   unsigned int i;
+
+   for(i = 0; slice_equivalents[i].encoding != MMAL_ENCODING_UNKNOWN; i++)
+      if(slice_equivalents[i].encoding == encoding) break;
+
+   return slice_equivalents[i].sliced_encoding;
 }
 
 const char* mmal_port_type_to_string(MMAL_PORT_TYPE_T type)
