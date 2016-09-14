@@ -702,7 +702,8 @@ static void *tvservice_notify_func(void *arg) {
          //Get all notifications in the queue
          success = vchi_msg_dequeue( state->notify_handle[0], state->notify_buffer, sizeof(state->notify_buffer), &state->notify_length, VCHI_FLAGS_NONE );
          if(success != 0 || state->notify_length < sizeof(uint32_t)*3 ) {
-            continue;
+            vcos_assert(state->notify_length == sizeof(uint32_t)*3);
+            break;
          }
 
          if(tvservice_lock_obtain() != 0)
