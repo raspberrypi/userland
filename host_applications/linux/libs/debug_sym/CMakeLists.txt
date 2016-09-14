@@ -3,6 +3,7 @@ get_filename_component (VIDEOCORE_ROOT ../../../../ ABSOLUTE)
 include (${VIDEOCORE_ROOT}/makefiles/cmake/global_settings.cmake)
 
 include_directories (
+   ${VCOS_ROOT}/{RTOS}
    ${VIDEOCORE_HEADERS_BUILD_DIR}
    ../../../../host_support/include
    ${VIDEOCORE_ROOT})
