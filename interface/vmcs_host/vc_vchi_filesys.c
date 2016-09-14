@@ -220,17 +220,21 @@ static void *filesys_task_func(void *arg)
 
    while(1) {
       // wait for the semaphore to say that there is a message
-      if(vcos_event_wait(&vc_filesys_client.filesys_msg_avail) != VCOS_SUCCESS || vc_filesys_client.initialised == 0)
+      if (vcos_event_wait(&vc_filesys_client.filesys_msg_avail) != VCOS_SUCCESS || vc_filesys_client.initialised == 0)
          break;
 
       vchi_service_use(vc_filesys_client.open_handle);
       // read the message - should we really "peek" this
-      success = vchi_msg_dequeue(vc_filesys_client.open_handle, &vc_filesys_client.vc_msg,
-                                 sizeof(vc_filesys_client.vc_msg), &msg_len, VCHI_FLAGS_NONE);
+      while (1) {
+         success = vchi_msg_dequeue(vc_filesys_client.open_handle, &vc_filesys_client.vc_msg,
+                                    sizeof(vc_filesys_client.vc_msg), &msg_len, VCHI_FLAGS_NONE);
+         if (!success)
+            break;
 
-      /* coverity[tainted_string_argument] */
-      success = (int32_t) vc_fs_message_handler(&vc_filesys_client.vc_msg, msg_len);
-      (void)success;
+         /* coverity[tainted_string_argument] */
+         success = (int32_t) vc_fs_message_handler(&vc_filesys_client.vc_msg, msg_len);
+         (void)success;
+      }
       vchi_service_release(vc_filesys_client.open_handle);
    }
 
