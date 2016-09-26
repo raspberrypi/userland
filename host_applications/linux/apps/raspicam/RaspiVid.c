@@ -1107,7 +1107,7 @@ static void update_annotation_data(RASPIVID_STATE *state)
    if (state->camera_parameters.enable_annotate & ANNOTATE_APP_TEXT)
    {
       char *text;
-      char *refresh = raspicli_unmap_xref(state->intra_refresh_type, intra_refresh_map, intra_refresh_map_size);
+      const char *refresh = raspicli_unmap_xref(state->intra_refresh_type, intra_refresh_map, intra_refresh_map_size);
 
       asprintf(&text,  "%dk,%df,%s,%d,%s,%s",
             state->bitrate / 1000,  state->framerate,
