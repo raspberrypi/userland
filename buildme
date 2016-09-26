@@ -6,7 +6,7 @@ BUILDTYPE=Debug
 shift
 fi
 
-BUILDSUBDIR=`echo $BUILDTYPE | tr [A-Z] [a-z]`;
+BUILDSUBDIR=`echo $BUILDTYPE | tr '[A-Z]' '[a-z]'`;
 
 if [ "armv6l" = `arch` ] || [ "armv7l" = `arch` ]; then
 	# Native compile on the Raspberry Pi
