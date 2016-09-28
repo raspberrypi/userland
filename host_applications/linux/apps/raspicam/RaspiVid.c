@@ -947,20 +947,16 @@ static void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
  *
  * @param state Pointer to state
  */
-static FILE *open_filename(RASPIVID_STATE *pState)
+static FILE *open_filename(RASPIVID_STATE *pState, char *filename)
 {
    FILE *new_handle = NULL;
-   char *tempname = NULL, *filename = NULL;
+   char *tempname = NULL;
 
    if (pState->segmentSize || pState->splitWait)
    {
       // Create a new filename string
-      asprintf(&tempname, pState->filename, pState->segmentNumber);
+      asprintf(&tempname, filename, pState->segmentNumber);
       filename = tempname;
-   }
-   else
-   {
-      filename = pState->filename;
    }
 
    if (filename)
@@ -1021,73 +1017,6 @@ static FILE *open_filename(RASPIVID_STATE *pState)
 
    if (tempname)
       free(tempname);
-
-   return new_handle;
-}
-
-/**
- * Open a file based on the settings in state
- *
- * This time for the imv output file
- *
- * @param state Pointer to state
- */
-static FILE *open_imv_filename(RASPIVID_STATE *pState)
-{
-   FILE *new_handle = NULL;
-   char *tempname = NULL, *filename = NULL;
-
-   if (pState->segmentSize || pState->splitWait)
-   {
-      // Create a new filename string
-      asprintf(&tempname, pState->imv_filename, pState->segmentNumber);
-      filename = tempname;
-   }
-   else
-   {
-      filename = pState->imv_filename;
-   }
-
-   if (filename)
-      new_handle = fopen(filename, "wb");
-
-   if (pState->verbose)
-   {
-      if (new_handle)
-         fprintf(stderr, "Opening imv output file \"%s\"\n", filename);
-      else
-         fprintf(stderr, "Failed to open new imv file \"%s\"\n", filename);
-   }
-
-   if (tempname)
-      free(tempname);
-
-   return new_handle;
-}
-
-static FILE *open_pts_filename(RASPIVID_STATE *pState)
-{
-   FILE *new_handle = NULL;
-   char *filename = NULL;
-
-   filename = pState->pts_file;
-
-   if (filename)
-      new_handle = fopen(filename, "wb");
-
-   if (pState->verbose)
-   {
-      if (new_handle)
-         fprintf(stderr, "Opening pts output file \"%s\"\n", filename);
-      else
-         fprintf(stderr, "Failed to open new pts file \"%s\"\n", filename);
-   }
-
-   if (new_handle)
-   {
-      //save header for mkvmerge
-      fprintf(new_handle,"# timecode format v2\n");
-   }
 
    return new_handle;
 }
@@ -1264,7 +1193,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
             if (pData->pstate->segmentWrap && pData->pstate->segmentNumber > pData->pstate->segmentWrap)
                pData->pstate->segmentNumber = 1;
 
-            new_handle = open_filename(pData->pstate);
+            new_handle = open_filename(pData->pstate, pData->pstate->filename);
 
             if (new_handle)
             {
@@ -1272,7 +1201,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
                pData->file_handle = new_handle;
             }
 
-            new_handle = open_imv_filename(pData->pstate);
+            new_handle = open_filename(pData->pstate, pData->pstate->imv_filename);
 
             if (new_handle)
             {
@@ -2233,7 +2162,7 @@ int main(int argc, const char **argv)
             }
             else
             {
-               state.callback_data.file_handle = open_filename(&state);
+               state.callback_data.file_handle = open_filename(&state, state.filename);
             }
 
             if (!state.callback_data.file_handle)
@@ -2253,7 +2182,7 @@ int main(int argc, const char **argv)
             }
             else
             {
-               state.callback_data.imv_file_handle = open_imv_filename(&state);
+               state.callback_data.imv_file_handle = open_filename(&state, state.imv_filename);
             }
 
             if (!state.callback_data.imv_file_handle)
@@ -2274,7 +2203,9 @@ int main(int argc, const char **argv)
             }
             else
             {
-               state.callback_data.pts_file_handle = open_pts_filename(&state);
+               state.callback_data.pts_file_handle = open_filename(&state, state.pts_file);
+               if (state.callback_data.pts_file_handle) /* save header for mkvmerge */
+                  fprintf(state.callback_data.pts_file_handle, "# timecode format v2\n");
             }
 
             if (!state.callback_data.pts_file_handle)
