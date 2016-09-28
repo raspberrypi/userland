@@ -199,7 +199,7 @@ struct RASPIVID_STATE_S
    int sensor_mode;			            /// Sensor mode. 0=auto. Check docs/forum for modes selected by other values.
    int intra_refresh_type;              /// What intra refresh type to use. -1 to not set.
    int frame;
-   char *pts_file;
+   char *pts_filename;
    int save_pts;
    int64_t starttime;
    int64_t lasttime;
@@ -767,10 +767,10 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          int len = strlen(argv[i + 1]);
          if (len)
          {
-            state->pts_file = malloc(len + 1);
-            vcos_assert(state->pts_file);
-            if (state->pts_file)
-               strncpy(state->pts_file, argv[i + 1], len+1);
+            state->pts_filename = malloc(len + 1);
+            vcos_assert(state->pts_filename);
+            if (state->pts_filename)
+               strncpy(state->pts_filename, argv[i + 1], len+1);
             i++;
          }
          else
@@ -2195,15 +2195,15 @@ int main(int argc, const char **argv)
 
          state.callback_data.pts_file_handle = NULL;
 
-         if (state.pts_file)
+         if (state.pts_filename)
          {
-            if (state.pts_file[0] == '-')
+            if (state.pts_filename[0] == '-')
             {
                state.callback_data.pts_file_handle = stdout;
             }
             else
             {
-               state.callback_data.pts_file_handle = open_filename(&state, state.pts_file);
+               state.callback_data.pts_file_handle = open_filename(&state, state.pts_filename);
                if (state.callback_data.pts_file_handle) /* save header for mkvmerge */
                   fprintf(state.callback_data.pts_file_handle, "# timecode format v2\n");
             }
@@ -2211,7 +2211,7 @@ int main(int argc, const char **argv)
             if (!state.callback_data.pts_file_handle)
             {
                // Notify user, carry on but discarding encoded output buffers
-               fprintf(stderr, "Error opening output file: %s\nNo output file will be generated\n",state.pts_file);
+               fprintf(stderr, "Error opening output file: %s\nNo output file will be generated\n",state.pts_filename);
                state.save_pts=0;
             }
          }
