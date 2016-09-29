@@ -273,7 +273,9 @@ static KHRN_IMAGE_FORMAT_T convert_format(uint32_t format)
       case EGL_PIXEL_FORMAT_XRGB_8888_BRCM:     return XBGR_8888;
       case EGL_PIXEL_FORMAT_RGB_565_BRCM:       return RGB_565;
       case EGL_PIXEL_FORMAT_A_8_BRCM:           return A_8;
-      default:                                  vcos_verify(0); return (KHRN_IMAGE_FORMAT_T)0;
+      default:
+         vcos_assert(0);
+         return (KHRN_IMAGE_FORMAT_T)0;
    }
 }
 
