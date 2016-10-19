@@ -29,6 +29,7 @@ elseif (${WIN32})
 else()
    message(FATAL_ERROR,"Unknown system type")
 endif()
+set (ARM64 OFF CACHE BOOL "Whether target is ARM64")
 
 # construct the vmcs config header file
 add_definitions(-DHAVE_VMCS_CONFIG)
