@@ -108,8 +108,14 @@ static struct {
    // Bayer formats, the resulting alignment must also be a multiple of 16.
    // Camplus padded to a multiple of 32, so let's copy that.
    {MMAL_ENCODING_BAYER_SBGGR8,        1, 1, 32},
+   {MMAL_ENCODING_BAYER_SGBRG8,        1, 1, 32},
+   {MMAL_ENCODING_BAYER_SGRBG8,        1, 1, 32},
+   {MMAL_ENCODING_BAYER_SRGGB8,        1, 1, 32},
    {MMAL_ENCODING_BAYER_SBGGR10DPCM8,  1, 1, 32},
    {MMAL_ENCODING_BAYER_SBGGR10P,      10,8, 32},
+   {MMAL_ENCODING_BAYER_SGRBG10P,      10,8, 32},
+   {MMAL_ENCODING_BAYER_SGBRG10P,      10,8, 32},
+   {MMAL_ENCODING_BAYER_SRGGB10P,      10,8, 32},
    {MMAL_ENCODING_BAYER_SBGGR16,       2, 1, 32},
 
    /* {MMAL_ENCODING_YUVUV128, 1, 1}, That's a special case which must not be included */

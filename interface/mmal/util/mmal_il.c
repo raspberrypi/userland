@@ -726,6 +726,9 @@ static struct {
    {MMAL_ENCODING_EGL_IMAGE,      OMX_COLOR_FormatBRCMEGL},
    {MMAL_ENCODING_BAYER_SBGGR8,   OMX_COLOR_FormatRawBayer8bit},
    {MMAL_ENCODING_BAYER_SBGGR10P, OMX_COLOR_FormatRawBayer10bit},
+   {MMAL_ENCODING_BAYER_SGRBG10P, OMX_COLOR_FormatRawBayer10bit},
+   {MMAL_ENCODING_BAYER_SGBRG10P, OMX_COLOR_FormatRawBayer10bit},
+   {MMAL_ENCODING_BAYER_SRGGB10P, OMX_COLOR_FormatRawBayer10bit},
    {MMAL_ENCODING_BAYER_SBGGR12P, OMX_COLOR_FormatRawBayer12bit},
    {MMAL_ENCODING_BAYER_SBGGR16,  OMX_COLOR_FormatRawBayer16bit},
    {MMAL_ENCODING_BAYER_SBGGR10DPCM8,OMX_COLOR_FormatRawBayer8bitcompressed},
@@ -747,6 +750,48 @@ OMX_COLOR_FORMATTYPE mmalil_encoding_to_omx_color_format(uint32_t encoding)
    for(i = 0; mmal_omx_colorformat_coding_table[i].encoding != MMAL_ENCODING_UNKNOWN; i++)
       if(mmal_omx_colorformat_coding_table[i].encoding == encoding) break;
    return mmal_omx_colorformat_coding_table[i].coding;
+}
+
+static struct {
+   uint32_t encoding;
+   OMX_COLOR_FORMATTYPE color_format;
+   OMX_BAYERORDERTYPE bayer_order;
+} mmal_omx_bayer_order_coding_table[] =
+{
+   //Colour format required for conversion from OMX to MMAL.
+   //Not used for MMAL encoding to OMX color format.
+   {MMAL_ENCODING_BAYER_SBGGR8, OMX_COLOR_FormatRawBayer8bit, OMX_BayerOrderBGGR},
+   {MMAL_ENCODING_BAYER_SGBRG8, OMX_COLOR_FormatRawBayer8bit, OMX_BayerOrderGBRG},
+   {MMAL_ENCODING_BAYER_SGRBG8, OMX_COLOR_FormatRawBayer8bit, OMX_BayerOrderGRBG},
+   {MMAL_ENCODING_BAYER_SRGGB8, OMX_COLOR_FormatRawBayer8bit, OMX_BayerOrderRGGB},
+
+   {MMAL_ENCODING_BAYER_SBGGR10P, OMX_COLOR_FormatRawBayer10bit, OMX_BayerOrderBGGR},
+   {MMAL_ENCODING_BAYER_SGRBG10P, OMX_COLOR_FormatRawBayer10bit, OMX_BayerOrderGRBG},
+   {MMAL_ENCODING_BAYER_SGBRG10P, OMX_COLOR_FormatRawBayer10bit, OMX_BayerOrderGBRG},
+   {MMAL_ENCODING_BAYER_SRGGB10P, OMX_COLOR_FormatRawBayer10bit, OMX_BayerOrderRGGB},
+
+   {MMAL_ENCODING_BAYER_SBGGR12P, OMX_COLOR_FormatRawBayer12bit, OMX_BayerOrderBGGR},
+   {MMAL_ENCODING_BAYER_SBGGR16,  OMX_COLOR_FormatRawBayer16bit, OMX_BayerOrderBGGR},
+   {MMAL_ENCODING_BAYER_SBGGR10DPCM8,OMX_COLOR_FormatRawBayer8bitcompressed, OMX_BayerOrderBGGR},
+   {MMAL_ENCODING_UNKNOWN,        OMX_BayerOrderMax}
+};
+
+uint32_t mmalil_omx_bayer_format_order_to_encoding(OMX_BAYERORDERTYPE bayer_order, OMX_COLOR_FORMATTYPE color_format)
+{
+   unsigned int i;
+   for(i = 0; mmal_omx_bayer_order_coding_table[i].encoding != MMAL_ENCODING_UNKNOWN; i++)
+      if(mmal_omx_bayer_order_coding_table[i].bayer_order == bayer_order &&
+         mmal_omx_bayer_order_coding_table[i].color_format == color_format)
+         break;
+   return mmal_omx_bayer_order_coding_table[i].encoding;
+}
+
+OMX_BAYERORDERTYPE mmalil_encoding_to_omx_bayer_order(uint32_t encoding)
+{
+   unsigned int i;
+   for(i = 0; mmal_omx_bayer_order_coding_table[i].encoding != MMAL_ENCODING_UNKNOWN; i++)
+      if(mmal_omx_bayer_order_coding_table[i].encoding == encoding) break;
+   return mmal_omx_bayer_order_coding_table[i].bayer_order;
 }
 
 /*****************************************************************************/
