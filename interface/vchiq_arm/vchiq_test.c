@@ -1319,11 +1319,17 @@ clnt_callback(VCHIQ_REASON_T reason, VCHIQ_HEADER_T *header,
    vcos_mutex_lock(&g_mutex);
    if (reason == VCHIQ_MESSAGE_AVAILABLE)
    {
-      if (header->size <= 1)
+      /* 
+       * Store the header size as it is going to be released
+       * and the size may be overwritten by the release.
+       */
+      size_t header_size = header->size;
+
+      if (header_size <= 1)
          vchiq_release_message(service, header);
       else
       /* Responses of length 0 are not sync points */
-      if ((header->size >= 4) && (memcpy(&data, header->data, sizeof(data)), data == MSG_ECHO))
+      if ((header_size >= 4) && (memcpy(&data, header->data, sizeof(data)), data == MSG_ECHO))
       {
          /* This is a complete echoed packet */
          if (g_params.verify && (mem_check(header->data, bulk_tx_data[ctrl_received % NUM_BULK_BUFS], g_params.blocksize) != 0))
@@ -1334,10 +1340,10 @@ clnt_callback(VCHIQ_REASON_T reason, VCHIQ_HEADER_T *header,
             vcos_event_signal(&g_shutdown);
          vchiq_release_message(service, header);
       }
-      else if (header->size != 0)
+      else if (header_size != 0)
          g_server_error = header->data;
 
-      if ((header->size != 0) || g_server_error)
+      if ((header_size != 0) || g_server_error)
          vcos_event_signal(&g_server_reply);
    }
    else if (reason == VCHIQ_BULK_TRANSMIT_DONE)
