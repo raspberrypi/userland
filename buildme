@@ -2,8 +2,8 @@
 BUILDTYPE=Release
 
 if [ "$1" = "--debug" ]; then
-BUILDTYPE=Debug
-shift
+	BUILDTYPE=Debug
+	shift
 fi
 
 BUILDSUBDIR=`echo $BUILDTYPE | tr '[A-Z]' '[a-z]'`;
@@ -19,9 +19,9 @@ if [ "armv6l" = `arch` ] || [ "armv7l" = `arch` ]; then
 		make -j4
 	fi
 	if [ "$1" != "" ]; then
-	 sudo make install DESTDIR=$1
+		sudo make install DESTDIR=$1
 	else
-	 sudo make install
+		sudo make install
 	fi
 elif [ "$1" = "--native" ]; then
 	# Build natively on the host
@@ -38,8 +38,7 @@ else
 	make -j 6
 
 	if [ "$1" != "" ]; then
-	 sudo make install DESTDIR=$1
+		sudo make install DESTDIR=$1
 	fi
 fi
 popd
-
