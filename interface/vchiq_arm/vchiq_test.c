@@ -1201,15 +1201,15 @@ func_data_test(VCHIQ_SERVICE_HANDLE_T service, int datalen, int align, int serve
    EXPECT(vchiq_queue_message(service, &element, 1), VCHIQ_SUCCESS);
 
    memset(databuf, 0xff, sizeof(databuf));
-   data = (uint8_t *)((uint32_t)databuf & ~(PAGE_SIZE - 1)) + align;
-   data = (uint8_t *)((((int)databuf + PROLOGUE_SIZE) & ~(FUN2_MAX_ALIGN - 1)) + align - PROLOGUE_SIZE);
+   data = (uint8_t *)((uintptr_t)databuf & ~(PAGE_SIZE - 1)) + align;
+   data = (uint8_t *)((((intptr_t)databuf + PROLOGUE_SIZE) & ~(FUN2_MAX_ALIGN - 1)) + align - PROLOGUE_SIZE);
    if (data < databuf)
       data += PAGE_SIZE;
    data += PROLOGUE_SIZE;
 
    EXPECT(vchiq_queue_bulk_receive(service, data, datalen, NULL), VCHIQ_SUCCESS);
 
-   data2 = (uint8_t *)(((uint32_t)databuf2 + PROLOGUE_SIZE) & ~(PAGE_SIZE - 1)) + align - PROLOGUE_SIZE;
+   data2 = (uint8_t *)(((uintptr_t)databuf2 + PROLOGUE_SIZE) & ~(PAGE_SIZE - 1)) + align - PROLOGUE_SIZE;
    if (data2 < databuf2)
       data2 += PAGE_SIZE;
    prologue = data2;
@@ -1319,11 +1319,17 @@ clnt_callback(VCHIQ_REASON_T reason, VCHIQ_HEADER_T *header,
    vcos_mutex_lock(&g_mutex);
    if (reason == VCHIQ_MESSAGE_AVAILABLE)
    {
-      if (header->size <= 1)
+      /* 
+       * Store the header size as it is going to be released
+       * and the size may be overwritten by the release.
+       */
+      size_t header_size = header->size;
+
+      if (header_size <= 1)
          vchiq_release_message(service, header);
       else
       /* Responses of length 0 are not sync points */
-      if ((header->size >= 4) && (memcpy(&data, header->data, sizeof(data)), data == MSG_ECHO))
+      if ((header_size >= 4) && (memcpy(&data, header->data, sizeof(data)), data == MSG_ECHO))
       {
          /* This is a complete echoed packet */
          if (g_params.verify && (mem_check(header->data, bulk_tx_data[ctrl_received % NUM_BULK_BUFS], g_params.blocksize) != 0))
@@ -1334,10 +1340,10 @@ clnt_callback(VCHIQ_REASON_T reason, VCHIQ_HEADER_T *header,
             vcos_event_signal(&g_shutdown);
          vchiq_release_message(service, header);
       }
-      else if (header->size != 0)
+      else if (header_size != 0)
          g_server_error = header->data;
 
-      if ((header->size != 0) || g_server_error)
+      if ((header_size != 0) || g_server_error)
          vcos_event_signal(&g_server_reply);
    }
    else if (reason == VCHIQ_BULK_TRANSMIT_DONE)
@@ -1633,7 +1639,7 @@ static void check_timer(void)
 
 static char *buf_align(char *buf, int align_size, int align)
 {
-   char *aligned = buf - ((int)buf & (align_size - 1)) + align;
+   char *aligned = buf - ((intptr_t)buf & (align_size - 1)) + align;
    if (aligned < buf)
       aligned += align_size;
    return aligned;
