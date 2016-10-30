@@ -1201,15 +1201,15 @@ func_data_test(VCHIQ_SERVICE_HANDLE_T service, int datalen, int align, int serve
    EXPECT(vchiq_queue_message(service, &element, 1), VCHIQ_SUCCESS);
 
    memset(databuf, 0xff, sizeof(databuf));
-   data = (uint8_t *)((uint32_t)databuf & ~(PAGE_SIZE - 1)) + align;
-   data = (uint8_t *)((((int)databuf + PROLOGUE_SIZE) & ~(FUN2_MAX_ALIGN - 1)) + align - PROLOGUE_SIZE);
+   data = (uint8_t *)((uintptr_t)databuf & ~(PAGE_SIZE - 1)) + align;
+   data = (uint8_t *)((((intptr_t)databuf + PROLOGUE_SIZE) & ~(FUN2_MAX_ALIGN - 1)) + align - PROLOGUE_SIZE);
    if (data < databuf)
       data += PAGE_SIZE;
    data += PROLOGUE_SIZE;
 
    EXPECT(vchiq_queue_bulk_receive(service, data, datalen, NULL), VCHIQ_SUCCESS);
 
-   data2 = (uint8_t *)(((uint32_t)databuf2 + PROLOGUE_SIZE) & ~(PAGE_SIZE - 1)) + align - PROLOGUE_SIZE;
+   data2 = (uint8_t *)(((uintptr_t)databuf2 + PROLOGUE_SIZE) & ~(PAGE_SIZE - 1)) + align - PROLOGUE_SIZE;
    if (data2 < databuf2)
       data2 += PAGE_SIZE;
    prologue = data2;
@@ -1633,7 +1633,7 @@ static void check_timer(void)
 
 static char *buf_align(char *buf, int align_size, int align)
 {
-   char *aligned = buf - ((int)buf & (align_size - 1)) + align;
+   char *aligned = buf - ((intptr_t)buf & (align_size - 1)) + align;
    if (aligned < buf)
       aligned += align_size;
    return aligned;
