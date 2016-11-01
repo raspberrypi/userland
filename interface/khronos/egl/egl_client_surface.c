@@ -424,7 +424,7 @@ EGL_SURFACE_T *egl_surface_create(
       surface->avail_buffers_valid = 0;
 
       if (surface->buffers > 1) {
-         uint64_t pid = khronos_platform_get_process_id();
+         uint64_t pid = rpc_get_client_id(thread);
          int sem[3] = { (int)pid, (int)(pid >> 32), (int)name };
          if (khronos_platform_semaphore_create(&surface->avail_buffers, sem, surface->buffers) == KHR_SUCCESS)
             surface->avail_buffers_valid = 1;
@@ -458,7 +458,7 @@ EGL_SURFACE_T *egl_surface_create(
       sem_name = KHRN_NO_SEMAPHORE;
 #ifndef KHRONOS_EGL_PLATFORM_OPENWFC
       if (surface->buffers > 1) {
-         uint64_t pid = khronos_platform_get_process_id();
+         uint64_t pid = rpc_get_client_id(thread);
          int sem[3];
          sem[0] = (int)pid; sem[1] = (int)(pid >> 32); sem[2] = (int)name;
 

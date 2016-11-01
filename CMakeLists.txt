@@ -8,8 +8,13 @@ SET(PROJECT_VER_PATCH 0)
 SET(PROJECT_VER "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}.${PROJECT_VER_PATCH}")
 SET(PROJECT_APIVER "${PROJECT_VER}")
 
-set(BUILD_MMAL TRUE)
-set(BUILD_MMAL_APPS TRUE)
+if(ARM64)
+   set(BUILD_MMAL FALSE)
+   set(BUILD_MMAL_APPS FALSE)
+else()
+   set(BUILD_MMAL TRUE)
+   set(BUILD_MMAL_APPS TRUE)
+endif()
 set(vmcs_root ${PROJECT_SOURCE_DIR})
 get_filename_component(VIDEOCORE_ROOT . ABSOLUTE)
 
@@ -44,6 +49,7 @@ add_definitions(-DUSE_VCHIQ_ARM -DVCHI_BULK_ALIGN=1 -DVCHI_BULK_GRANULARITY=1)
 add_definitions(-DOMX_SKIP64BIT)
 add_definitions(-DEGL_SERVER_DISPMANX)
 add_definitions(-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64)
+add_definitions(-D_GNU_SOURCE)
 
 # do we actually need this?
 add_definitions(-D__VIDEOCORE4__)
@@ -60,7 +66,9 @@ endif()
 add_subdirectory(interface/vcos)
 add_subdirectory(interface/vmcs_host)
 add_subdirectory(interface/vchiq_arm)
-add_subdirectory(interface/khronos)
+if(NOT ARM64)
+   add_subdirectory(interface/khronos)
+endif()
 
 #add_subdirectory(opensrc/tools/lua)
 if(BUILD_MMAL)
@@ -74,7 +82,9 @@ if(BUILD_MMAL_APPS)
 add_subdirectory(host_applications/android/apps/vidtex)
 endif(BUILD_MMAL_APPS)
 
-add_subdirectory(middleware/openmaxil)
+if(NOT ARM64)
+   add_subdirectory(middleware/openmaxil)
+endif()
 
 # 3d demo code
 #if(NOT ANDROID)
@@ -85,13 +95,6 @@ add_subdirectory(middleware/openmaxil)
 #if(ENABLE_3D_TESTS)
 #   add_subdirectory(thirdparty/applications/test)
 #endif()
-
-# FIXME: this directory needs a more sensible name and better
-# platform factoring
-
-if(NOT CMAKE_SYSTEM_NAME MATCHES "NetBSD")
-   add_subdirectory(interface/usbdk)
-endif()
 
 # FIXME: we should use a pre-packaged version of freetype
 # rather than the one included in the repo.
@@ -116,6 +119,14 @@ set(vmcs_host_apps_VERSION_MAJOR 1)
 set(vmcs_host_apps_VERSION_MINOR 0)
 
 include_directories("${PROJECT_BINARY_DIR}")
-
+include(FindPkgConfig QUIET)
+if(PKG_CONFIG_FOUND)
+	# Produce a pkg-config file
+	foreach(PCFILE bcm_host.pc  egl.pc  glesv2.pc  vg.pc brcmegl.pc  brcmglesv2.pc  brcmvg.pc )
+		configure_file("pkgconfig/${PCFILE}.in" "${PCFILE}" @ONLY)
+		install(FILES       "${CMAKE_CURRENT_BINARY_DIR}/${PCFILE}"
+			DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig")
+	endforeach()
+endif()
 # Remove cache entry, if one added by command line
 unset(KHRONOS_EGL_PLATFORM CACHE)

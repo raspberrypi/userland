@@ -138,6 +138,9 @@ struct RASPIVIDYUV_STATE_S
    int onTime;                         /// In timed cycle mode, the amount of time the capture is on per cycle
    int offTime;                        /// In timed cycle mode, the amount of time the capture is off per cycle
 
+   int onlyLuma;                       /// Only output the luma / Y plane of the YUV data
+   int useRGB;                         /// Output RGB data rather than YUV
+
    RASPIPREVIEW_PARAMETERS preview_parameters;   /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
 
@@ -182,6 +185,8 @@ static void display_valid_parameters(char *app_name);
 #define CommandCamSelect    12
 #define CommandSettings     13
 #define CommandSensorMode   14
+#define CommandOnlyLuma     15
+#define CommandUseRGB       16
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -200,6 +205,8 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandCamSelect,     "-camselect",  "cs", "Select camera <number>. Default 0", 1 },
    { CommandSettings,      "-settings",   "set","Retrieve camera settings and write to stdout", 0},
    { CommandSensorMode,    "-mode",       "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
+   { CommandOnlyLuma,      "-luma",       "y",  "Only output the luma / Y of the YUV data'", 0},
+   { CommandUseRGB,        "-rgb",        "rgb","Save as RGB data rather than YUV", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -254,6 +261,7 @@ static void default_status(RASPIVIDYUV_STATE *state)
    state->cameraNum = 0;
    state->settings = 0;
    state->sensor_mode = 0;
+   state->onlyLuma = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -507,6 +515,24 @@ static int parse_cmdline(int argc, const char **argv, RASPIVIDYUV_STATE *state)
          break;
       }
 
+      case CommandOnlyLuma:
+         if (state->useRGB)
+         {
+            fprintf(stderr, "--luma and --rgb are mutually exclusive\n");
+            valid = 0;
+         }
+         state->onlyLuma = 1;
+         break;
+
+      case CommandUseRGB: // display lots of data during run
+         if (state->onlyLuma)
+         {
+            fprintf(stderr, "--luma and --rgb are mutually exclusive\n");
+            valid = 0;
+         }
+         state->useRGB = 1;
+         break;
+
       default:
       {
          // Try parsing for any image specific parameters
@@ -677,19 +703,24 @@ static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buff
 
    if (pData)
    {
-      int bytes_written = buffer->length;
+      int bytes_written = 0;
+      int bytes_to_write = buffer->length;
+
+      if (buffer->length && pData->pstate->onlyLuma)
+         bytes_to_write = port->format->es->video.width * port->format->es->video.height;
+
 
       vcos_assert(pData->file_handle);
 
-      if (buffer->length)
+      if (bytes_to_write)
       {
          mmal_buffer_header_mem_lock(buffer);
-         bytes_written = fwrite(buffer->data, 1, buffer->length, pData->file_handle);
+         bytes_written = fwrite(buffer->data, 1, bytes_to_write, pData->file_handle);
          mmal_buffer_header_mem_unlock(buffer);
 
-         if (bytes_written != buffer->length)
+         if (bytes_written != bytes_to_write)
          {
-            vcos_log_error("Failed to write buffer data (%d from %d)- aborting", bytes_written, buffer->length);
+            vcos_log_error("Failed to write buffer data (%d from %d)- aborting", bytes_written, bytes_to_write);
             pData->abort = 1;
          }
       }
@@ -821,9 +852,6 @@ static MMAL_STATUS_T create_camera_component(RASPIVIDYUV_STATE *state)
 
    format = preview_port->format;
 
-   format->encoding = MMAL_ENCODING_OPAQUE;
-   format->encoding_variant = MMAL_ENCODING_I420;
-
    if(state->camera_parameters.shutter_speed > 6000000)
    {
         MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
@@ -869,7 +897,6 @@ static MMAL_STATUS_T create_camera_component(RASPIVIDYUV_STATE *state)
    // Set the encode format on the video  port
 
    format = video_port->format;
-   format->encoding_variant = MMAL_ENCODING_I420;
 
    if(state->camera_parameters.shutter_speed > 6000000)
    {
@@ -884,8 +911,16 @@ static MMAL_STATUS_T create_camera_component(RASPIVIDYUV_STATE *state)
         mmal_port_parameter_set(video_port, &fps_range.hdr);
    }
 
-   format->encoding = MMAL_ENCODING_I420;
-   format->encoding_variant = MMAL_ENCODING_I420;
+   if (state->useRGB)
+   {
+      format->encoding = mmal_util_rgb_order_fixed(still_port) ? MMAL_ENCODING_RGB24 : MMAL_ENCODING_BGR24;
+      format->encoding_variant = 0;  //Irrelevant when not in opaque mode
+   }
+   else
+   {
+      format->encoding = MMAL_ENCODING_I420;
+      format->encoding_variant = MMAL_ENCODING_I420;
+   }
 
    format->es->video.width = VCOS_ALIGN_UP(state->width, 32);
    format->es->video.height = VCOS_ALIGN_UP(state->height, 16);

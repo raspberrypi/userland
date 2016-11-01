@@ -181,7 +181,7 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandROI,         "-roi",       "roi","Set region of interest (x,y,w,d as normalised coordinates [0.0-1.0])", 1},
    {CommandShutterSpeed,"-shutter",   "ss", "Set shutter speed in microseconds", 1},
    {CommandAwbGains,    "-awbgains",  "awbg", "Set AWB gains - AWB mode must be off", 1},
-   {CommandDRCLevel,    "-drc",       "drc", "Set DRC Level", 1},
+   {CommandDRCLevel,    "-drc",       "drc", "Set DRC Level (see Notes)", 1},
    {CommandStatsPass,   "-stats",     "st", "Force recomputation of statistics on stills capture pass"},
    {CommandAnnotate,    "-annotate",  "a",  "Enable/Set annotate flags or text", 1},
    {CommandStereoMode,  "-stereo",    "3d", "Select stereoscopic mode", 1},
@@ -1419,7 +1419,7 @@ int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, c
       char tmp[MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3];
       int process_datetime = 1;
 
-       annotate.enable = 1;
+      annotate.enable = 1;
 
       if (settings & (ANNOTATE_APP_TEXT | ANNOTATE_USER_TEXT))
       {
@@ -1436,7 +1436,7 @@ int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, c
       if (process_datetime && (settings & ANNOTATE_TIME_TEXT))
       {
          if(strlen(annotate.text)){
-            strftime(tmp, 32, " %X", &tm );   
+            strftime(tmp, 32, " %X", &tm );
          }else{
             strftime(tmp, 32, "%X", &tm );
          }
@@ -1446,7 +1446,7 @@ int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, c
       if (process_datetime && (settings & ANNOTATE_DATE_TEXT))
       {
          if(strlen(annotate.text)){
-            strftime(tmp, 32, " %x", &tm );   
+            strftime(tmp, 32, " %x", &tm );
          }else{
             strftime(tmp, 32, "%x", &tm );
          }
@@ -1485,7 +1485,7 @@ int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, c
       }
       else
          annotate.custom_text_colour = MMAL_FALSE;
- 
+
       if (bg_colour != -1)
       {
          annotate.custom_background_colour = MMAL_TRUE;
@@ -1495,9 +1495,9 @@ int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, c
       }
       else
          annotate.custom_background_colour = MMAL_FALSE;
-   }
-   else
-      annotate.enable = 0;
+    }
+    else
+       annotate.enable = 0;
 
    return mmal_status_to_int(mmal_port_parameter_set(camera->control, &annotate.hdr));
 }

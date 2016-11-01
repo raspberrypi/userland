@@ -256,4 +256,8 @@ uint16_t vc_container_net_to_host_16( uint16_t value );
  * \return The converted value. */
 uint16_t vc_container_net_from_host_16( uint16_t value );
 
+#ifdef __cplusplus
+}
+#endif
+
 #endif /* VC_NET_SOCKETS_H */

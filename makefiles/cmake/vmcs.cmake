@@ -15,7 +15,9 @@ endif()
 
 SET(CMAKE_INSTALL_PREFIX "${VMCS_INSTALL_PREFIX}" CACHE INTERNAL "Prefix
     prepended to install directories" FORCE)
-SET(VMCS_PLUGIN_DIR ${CMAKE_INSTALL_PREFIX}/${CMAKE_SHARED_LIBRARY_PREFIX}/plugins)
+if(NOT DEFINED VMCS_PLUGIN_DIR)
+  SET(VMCS_PLUGIN_DIR ${CMAKE_INSTALL_PREFIX}/${CMAKE_SHARED_LIBRARY_PREFIX}/plugins)
+endif()
 
 # What kind of system are we?
 if (${UNIX})
@@ -27,6 +29,7 @@ elseif (${WIN32})
 else()
    message(FATAL_ERROR,"Unknown system type")
 endif()
+set (ARM64 OFF CACHE BOOL "Whether target is ARM64")
 
 # construct the vmcs config header file
 add_definitions(-DHAVE_VMCS_CONFIG)

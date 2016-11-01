@@ -42,7 +42,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /* The current IPC version number */
 #define WFC_IPC_VER_CURRENT     8
 
-/* The minimum verison number for backwards compatibility */
+/* The minimum version number for backwards compatibility */
 #ifndef WFC_IPC_VER_MINIMUM
 #define WFC_IPC_VER_MINIMUM     5
 #endif

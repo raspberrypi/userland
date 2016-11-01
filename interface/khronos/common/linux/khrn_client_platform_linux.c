@@ -77,7 +77,9 @@ VCOS_STATUS_T khronos_platform_semaphore_create(PLATFORM_SEMAPHORE_T *sem, int n
 
 uint64_t khronos_platform_get_process_id()
 {
-   return vcos_process_id_current();
+   CLIENT_THREAD_STATE_T *thread = CLIENT_GET_THREAD_STATE();
+
+   return rpc_get_client_id(thread);
 }
 
 static bool process_attached = false;
@@ -271,7 +273,9 @@ static KHRN_IMAGE_FORMAT_T convert_format(uint32_t format)
       case EGL_PIXEL_FORMAT_XRGB_8888_BRCM:     return XBGR_8888;
       case EGL_PIXEL_FORMAT_RGB_565_BRCM:       return RGB_565;
       case EGL_PIXEL_FORMAT_A_8_BRCM:           return A_8;
-      default:                                  vcos_verify(0); return (KHRN_IMAGE_FORMAT_T)0;
+      default:
+         vcos_assert(0);
+         return (KHRN_IMAGE_FORMAT_T)0;
    }
 }
 
@@ -753,7 +757,7 @@ static EGL_DISPMANX_WINDOW_T *check_default(EGLNativeWindowType win)
          VC_RECT_T dst_rect;
          VC_RECT_T src_rect;
 
-         int x = 0, y = 0, width = 0, height = 0, layer;
+         int x = 0, y = 0, width = 0, height = 0, layer = 0;
 
          switch(wid)
          {

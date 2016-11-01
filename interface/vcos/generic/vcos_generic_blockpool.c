@@ -223,7 +223,7 @@ VCOS_STATUS_T vcos_generic_blockpool_create_on_heap(VCOS_BLOCKPOOL_T *pool,
    return status;
 
 fail:
-   free(mem);
+   vcos_free(mem);
    return status;
 }
 

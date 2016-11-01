@@ -26,7 +26,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 #include <string.h>
 #include <stdio.h>
-#include "vchost_config.h"
+#include "vchost_platform_config.h"
 #include "vchost.h"
 
 #include "interface/vcos/vcos.h"
@@ -567,7 +567,8 @@ static void *cecservice_notify_func(void *arg) {
          //Get all notifications in the queue
          success = vchi_msg_dequeue( state->notify_handle[0], state->notify_buffer, sizeof(state->notify_buffer), &state->notify_length, VCHI_FLAGS_NONE );
          if(success != 0 || state->notify_length < sizeof(uint32_t)*5 ) { //reason + 4x32-bit parameter
-            continue;
+            vcos_assert(state->notify_length == sizeof(uint32_t)*5);
+            break;
          }
 
          //if(lock_obtain() != 0)

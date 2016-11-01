@@ -121,6 +121,7 @@ typedef struct
    int settings;                       /// Request settings from the camera
    int cameraNum;                      /// Camera number
    int burstCaptureMode;               /// Enable burst mode
+   int onlyLuma;                       /// Only output the luma / Y plane of the YUV data
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -159,6 +160,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandSignal       12
 #define CommandSettings     13
 #define CommandBurstMode    14
+#define CommandOnlyLuma     15
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -176,7 +178,8 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandKeypress,"-keypress",   "k",  "Wait between captures for a ENTER, X then ENTER to exit", 0},
    { CommandSignal,  "-signal",     "s",  "Wait between captures for a SIGUSR1 from another process", 0},
    { CommandSettings, "-settings",  "set","Retrieve camera settings and write to stdout", 0},
-   { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},   
+   { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},
+   { CommandOnlyLuma,  "-luma",     "y",  "Only output the luma / Y of the YUV data'", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -225,13 +228,14 @@ static void default_status(RASPISTILLYUV_STATE *state)
    state->frameNextMethod = FRAME_NEXT_SINGLE;
    state->settings = 0;
    state->burstCaptureMode=0;
+   state->onlyLuma = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
 
    // Set up the camera_parameters to default
    raspicamcontrol_set_defaults(&state->camera_parameters);
-   
+
    // Set default camera
    state->cameraNum = 0;
 }
@@ -403,9 +407,14 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
          break;
 
       case CommandUseRGB: // display lots of data during run
+         if (state->onlyLuma)
+         {
+            fprintf(stderr, "--luma and --rgb are mutually exclusive\n");
+            valid = 0;
+         }
          state->useRGB = 1;
          break;
-      
+
       case CommandCamSelect:  //Select camera input port
       {
          if (sscanf(argv[i + 1], "%u", &state->cameraNum) == 1)
@@ -414,8 +423,8 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
          }
          else
             valid = 0;
-		  break;
-	  }
+        break;
+      }
 
       case CommandFullResPreview:
          state->fullResPreview = 1;
@@ -435,10 +444,19 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
          state->settings = 1;
          break;
 
-      case CommandBurstMode: 
+      case CommandBurstMode:
          state->burstCaptureMode=1;
          break;
-         
+
+      case CommandOnlyLuma:
+         if (state->useRGB)
+         {
+            fprintf(stderr, "--luma and --rgb are mutually exclusive\n");
+            valid = 0;
+         }
+         state->onlyLuma = 1;
+         break;
+
       default:
       {
          // Try parsing for any image specific parameters
@@ -558,21 +576,25 @@ static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buff
 
    if (pData)
    {
-      int bytes_written = buffer->length;
+      int bytes_written = 0;
+      int bytes_to_write = buffer->length;
 
-      if (buffer->length && pData->file_handle)
+      if (pData->pstate->onlyLuma)
+         bytes_to_write = port->format->es->video.width * port->format->es->video.height;
+
+      if (bytes_to_write && pData->file_handle)
       {
          mmal_buffer_header_mem_lock(buffer);
 
-         bytes_written = fwrite(buffer->data, 1, buffer->length, pData->file_handle);
+         bytes_written = fwrite(buffer->data, 1, bytes_to_write, pData->file_handle);
 
          mmal_buffer_header_mem_unlock(buffer);
       }
 
       // We need to check we wrote what we wanted - it's possible we have run out of storage.
-      if (bytes_written != buffer->length)
+      if (buffer->length && bytes_written != bytes_to_write)
       {
-         vcos_log_error("Unable to write buffer to file - aborting");
+         vcos_log_error("Unable to write buffer to file - aborting %d vs %d", bytes_written, bytes_to_write);
          complete = 1;
       }
 
@@ -640,13 +662,13 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
       {{MMAL_PARAMETER_CAMERA_NUM, sizeof(camera_num)}, state->cameraNum};
 
    status = mmal_port_parameter_set(camera->control, &camera_num.hdr);
-   
+
    if (status != MMAL_SUCCESS)
    {
       vcos_log_error("Could not select camera : error %d", status);
       goto error;
    }
-   
+
    if (!camera->output_num)
    {
       status = MMAL_ENOSYS;
@@ -696,7 +718,7 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
          .fast_preview_resume = 0,
          .use_stc_timestamp = MMAL_PARAM_TIMESTAMP_MODE_RESET_STC
       };
-      
+
       if (state->fullResPreview)
       {
          cam_config.max_preview_video_w = state->width;
@@ -792,8 +814,8 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
    // Set our stills format on the stills  port
    if (state->useRGB)
    {
-      format->encoding = MMAL_ENCODING_BGR24;
-      format->encoding_variant = MMAL_ENCODING_BGR24;
+      format->encoding = mmal_util_rgb_order_fixed(still_port) ? MMAL_ENCODING_RGB24 : MMAL_ENCODING_BGR24;
+      format->encoding_variant = 0;  //Irrelevant when not in opaque mode
    }
    else
    {
@@ -1049,19 +1071,19 @@ static int wait_for_next_frame(RASPISTILLYUV_STATE *state, int *frame)
 
    case FRAME_NEXT_KEYPRESS :
    {
-    	int ch;
+	int ch;
 
-    	if (state->verbose)
+	if (state->verbose)
          fprintf(stderr, "Press Enter to capture, X then ENTER to exit\n");
 
-    	ch = getchar();
-    	*frame+=1;
-    	if (ch == 'x' || ch == 'X')
-    	   return 0;
-    	else
-    	{
- 	      return keep_running;
-    	}
+	ch = getchar();
+	*frame+=1;
+	if (ch == 'x' || ch == 'X')
+	   return 0;
+	else
+	{
+	      return keep_running;
+	}
    }
 
    case FRAME_NEXT_IMMEDIATELY :
@@ -1394,7 +1416,7 @@ int main(int argc, const char **argv)
                final_filename = NULL;
             }
          } // end for (frame)
-         
+
          vcos_semaphore_delete(&callback_data.complete_semaphore);
       }
       else

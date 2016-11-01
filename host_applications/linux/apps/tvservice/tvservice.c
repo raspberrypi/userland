@@ -426,7 +426,7 @@ static const char *status_mode( TV_DISPLAY_STATE_T *tvstate ) {
          }
       }
       //This is the format's aspect ratio
-      tmp = status_sprintf(mode_str, MAX_STATUS_STR_LENGTH, &offset, " %s", aspect_ratio_str(tvstate->display.sdtv.display_options.aspect));
+      tmp = status_sprintf(mode_str, MAX_STATUS_STR_LENGTH, &offset, " %s", aspect_ratio_sd_str(tvstate->display.sdtv.display_options.aspect));
    } else if (tvstate->state & VC_LCD_ATTACHED_DEFAULT) {
       status_sprintf(mode_str, MAX_STATUS_STR_LENGTH, &offset, "LCD");
    } else {

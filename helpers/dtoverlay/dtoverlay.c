@@ -166,6 +166,42 @@ int dtoverlay_delete_node(DTBLOB_T *dtb, const char *node_path, int path_len)
    return fdt_del_node(dtb->fdt, node_off);
 }
 
+// Returns the offset of the node indicated by the absolute path or a negative
+// error code.
+int dtoverlay_find_node(DTBLOB_T *dtb, const char *node_path, int path_len)
+{
+   if (!path_len)
+      path_len = strlen(node_path);
+   return fdt_path_offset_namelen(dtb->fdt, node_path, path_len);
+}
+
+// Returns 0 on success, otherwise <0 error code
+int dtoverlay_set_node_properties(DTBLOB_T *dtb, const char *node_path,
+                                  DTOVERLAY_PARAM_T *properties,
+                                  unsigned int num_properties)
+{
+   int err = 0;
+   int node_off;
+
+   node_off = fdt_path_offset(dtb->fdt, node_path);
+   if (node_off < 0)
+      node_off = dtoverlay_create_node(dtb, node_path, 0);
+   if (node_off >= 0)
+   {
+      int i;
+      for (i = 0; (i < num_properties) && (err == 0); i++)
+      {
+         DTOVERLAY_PARAM_T *p;
+
+         p = properties + i;
+         err = fdt_setprop(dtb->fdt, node_off, p->param, p->b, p->len);
+      }
+   }
+   else
+      err = node_off;
+   return err;
+}
+
 // Returns 0 on success, otherwise <0 error code
 int dtoverlay_create_prop_fragment(DTBLOB_T *dtb, int idx, int target_phandle,
                                    const char *prop_name, const void *prop_data,
@@ -647,12 +683,12 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
       target_path = fdt_getprop(overlay_dtb->fdt, frag_off, "target-path", &len);
       if (target_path)
       {
-         if (target_path[0] != '/')
-            target_path = dtoverlay_get_alias(base_dtb, target_path);
-         target_off = dtoverlay_create_node(base_dtb, target_path, len - 1);
+         if (len && (target_path[len - 1] == '\0'))
+            len--;
+         target_off = fdt_path_offset_namelen(base_dtb->fdt, target_path, len);
          if (target_off < 0)
          {
-            dtoverlay_error("invalid target-path");
+            dtoverlay_error("invalid target-path '%.*s'", len, target_path);
             return NON_FATAL(target_off);
          }
       }
@@ -1553,6 +1589,15 @@ const char *dtoverlay_get_alias(DTBLOB_T *dtb, const char *alias_name)
    node_off = fdt_path_offset(dtb->fdt, "/aliases");
 
    return fdt_getprop(dtb->fdt, node_off, alias_name, NULL);
+}
+
+int dtoverlay_set_alias(DTBLOB_T *dtb, const char *alias_name, const char *value)
+{
+   int node_off;
+
+   node_off = fdt_path_offset(dtb->fdt, "/aliases");
+
+   return fdt_setprop_string(dtb->fdt, node_off, alias_name, value);
 }
 
 void dtoverlay_set_logging_func(DTOVERLAY_LOGGING_FUNC *func)

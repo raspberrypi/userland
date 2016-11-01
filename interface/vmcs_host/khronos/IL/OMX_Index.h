@@ -524,6 +524,8 @@ typedef enum OMX_INDEXTYPE {
     OMX_IndexParamBrcmVideoAVCSPSTimingEnable,                /** reference: OMX_CONFIG_PORTBOOLEANTYPE */
     OMX_IndexParamBrcmBayerOrder,                             /** reference: OMX_PARAM_BAYERORDERTYPE */
     OMX_IndexParamBrcmMaxNumCallbacks,                        /**< reference: OMX_PARAM_U32TYPE */
+    OMX_IndexParamBrcmJpegRestartInterval,                    /**< reference: OMX_PARAM_U32TYPE */
+    OMX_IndexParamBrcmSupportsSlices,                         /**< reference: OMX_CONFIG_PORT_BOOLEANTYPE */
     OMX_IndexMax = 0x7FFFFFFF
 } OMX_INDEXTYPE;
 

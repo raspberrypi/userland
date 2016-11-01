@@ -29,7 +29,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 VideoCore OS Abstraction Layer - pthreads types
 =============================================================================*/
 
-/* Do not include this file directly - instead include it via vcos.h */
+/* DO NOT include this file directly - instead include it via vcos.h */
 
 /** @file
   *
@@ -581,7 +581,8 @@ void vcos_event_signal(VCOS_EVENT_T *event)
 fail_sem:
    vcos_mutex_unlock(&event->mutex);
 fail_mtx:
-   vcos_assert(ok);
+   if (!ok)
+      vcos_assert(ok);
 }
 
 VCOS_INLINE_IMPL
@@ -770,11 +771,11 @@ void vcos_atomic_flags_delete(VCOS_ATOMIC_FLAGS_T *atomic_flags)
 
 #if defined(linux) || defined(_HAVE_SBRK)
 
-/* not exactly the free memory, but a measure of it */
+/* Returns invalid result, do not use */
 
 VCOS_INLINE_IMPL
-unsigned long vcos_get_free_mem(void) {
-   return (unsigned long)sbrk(0);
+unsigned long VCOS_DEPRECATED("returns invalid result") vcos_get_free_mem(void) {
+   return 0;
 }
 
 #endif
@@ -815,7 +816,13 @@ VCOS_INLINE_DECL void _vcos_thread_sem_post(VCOS_THREAD_T *);
 VCOS_STATIC_INLINE
 char *vcos_strdup(const char *str)
 {
-   return strdup(str);
+   size_t len = strlen(str) + 1;
+   void *p = malloc(len);
+
+   if (p == NULL)
+      return NULL;
+
+   return (char *)memcpy(p, str, len);
 }
 
 typedef void (*VCOS_ISR_HANDLER_T)(VCOS_UNSIGNED vecnum);

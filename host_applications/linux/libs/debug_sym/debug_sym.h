@@ -33,6 +33,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/vcos/vcos.h"
 #include "interface/vcos/vcos_stdint.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* ---- Constants and Types ---------------------------------------------- */
 
 typedef struct opaque_vc_mem_access_handle_t *VC_MEM_ACCESS_HANDLE_T;
@@ -201,6 +205,10 @@ VC_MEM_SIZE_T GetVideoCoreMemorySize( VC_MEM_ACCESS_HANDLE_T handle );
  * Returns the videocore memory physical address.
  */
 VC_MEM_ADDR_T GetVideoCoreMemoryPhysicalAddress( VC_MEM_ACCESS_HANDLE_T handle );
+
+#ifdef __cplusplus
+}
+#endif
 
 
 #endif /* DEBUG_SYM_H */
