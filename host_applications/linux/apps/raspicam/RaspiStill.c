@@ -1277,7 +1277,7 @@ static MMAL_STATUS_T create_encoder_component(RASPISTILL_STATE *state)
    // Set the JPEG restart interval
    status = mmal_port_parameter_set_uint32(encoder_output, MMAL_PARAMETER_JPEG_RESTART_INTERVAL, state->restart_interval);
 
-   if (status != MMAL_SUCCESS)
+   if (state->restart_interval && status != MMAL_SUCCESS)
    {
       vcos_log_error("Unable to set JPEG restart interval");
       goto error;
