@@ -1214,6 +1214,17 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
                   pData->imv_file_handle = new_handle;
                }
             }
+
+            if (pData->pstate->pts_filename && pData->pstate->pts_filename[0] != '-')
+            {
+               new_handle = open_filename(pData->pstate, pData->pstate->pts_filename);
+
+               if (new_handle)
+               {
+                  fclose(pData->pts_file_handle);
+                  pData->pts_file_handle = new_handle;
+               }
+            }
          }
          if (buffer->length)
          {
