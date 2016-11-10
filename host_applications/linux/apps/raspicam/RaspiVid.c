@@ -1193,20 +1193,26 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
             if (pData->pstate->segmentWrap && pData->pstate->segmentNumber > pData->pstate->segmentWrap)
                pData->pstate->segmentNumber = 1;
 
-            new_handle = open_filename(pData->pstate, pData->pstate->filename);
-
-            if (new_handle)
+            if (pData->pstate->filename && pData->pstate->filename[0] != '-')
             {
-               fclose(pData->file_handle);
-               pData->file_handle = new_handle;
+               new_handle = open_filename(pData->pstate, pData->pstate->filename);
+
+               if (new_handle)
+               {
+                  fclose(pData->file_handle);
+                  pData->file_handle = new_handle;
+               }
             }
 
-            new_handle = open_filename(pData->pstate, pData->pstate->imv_filename);
-
-            if (new_handle)
+            if (pData->pstate->imv_filename && pData->pstate->imv_filename[0] != '-')
             {
-               fclose(pData->imv_file_handle);
-               pData->imv_file_handle = new_handle;
+               new_handle = open_filename(pData->pstate, pData->pstate->imv_filename);
+
+               if (new_handle)
+               {
+                  fclose(pData->imv_file_handle);
+                  pData->imv_file_handle = new_handle;
+               }
             }
          }
          if (buffer->length)
