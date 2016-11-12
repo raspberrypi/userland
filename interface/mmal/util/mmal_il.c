@@ -773,7 +773,7 @@ static struct {
    {MMAL_ENCODING_BAYER_SBGGR12P, OMX_COLOR_FormatRawBayer12bit, OMX_BayerOrderBGGR},
    {MMAL_ENCODING_BAYER_SBGGR16,  OMX_COLOR_FormatRawBayer16bit, OMX_BayerOrderBGGR},
    {MMAL_ENCODING_BAYER_SBGGR10DPCM8,OMX_COLOR_FormatRawBayer8bitcompressed, OMX_BayerOrderBGGR},
-   {MMAL_ENCODING_UNKNOWN,        OMX_BayerOrderMax}
+   {MMAL_ENCODING_UNKNOWN,        OMX_COLOR_FormatMax,            OMX_BayerOrderMax}
 };
 
 uint32_t mmalil_omx_bayer_format_order_to_encoding(OMX_BAYERORDERTYPE bayer_order, OMX_COLOR_FORMATTYPE color_format)
