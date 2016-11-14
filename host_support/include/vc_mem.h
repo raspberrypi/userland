@@ -35,6 +35,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define VC_MEM_IOC_MEM_SIZE         _IOR( VC_MEM_IOC_MAGIC, 1, unsigned int )
 #define VC_MEM_IOC_MEM_BASE         _IOR( VC_MEM_IOC_MAGIC, 2, unsigned int )
 #define VC_MEM_IOC_MEM_LOAD         _IOR( VC_MEM_IOC_MAGIC, 3, unsigned int )
+#define VC_MEM_IOC_MEM_COPY         _IOWR( VC_MEM_IOC_MAGIC, 4, char *)
 
 #if defined( __KERNEL__ )
 #define VC_MEM_TO_ARM_ADDR_MASK 0x3FFFFFFF
