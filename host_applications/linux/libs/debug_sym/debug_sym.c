@@ -140,13 +140,13 @@ int OpenVideoCoreMemory( VC_MEM_ACCESS_HANDLE_T *vcHandlePtr  )
 ***************************************************************************/
 
 struct fb_dmacopy {
-	uint32_t dst;
+	void *dst;
 	uint32_t src;
 	uint32_t length;
 };
 #define FBIODMACOPY _IOW('z', 0x22, struct fb_dmacopy)
 
-static int vc_mem_copy(uint32_t dst, uint32_t src, uint32_t length)
+static int vc_mem_copy(void *dst, uint32_t src, uint32_t length)
 {
     const char *filename = "/dev/fb0";
     int memFd;
@@ -626,7 +626,7 @@ static int AccessVideoCoreMemory( VC_MEM_ACCESS_HANDLE_T vcHandle,
     if (mem_op == READ_MEM)
     {
         DBG( "AccessVideoCoreMemory: %p, %x, %d", buf, origVcMemAddr, numBytes );
-        int s = vc_mem_copy((uint32_t)buf, (uint32_t)origVcMemAddr, numBytes);
+        int s = vc_mem_copy(buf, (uint32_t)origVcMemAddr, numBytes);
         if (s == 0)
             return 1;
     }
