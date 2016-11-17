@@ -1417,8 +1417,11 @@ vchi_clnt_callback(void *callback_param,
             if (actual > 1)
                g_server_error = pong_buf;
             if (actual != 0)
+            {
                /* Responses of length 0 are not sync points */
                vcos_event_signal(&g_server_reply);
+               break;
+            }
          }
       }
    }
