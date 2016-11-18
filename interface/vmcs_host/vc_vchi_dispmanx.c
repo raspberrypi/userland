@@ -25,8 +25,9 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 #include <string.h>
+#include <stdlib.h>
 
-#include "vchost_config.h"
+#include "vchost_platform_config.h"
 #include "vchost.h"
 
 #include "interface/vcos/vcos.h"
@@ -510,6 +511,13 @@ VCHPRE_ int VCHPOST_ vc_dispmanx_resource_write_data_handle( DISPMANX_RESOURCE_H
  ***********************************************************/
 VCHPRE_ DISPMANX_DISPLAY_HANDLE_T VCHPOST_ vc_dispmanx_display_open( uint32_t device ) {
    uint32_t display_handle;
+   char *env = getenv("VC_DISPLAY");
+
+   if (device == 0 && env)
+   {
+      device = atoi(env);
+   }
+
    device = VC_HTOV32(device);
    display_handle = dispmanx_get_handle(EDispmanDisplayOpen,
                                                  &device, sizeof(device));
@@ -1173,7 +1181,7 @@ static int32_t dispmanx_wait_for_reply(void *response, uint32_t max_length) {
  *
  * Arguments: command, parameter buffer, parameter legnth
  *
- * Description: send a command and wait for its reponse (int)
+ * Description: send a command and wait for its response (int)
  *
  * Returns: response
  *
@@ -1209,7 +1217,7 @@ int32_t vc_dispmanx_send_command (uint32_t command, void *buffer,
  *
  * Arguments: command, parameter buffer, parameter legnth, reply buffer, buffer length
  *
- * Description: send a command and wait for its reponse (in a buffer)
+ * Description: send a command and wait for its response (in a buffer)
  *
  * Returns: error code
  *
@@ -1286,23 +1294,26 @@ static void *dispmanx_notify_func( void *arg ) {
       status = vcos_event_wait(&dispmanx_notify_available_event);
       if (status != VCOS_SUCCESS || !dispmanx_client.initialised)
          break;
-      success = vchi_msg_dequeue( dispmanx_client.notify_handle[0], dispmanx_client.notify_buffer, sizeof(dispmanx_client.notify_buffer), &dispmanx_client.notify_length, VCHI_FLAGS_NONE );
-      if (success != 0)
-         continue;
 
-      handle = (DISPMANX_UPDATE_HANDLE_T)dispmanx_client.notify_buffer[0];
-      if (handle) {
-         // This is the response to an update submit
-         // Decrement the use count - the corresponding "use" is in vc_dispmanx_update_submit.
-         vchi_service_release(dispmanx_client.notify_handle[0]);
-         if (dispmanx_client.update_callback ) {
-            vcos_assert( dispmanx_client.pending_update_handle == handle);
-            dispmanx_client.update_callback(handle, dispmanx_client.update_callback_param);
-         }
-      } else {
-         // This is a vsync notification
-         if (dispmanx_client.vsync_callback ) {
-            dispmanx_client.vsync_callback(handle, dispmanx_client.vsync_callback_param);
+      while (1) {
+         success = vchi_msg_dequeue( dispmanx_client.notify_handle[0], dispmanx_client.notify_buffer, sizeof(dispmanx_client.notify_buffer), &dispmanx_client.notify_length, VCHI_FLAGS_NONE );
+         if (success != 0)
+            break;
+
+         handle = (DISPMANX_UPDATE_HANDLE_T)dispmanx_client.notify_buffer[0];
+         if (handle) {
+            // This is the response to an update submit
+            // Decrement the use count - the corresponding "use" is in vc_dispmanx_update_submit.
+            vchi_service_release(dispmanx_client.notify_handle[0]);
+            if (dispmanx_client.update_callback ) {
+               vcos_assert( dispmanx_client.pending_update_handle == handle);
+               dispmanx_client.update_callback(handle, dispmanx_client.update_callback_param);
+            }
+         } else {
+            // This is a vsync notification
+            if (dispmanx_client.vsync_callback ) {
+               dispmanx_client.vsync_callback(handle, dispmanx_client.vsync_callback_param);
+            }
          }
       }
    }

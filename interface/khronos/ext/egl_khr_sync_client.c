@@ -73,7 +73,7 @@ static EGL_SYNC_T *egl_sync_create(EGLSyncKHR sync, EGLenum type,
 {
    CLIENT_THREAD_STATE_T *thread = CLIENT_GET_THREAD_STATE();
    EGL_SYNC_T *sync_ptr = (EGL_SYNC_T *)khrn_platform_malloc(sizeof(EGL_SYNC_T), "EGL_SYNC_T");
-   uint64_t pid = khronos_platform_get_process_id();
+   uint64_t pid = rpc_get_client_id(thread);
    uint32_t sem;
 
    if (!sync_ptr)

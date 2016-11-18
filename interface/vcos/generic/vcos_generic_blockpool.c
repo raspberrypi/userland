@@ -118,7 +118,7 @@ static void vcos_generic_blockpool_subpool_init(
    subpool->owner = pool;
 
    /* Initialise to a predictable bit pattern unless the pool is so big
-    * that the delay would be noticable. */
+    * that the delay would be noticeable. */
    if (pool_size < VCOS_BLOCKPOOL_DEBUG_MEMSET_MAX_SIZE)
       memset(subpool->mem, 0xBC, pool_size); /* For debugging */
 
@@ -223,7 +223,7 @@ VCOS_STATUS_T vcos_generic_blockpool_create_on_heap(VCOS_BLOCKPOOL_T *pool,
    return status;
 
 fail:
-   free(mem);
+   vcos_free(mem);
    return status;
 }
 

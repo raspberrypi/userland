@@ -192,7 +192,7 @@ int main( int argc, char **argv )
    int  opt;
    int  opt_alloc = 0;
    int  opt_status = 0;
-   uint32_t alloc_size;
+   uint32_t alloc_size = 0;
    int  opt_pid = -1;
    VCSM_STATUS_T status_mode = VCSM_STATUS_NONE;
 

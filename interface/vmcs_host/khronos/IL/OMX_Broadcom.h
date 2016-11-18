@@ -62,6 +62,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 #define OMX_BUFFERFLAG_CODECSIDEINFO 0x00002000
 
+// for use in buffer headers - indicated the timestamp is a DTS rather than PTS
+#define OMX_BUFFERFLAG_TIME_IS_DTS 0x000004000
+
+// for use in buffer headers - signals that a video picture is interlaced
+#define OMX_BUFFERFLAG_INTERLACED 0x000010000
+
+// Signals that the top field of the current interlaced frame should be displayed first
+#define OMX_BUFFERFLAG_TOP_FIELD_FIRST 0x000020000
+
 /**
  * Macros to convert to <code>OMX_TICKS</code> from a signed 64 bit value and
  * vice-versa. These macros don't actually do anything unless <code>OMX_TICKS</code>
@@ -481,7 +490,7 @@ R' = coeff[1] * sample[N] + coeff[3] * sample[N+1] + coeff[5] * sample[N+2] + co
 \code{coeff} describes the downmixing coefficients
 */
 
-/* OMX_IndexConfigBrcmAudioDownmixCoefficients8x8: Audio Downmix Coefficients */
+/* OMX_IndexConfigBrcmAudioDownmixCoefficients8x8: Audio Downmix Coefficient matrix */
 typedef struct OMX_CONFIG_BRCMAUDIODOWNMIXCOEFFICIENTS8x8 {
    OMX_U32 nSize;
    OMX_VERSIONTYPE nVersion;
@@ -735,7 +744,7 @@ typedef enum OMX_CAMERAIMAGEPOOLINPUTMODETYPE {
                                                anyway.
                                              */
    OMX_CAMERAIMAGEPOOLINPUTMODE_TWOPOOLS,    /*All stills & video input images are allocated
-                                               from two seperate pools.
+                                               from two separate pools.
                                                This ensures that parallel capture can work, but
                                                would consume more memory if used on a simple
                                                stills capture use case.
@@ -958,7 +967,7 @@ The \code{nByteCount} field is a 64 bit value, that will either use a
 For each port on the clock component, requests for media times may be
 made.  These are typically done one per video frame to allow for
 scheduling the display of that frame at the correct time.  If a
-request is made after the time has occured, then that frame will be
+request is made after the time has occurred, then that frame will be
 displayed late, and the clock component keeps a per-port record of the
 number of times this occurs.  This record can be read using this
 index.
@@ -2121,7 +2130,7 @@ typedef struct OMX_PARAM_TIMESTAMPMODETYPE
    OMX_TIMESTAMPMODETYPE eTimestampMode;
 } OMX_PARAM_TIMESTAMPMODETYPE;
 /*
- Specifies what to use as timestamps in the abscence of a clock component.
+ Specifies what to use as timestamps in the absence of a clock component.
 */
 
 /* EGL image buffer for passing to video port.
@@ -2218,6 +2227,9 @@ typedef struct OMX_PARAM_COLORSPACETYPE
    OMX_U32 nPortIndex;
    OMX_COLORSPACETYPE eColorSpace;
 } OMX_PARAM_COLORSPACETYPE;
+/*
+Sets the colourspace with which pixel buffers should be generated / interpreted.
+*/
 
 typedef enum OMX_CAPTURESTATETYPE
 {
@@ -2245,7 +2257,7 @@ This control can be supported to enable the client to request that the component
 to minimise fragmentation of output buffers.
 */
 
-/* OMX_IndexConfigBrcmBufferFlagFilter: Filters buffers based on flags */
+/* OMX_IndexConfigBrcmBufferFlagFilter: Filter buffers based on flags */
 /*
 This control can be set to request that buffers are conditionally forwarded on 
 output ports based on matching flags set on that buffer.
@@ -2272,6 +2284,37 @@ the postprocessor stage of the ISP.
 /*
 This control can be used to control whether loadable modules used a dedicated memory
 pool or use heap allocated memory.
+*/
+
+/* OMX_IndexParamBrcmVideoPrecodeForQP: Pre-code 1st frame for QP.*/
+/*
+This control selects a pre-encode of the first frame to set up a better initial QP value.
+*/
+
+/* OMX_IndexParamBrcmVideoTimestampFifo: Video timestamp FIFO mode. */
+/*
+When enabled, the timestamp fifo mode will change the way
+incoming timestamps are associated with output images so the incoming timestamps
+get used without re-ordering on output images.
+*/
+
+/* OMX_IndexParamCameraCustomSensorConfig: Custom camera sensor configuration. */
+/*
+This parameter is passed down to the camera sensor driver to be interpreted as a
+request for a different configuration to normal. How the configuration varies is
+sensor specific.
+*/
+
+/* OMX_IndexParamCameraDeviceNumber: Camera device selection .*/
+/*
+Controls which camera driver, or camera peripheral, to use.
+*/
+
+/* OMX_IndexParamBrcmMaxNumCallbacks: Codec callback limit. */
+/*
+The codec can queue up a significant number of frames internally if the sink is
+not consuming the output fast enough. This control limits the number of frames
+that can be queued up.
 */
 
 typedef struct OMX_PARAM_BRCMCONFIGFILETYPE {
@@ -2329,12 +2372,16 @@ typedef struct OMX_CONFIG_ZEROSHUTTERLAGTYPE
 
 } OMX_CONFIG_ZEROSHUTTERLAGTYPE;
 
+/* OMX_IndexParamBrcmVideoDecodeConfigVD3: VDec3 configuration. */
 typedef struct OMX_PARAM_BRCMVIDEODECODECONFIGVD3TYPE {
    OMX_U32 nSize;                      /**< size of the structure in bytes, including
                                             configuration data */
    OMX_VERSIONTYPE nVersion;           /**< OMX specification version information */
    OMX_U8 config[1];                   /**< Configuration data (a VD3_CONFIGURE_T) */
 } OMX_PARAM_BRCMVIDEODECODECONFIGVD3TYPE;
+/*
+Codec specific configuration block to set up internal state in a non-standard manner.
+*/
 
 typedef struct OMX_CONFIG_CUSTOMAWBGAINSTYPE {
    OMX_U32 nSize;                      /**< size of the structure in bytes, including
@@ -2344,7 +2391,7 @@ typedef struct OMX_CONFIG_CUSTOMAWBGAINSTYPE {
    OMX_U32 xGainB;                     /**< Blue gain - 16p16 */
 } OMX_CONFIG_CUSTOMAWBGAINSTYPE;
 
-/* OMX_IndexConfigBrcmRenderStats: Query port statistics */
+/* OMX_IndexConfigBrcmRenderStats: Render port statistics */
 typedef struct OMX_CONFIG_BRCMRENDERSTATSTYPE {
    OMX_U32 nSize;
    OMX_VERSIONTYPE nVersion;
@@ -2358,6 +2405,10 @@ typedef struct OMX_CONFIG_BRCMRENDERSTATSTYPE {
    OMX_U32 nHvsStatus;
    OMX_U32 dummy0[2];
 } OMX_CONFIG_BRCMRENDERSTATSTYPE;
+/*
+This provides statistics from the renderer to allow more accurate synchronisation
+between the scheduler and display VSYNC.
+*/
 
 #define OMX_BRCM_MAXANNOTATETEXTLEN 256
 typedef struct OMX_CONFIG_BRCMANNOTATETYPE {
@@ -2370,10 +2421,21 @@ typedef struct OMX_CONFIG_BRCMANNOTATETYPE {
    OMX_BOOL bShowCaf;
    OMX_BOOL bShowMotion;
    OMX_BOOL bShowFrameNum;
-   OMX_BOOL bBlackBackground;
+   OMX_BOOL bEnableBackground;
+   OMX_BOOL bCustomBackgroundColour;
+   OMX_U8 nBackgroundY;
+   OMX_U8 nBackgroundU;
+   OMX_U8 nBackgroundV;
+   OMX_U8 dummy1;
+   OMX_BOOL bCustomTextColour;
+   OMX_U8 nTextY;
+   OMX_U8 nTextU;
+   OMX_U8 nTextV;
+   OMX_U8 nTextSize;   /**< Text size: 6-150 pixels */
    OMX_U8 sText[OMX_BRCM_MAXANNOTATETEXTLEN];
 } OMX_CONFIG_BRCMANNOTATETYPE;
 
+/* OMX_IndexParamBrcmStereoscopicMode: Stereoscopic camera support */
 typedef enum OMX_BRCMSTEREOSCOPICMODETYPE {
    OMX_STEREOSCOPIC_NONE = 0,
    OMX_STEREOSCOPIC_SIDEBYSIDE = 1,
@@ -2391,6 +2453,158 @@ typedef struct OMX_CONFIG_BRCMSTEREOSCOPICMODETYPE {
                                           (pixel aspect ratio = 1:2 or 2:1 if set. 1:1 if not set) */
    OMX_BOOL bSwapEyes;                    /**< False = left eye first. True = right eye first. */
 } OMX_CONFIG_BRCMSTEREOSCOPICMODETYPE;
+/*
+This control sets up how stereoscopic images should be generated.
+*/
+
+/* OMX_IndexParamCameraInterface: Camera interface type. */
+typedef enum OMX_CAMERAINTERFACETYPE {
+   OMX_CAMERAINTERFACE_CSI = 0,
+   OMX_CAMERAINTERFACE_CCP2 = 1,
+   OMX_CAMERAINTERFACE_CPI = 2,
+   OMX_CAMERAINTERFACE_MAX = 0x7FFFFFFF,
+} OMX_CAMERAINTERFACETYPE;
+
+typedef struct OMX_PARAM_CAMERAINTERFACETYPE {
+   OMX_U32 nSize;
+   OMX_VERSIONTYPE nVersion;
+
+   OMX_U32 nPortIndex;                    /**< port that this structure applies to */
+   OMX_CAMERAINTERFACETYPE eMode;         /**< Interface mode */
+} OMX_PARAM_CAMERAINTERFACETYPE;
+/*
+This configures the physical camera interface type.
+*/
+
+typedef enum OMX_CAMERACLOCKINGMODETYPE {
+   OMX_CAMERACLOCKINGMODE_STROBE = 0,
+   OMX_CAMERACLOCKINGMODE_CLOCK = 1,
+   OMX_CAMERACLOCKINGMODE_MAX = 0x7FFFFFFF,
+} OMX_CAMERACLOCKINGMODETYPE;
+
+typedef struct OMX_PARAM_CAMERACLOCKINGMODETYPE {
+   OMX_U32 nSize;
+   OMX_VERSIONTYPE nVersion;
+
+   OMX_U32 nPortIndex;                    /**< port that this structure applies to */
+   OMX_CAMERACLOCKINGMODETYPE eMode;      /**< Clocking mode */
+} OMX_PARAM_CAMERACLOCKINGMODETYPE;
+
+/* OMX_IndexParamCameraRxConfig: Camera receiver configuration */
+typedef enum OMX_CAMERARXDECODETYPE {
+   OMX_CAMERARXDECODE_NONE = 0,
+   OMX_CAMERARXDECODE_DPCM8TO10 = 1,
+   OMX_CAMERARXDECODE_DPCM7TO10 = 2,
+   OMX_CAMERARXDECODE_DPCM6TO10 = 3,
+   OMX_CAMERARXDECODE_DPCM8TO12 = 4,
+   OMX_CAMERARXDECODE_DPCM7TO12 = 5,
+   OMX_CAMERARXDECODE_DPCM6TO12 = 6,
+   OMX_CAMERARXDECODE_DPCM10TO14 = 7,
+   OMX_CAMERARXDECODE_DPCM8TO14 = 8,
+   OMX_CAMERARXDECODE_DPCM12TO16 = 9,
+   OMX_CAMERARXDECODE_DPCM10TO16 = 10,
+   OMX_CAMERARXDECODE_DPCM8TO16 = 11,
+   OMX_CAMERARXDECODE_MAX = 0x7FFFFFFF
+} OMX_CAMERARXDECODETYPE;
+
+typedef enum OMX_CAMERARXENCODETYPE {
+   OMX_CAMERARXENCODE_NONE = 0,
+   OMX_CAMERARXENCODE_DPCM10TO8 = 1,
+   OMX_CAMERARXENCODE_DPCM12TO8 = 2,
+   OMX_CAMERARXENCODE_DPCM14TO8 = 3,
+   OMX_CAMERARXENCODE_MAX = 0x7FFFFFFF
+} OMX_CAMERARXENCODETYPE;
+
+typedef enum OMX_CAMERARXUNPACKTYPE {
+   OMX_CAMERARXUNPACK_NONE = 0,
+   OMX_CAMERARXUNPACK_6 = 1,
+   OMX_CAMERARXUNPACK_7 = 2,
+   OMX_CAMERARXUNPACK_8 = 3,
+   OMX_CAMERARXUNPACK_10 = 4,
+   OMX_CAMERARXUNPACK_12 = 5,
+   OMX_CAMERARXUNPACK_14 = 6,
+   OMX_CAMERARXUNPACK_16 = 7,
+   OMX_CAMERARXUNPACK_MAX = 0x7FFFFFFF
+} OMX_CAMERARXUNPACKYPE;
+
+typedef enum OMX_CAMERARXPACKTYPE {
+   OMX_CAMERARXPACK_NONE = 0,
+   OMX_CAMERARXPACK_8 = 1,
+   OMX_CAMERARXPACK_10 = 2,
+   OMX_CAMERARXPACK_12 = 3,
+   OMX_CAMERARXPACK_14 = 4,
+   OMX_CAMERARXPACK_16 = 5,
+   OMX_CAMERARXPACK_RAW10 = 6,
+   OMX_CAMERARXPACK_RAW12 = 7,
+   OMX_CAMERARXPACK_MAX = 0x7FFFFFFF
+} OMX_CAMERARXPACKTYPE;
+
+typedef struct OMX_PARAM_CAMERARXCONFIG_TYPE {
+   OMX_U32 nSize;
+   OMX_VERSIONTYPE nVersion;
+
+   OMX_U32 nPortIndex;                    /**< port that this structure applies to */
+   OMX_CAMERARXDECODETYPE eDecode;
+   OMX_CAMERARXENCODETYPE eEncode;
+   OMX_CAMERARXUNPACKYPE eUnpack;
+   OMX_CAMERARXPACKTYPE ePack;
+   OMX_U32 nDataLanes;
+   OMX_U32 nEncodeBlockLength;
+   OMX_U32 nEmbeddedDataLines;
+   OMX_U32 nImageId;
+} OMX_PARAM_CAMERARXCONFIG_TYPE;
+/*
+Configures the setup and processing options of the camera receiver peripheral.
+*/
+
+typedef struct OMX_PARAM_CAMERARXTIMING_TYPE {
+   OMX_U32 nSize;
+   OMX_VERSIONTYPE nVersion;
+
+   OMX_U32 nPortIndex;                    /**< port that this structure applies to */
+   OMX_U32 nTiming1;
+   OMX_U32 nTiming2;
+   OMX_U32 nTiming3;
+   OMX_U32 nTiming4;
+   OMX_U32 nTiming5;
+   OMX_U32 nTerm1;
+   OMX_U32 nTerm2;
+   OMX_U32 nCpiTiming1;
+   OMX_U32 nCpiTiming2;
+} OMX_PARAM_CAMERARXTIMING_TYPE;
+
+
+/* OMX_IndexParamBrcmBayerOrder: Bayer order */
+typedef enum OMX_BAYERORDERTYPE {
+   OMX_BayerOrderRGGB = 0,
+   OMX_BayerOrderGBRG = 1,
+   OMX_BayerOrderBGGR = 2,
+   OMX_BayerOrderGRBG = 3,
+
+   OMX_BayerOrderMax = 0x7FFFFFFF
+} OMX_BAYERORDERTYPE;
+
+typedef struct OMX_PARAM_BAYERORDERTYPE {
+   OMX_U32 nSize;
+   OMX_VERSIONTYPE nVersion;
+
+   OMX_U32 nPortIndex;                    /**< port that this structure applies to */
+   OMX_BAYERORDERTYPE eBayerOrder;
+} OMX_PARAM_BAYERORDERTYPE;
+/*
+The IL standard does not support a way to specify the Bayer order of Bayer images.
+This control adds that missing functionality.
+*/
+
+/* OMX_IndexConfigBrcmPowerMonitor: Deprecated.*/
+/*
+Deprecated. Do not use.
+*/
+
+/* OMX_IndexParamBrcmZeroCopy: Deprecated */
+/*
+Deprecated. Do not use.
+*/
 
 #endif
 /* File EOF */

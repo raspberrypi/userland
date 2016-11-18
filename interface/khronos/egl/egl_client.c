@@ -1740,7 +1740,7 @@ static void send_pixmap(EGL_SURFACE_T *surface)
       KHRN_IMAGE_WRAP_T image;
 
       if (!platform_get_pixmap_info(surface->pixmap, &image)) {
-         vcos_verify(0); /* the pixmap has become invalid... */
+         (void)vcos_verify(0); /* the pixmap has become invalid... */
          return;
       }
 
@@ -1819,7 +1819,7 @@ static void retrieve_pixmap(EGL_SURFACE_T *surface, bool wait)
       KHRN_IMAGE_WRAP_T image;
 
       if (!platform_get_pixmap_info(surface->pixmap, &image)) {
-         vcos_verify(0); /* the pixmap has become invalid... */
+         (void)vcos_verify(0); /* the pixmap has become invalid... */
          return;
       }
 

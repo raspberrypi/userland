@@ -74,3 +74,16 @@ target_link_libraries(OpenVG EGL)
 
 install(TARGETS EGL GLESv2 OpenVG WFC khrn_client DESTINATION lib)
 install(TARGETS EGL_static GLESv2_static khrn_static DESTINATION lib)
+
+# recommended names to use to avoid conflicts with mesa libs
+add_library(brcmEGL ${SHARED} ${EGL_SOURCE})
+add_library(brcmGLESv2 ${SHARED} ${GLES_SOURCE})
+add_library(brcmOpenVG ${SHARED} ${VG_SOURCE})
+add_library(brcmWFC ${SHARED} ${WFC_SOURCE})
+
+target_link_libraries(brcmEGL khrn_client vchiq_arm vcos bcm_host -lm)
+target_link_libraries(brcmGLESv2 brcmEGL khrn_client vcos)
+target_link_libraries(brcmWFC brcmEGL)
+target_link_libraries(brcmOpenVG brcmEGL)
+
+install(TARGETS brcmEGL brcmGLESv2 brcmOpenVG brcmWFC DESTINATION lib)

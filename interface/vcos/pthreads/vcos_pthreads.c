@@ -744,7 +744,7 @@ VCOS_STATUS_T vcos_timer_init(void)
    return VCOS_SUCCESS;
 }
 
-VCOS_STATUS_T vcos_timer_create(VCOS_TIMER_T *timer,
+VCOS_STATUS_T vcos_pthreads_timer_create(VCOS_TIMER_T *timer,
                                 const char *name,
                                 void (*expiration_routine)(void *context),
                                 void *context)
@@ -827,7 +827,7 @@ VCOS_STATUS_T vcos_timer_create(VCOS_TIMER_T *timer,
    return result;
 }
 
-void vcos_timer_set(VCOS_TIMER_T *timer, VCOS_UNSIGNED delay_ms)
+void vcos_pthreads_timer_set(VCOS_TIMER_T *timer, VCOS_UNSIGNED delay_ms)
 {
    struct timespec now;
 
@@ -854,7 +854,7 @@ void vcos_timer_set(VCOS_TIMER_T *timer, VCOS_UNSIGNED delay_ms)
    pthread_mutex_unlock(&timer->lock);
 }
 
-void vcos_timer_cancel(VCOS_TIMER_T *timer)
+void vcos_pthreads_timer_cancel(VCOS_TIMER_T *timer)
 {
    vcos_assert(timer);
 
@@ -866,12 +866,7 @@ void vcos_timer_cancel(VCOS_TIMER_T *timer)
    pthread_mutex_unlock(&timer->lock);
 }
 
-void vcos_timer_reset(VCOS_TIMER_T *timer, VCOS_UNSIGNED delay_ms)
-{
-   vcos_timer_set(timer, delay_ms);
-}
-
-void vcos_timer_delete(VCOS_TIMER_T *timer)
+void vcos_pthreads_timer_delete(VCOS_TIMER_T *timer)
 {
    vcos_assert(timer);
 

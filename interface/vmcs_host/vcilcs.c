@@ -48,7 +48,7 @@ Private types and defines.
 ******************************************************************************/
 
 // number of threads that can use ilcs
-#define ILCS_MAX_WAITING 4
+#define ILCS_MAX_WAITING 8
 
 // maximum number of retries to grab a wait slot,
 // before the message is discarded and failure returned.
@@ -180,7 +180,7 @@ ILCS_SERVICE_T *ilcs_init(VCHIQ_STATE_T *state, void **connection, ILCS_CONFIG_T
       goto fail_timer;
 
    // create the queue of incoming messages
-   if(!vchiu_queue_init(&st->queue, 64))
+   if(!vchiu_queue_init(&st->queue, 256))
       goto fail_queue;
 
    // create the bulk receive event
@@ -385,6 +385,22 @@ static int ilcs_callback(VCHIQ_REASON_T reason, VCHIQ_HEADER_T *header, void *se
 #endif
 
    case VCHIQ_MESSAGE_AVAILABLE:
+#ifndef _VIDEOCORE
+      {
+	 static int queue_warn = 0;
+	 int queue_len = st->queue.write - st->queue.read;
+	 if (!queue_warn)
+	    queue_warn = getenv("ILCS_WARN") ? (st->queue.size/2) : st->queue.size;
+	 if (queue_len >= queue_warn)
+	 {
+	    if (queue_len == st->queue.size)
+	       VCOS_ALERT("ILCS queue full");
+	    else
+	       VCOS_ALERT("ILCS queue len = %d", queue_len);
+	    queue_warn = queue_warn + (st->queue.size - queue_warn)/2;
+	 }
+      }
+#endif
       vchiu_queue_push(&st->queue, header);
       break;
 
@@ -716,14 +732,24 @@ static int ilcs_execute_function_ex(ILCS_SERVICE_T *st, IL_FUNCTION_T func,
          // we'll pause until we can carry on and hope that's sufficient.
          vcos_mutex_unlock(&st->wait_mtx);
 
-         vcos_event_wait(&st->wait_event);
-
          // if we're the ilcs thread, then the waiters might need
          // us to handle their response, so try and clear those now
          if(vcos_thread_current() == &st->thread)
-            while(ilcs_process_message(st, 0))
-               if(st->kill_service >= CLOSED_CALLBACK)
-                  return -1;
+         {
+            while (vcos_event_try(&st->wait_event) != VCOS_SUCCESS)
+            {
+               while(ilcs_process_message(st, 0))
+                  if(st->kill_service >= CLOSED_CALLBACK)
+                     return -1;
+               if (vcos_event_try(&st->wait_event) == VCOS_SUCCESS)
+                  break;
+               vcos_sleep(1);
+            }
+         }
+         else
+         {
+            vcos_event_wait(&st->wait_event);
+         }
 
          vcos_mutex_lock(&st->wait_mtx);
       }

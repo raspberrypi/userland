@@ -85,7 +85,7 @@ vcos_static_assert(IS_POWER_2(VCHIQ_MAX_INSTANCE_SERVICES));
 
 /* Local utility functions */
 static VCHIQ_INSTANCE_T
-vchiq_lib_init(void);
+vchiq_lib_init(const int dev_vchiq_fd);
 
 static void *completion_thread(void *);
 
@@ -137,18 +137,30 @@ find_service_by_handle(VCHIQ_SERVICE_HANDLE_T handle)
  * VCHIQ API
  */
 
+// If dev_vchiq_fd == -1 then /dev/vchiq will be opened by this fn (as normal)
+//
+// Otherwise the given fd will be used.  N.B. in this case the fd is duped
+// so the caller will probably want to close whatever fd was passed once
+// this call has returned.  This slightly odd behaviour makes shutdown and
+// error cases much simpler.
 VCHIQ_STATUS_T
-vchiq_initialise(VCHIQ_INSTANCE_T *pinstance)
+vchiq_initialise_fd(VCHIQ_INSTANCE_T *pinstance, int dev_vchiq_fd)
 {
    VCHIQ_INSTANCE_T instance;
 
-   instance = vchiq_lib_init();
+   instance = vchiq_lib_init(dev_vchiq_fd);
 
    vcos_log_trace( "%s: returning instance handle %p", __func__, instance );
 
    *pinstance = instance;
 
    return (instance != NULL) ? VCHIQ_SUCCESS : VCHIQ_ERROR;
+}
+
+VCHIQ_STATUS_T
+vchiq_initialise(VCHIQ_INSTANCE_T *pinstance)
+{
+   return vchiq_initialise_fd(pinstance, -1);
 }
 
 VCHIQ_STATUS_T
@@ -208,6 +220,8 @@ vchiq_shutdown(VCHIQ_INSTANCE_T instance)
    vcos_global_unlock();
 
    vcos_log_trace( "%s returning", __func__ );
+
+   vcos_log_unregister(&vchiq_lib_log_category);
 
    return VCHIQ_SUCCESS;
 }
@@ -913,7 +927,7 @@ vchi_msg_dequeue( VCHI_SERVICE_HANDLE_T handle,
 
    if (service->peek_size >= 0)
    {
-      fprintf(stderr, "vchi_msg_dequeue -> using peek buffer\n");
+      vcos_log_error("vchi_msg_dequeue -> using peek buffer\n");
       if ((uint32_t)service->peek_size <= max_data_size_to_read)
       {
          memcpy(data, service->peek_buf, service->peek_size);
@@ -1081,7 +1095,7 @@ vchi_initialise( VCHI_INSTANCE_T *instance_handle )
 {
    VCHIQ_INSTANCE_T instance;
 
-   instance = vchiq_lib_init();
+   instance = vchiq_lib_init(-1);
 
    vcos_log_trace( "%s: returning instance handle %p", __func__, instance );
 
@@ -1165,8 +1179,8 @@ vchi_service_open( VCHI_INSTANCE_T instance_handle,
    memset(&params, 0, sizeof(params));
    params.fourcc = setup->service_id;
    params.userdata = setup->callback_param;
-   params.version = setup->version.version;
-   params.version_min = setup->version.version_min;
+   params.version = (short)setup->version.version;
+   params.version_min = (short)setup->version.version_min;
 
    status = create_service((VCHIQ_INSTANCE_T)instance_handle,
       &params,
@@ -1187,8 +1201,8 @@ vchi_service_create( VCHI_INSTANCE_T instance_handle,
    memset(&params, 0, sizeof(params));
    params.fourcc = setup->service_id;
    params.userdata = setup->callback_param;
-   params.version = setup->version.version;
-   params.version_min = setup->version.version_min;
+   params.version = (short)setup->version.version;
+   params.version_min = (short)setup->version.version_min;
 
    status = create_service((VCHIQ_INSTANCE_T)instance_handle,
       &params,
@@ -1403,7 +1417,7 @@ VCHIQ_STATUS_T vchiq_dump_phys_mem( VCHIQ_SERVICE_HANDLE_T handle,
  */
 
 static VCHIQ_INSTANCE_T
-vchiq_lib_init(void)
+vchiq_lib_init(const int dev_vchiq_fd)
 {
    static int mutex_initialised = 0;
    static VCOS_MUTEX_T vchiq_lib_mutex;
@@ -1425,7 +1439,9 @@ vchiq_lib_init(void)
 
    if (instance->initialised == 0)
    {
-      instance->fd = open("/dev/vchiq", O_RDWR);
+      instance->fd = dev_vchiq_fd == -1 ?
+         open("/dev/vchiq", O_RDWR) :
+         dup(dev_vchiq_fd);
       if (instance->fd >= 0)
       {
          VCHIQ_GET_CONFIG_T args;
@@ -1505,7 +1521,7 @@ completion_thread(void *arg)
 
    while (1)
    {
-      int ret, i;
+      int count, i;
 
       while ((unsigned int)args.msgbufcount < vcos_countof(msgbufs))
       {
@@ -1516,17 +1532,17 @@ completion_thread(void *arg)
          }
          else
          {
-            fprintf(stderr, "vchiq_lib: failed to allocate a message buffer\n");
+            vcos_log_error("vchiq_lib: failed to allocate a message buffer\n");
             vcos_demand(args.msgbufcount != 0);
          }
       }
 
-      RETRY(ret, ioctl(instance->fd, VCHIQ_IOC_AWAIT_COMPLETION, &args));
+      RETRY(count, ioctl(instance->fd, VCHIQ_IOC_AWAIT_COMPLETION, &args));
 
-      if (ret <= 0)
+      if (count <= 0)
          break;
 
-      for (i = 0; i < ret; i++)
+      for (i = 0; i < count; i++)
       {
          VCHIQ_COMPLETION_DATA_T *completion = &completions[i];
          VCHIQ_SERVICE_T *service = (VCHIQ_SERVICE_T *)completion->service_userdata;
@@ -1548,6 +1564,7 @@ completion_thread(void *arg)
          if ((completion->reason == VCHIQ_SERVICE_CLOSED) &&
              instance->use_close_delivered)
          {
+            int ret;
             RETRY(ret,ioctl(service->fd, VCHIQ_IOC_CLOSE_DELIVERED, service->handle));
          }
       }
@@ -1669,7 +1686,8 @@ create_service(VCHIQ_INSTANCE_T instance,
    {
       vcos_mutex_lock(&instance->mutex);
 
-      service->lib_handle = VCHIQ_SERVICE_HANDLE_INVALID;
+      if (service)
+         service->lib_handle = VCHIQ_SERVICE_HANDLE_INVALID;
 
       vcos_mutex_unlock(&instance->mutex);
 
@@ -1732,7 +1750,7 @@ alloc_msgbuf(void)
       free_msgbufs = *(void **)msgbuf;
    vcos_mutex_unlock(&vchiq_lib_mutex);
    if (!msgbuf)
-      msgbuf = malloc(MSGBUF_SIZE);
+      msgbuf = vcos_malloc(MSGBUF_SIZE, "alloc_msgbuf");
    return msgbuf;
 }
 

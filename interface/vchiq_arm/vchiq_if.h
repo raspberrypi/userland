@@ -30,6 +30,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "interface/vchi/vchi_mh.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define VCHIQ_SERVICE_HANDLE_INVALID 0
 
 #define VCHIQ_SLOT_SIZE          4096
@@ -132,6 +136,7 @@ typedef void (*VCHIQ_REMOTE_USE_CALLBACK_T)(void* cb_arg);
 
 
 extern VCHIQ_STATUS_T vchiq_initialise(VCHIQ_INSTANCE_T *pinstance);
+extern VCHIQ_STATUS_T vchiq_initialise_fd(VCHIQ_INSTANCE_T *pinstance, int dev_vchiq_fd);
 extern VCHIQ_STATUS_T vchiq_shutdown(VCHIQ_INSTANCE_T instance);
 extern VCHIQ_STATUS_T vchiq_connect(VCHIQ_INSTANCE_T instance);
 extern VCHIQ_STATUS_T vchiq_add_service(VCHIQ_INSTANCE_T instance,
@@ -186,5 +191,9 @@ extern VCHIQ_STATUS_T vchiq_dump_phys_mem(VCHIQ_SERVICE_HANDLE_T service,
 
 extern VCHIQ_STATUS_T vchiq_get_peer_version(VCHIQ_SERVICE_HANDLE_T handle,
       short *peer_version);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* VCHIQ_IF_H */

@@ -32,11 +32,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ctype.h>
 
 #include "interface/vchi/vchi.h"
+#include "interface/vcos/vcos_dlfcn.h"
 #include "interface/vmcs_host/khronos/IL/OMX_Component.h"
 #include "interface/vmcs_host/khronos/IL/OMX_ILCS.h"
 #include "interface/vmcs_host/vc_ilcs_defs.h"
 #include "interface/vmcs_host/vcilcs.h"
 #include "interface/vmcs_host/vcilcs_common.h"
+#include "interface/vcos/vcos_dlfcn.h"
 
 static VC_PRIVATE_PORT_T *find_port(VC_PRIVATE_COMPONENT_T *comp, OMX_U32 nPortIndex)
 {
@@ -457,14 +459,14 @@ static void load_eglIntOpenMAXILDoneMarker(void)
     * something explicitly loaded libEGL with RTLD_GLOBAL
     */
    handle = vcos_dlopen(NULL, VCOS_DL_GLOBAL);
-   local_eglIntOpenMAXILDoneMarker = vcos_dlsym(handle, "eglIntOpenMAXILDoneMarker");
+   local_eglIntOpenMAXILDoneMarker = (void * )vcos_dlsym(handle, "eglIntOpenMAXILDoneMarker");
    if (local_eglIntOpenMAXILDoneMarker == NULL)
    {
       vcos_dlclose(handle);
       /* If that failed try to load libEGL.so explicitely */
       handle = vcos_dlopen("libEGL.so", VCOS_DL_LAZY | VCOS_DL_LOCAL);
       vc_assert(handle != NULL);
-      local_eglIntOpenMAXILDoneMarker = vcos_dlsym(handle, "eglIntOpenMAXILDoneMarker");
+      local_eglIntOpenMAXILDoneMarker = (void * )vcos_dlsym(handle, "eglIntOpenMAXILDoneMarker");
       vc_assert(local_eglIntOpenMAXILDoneMarker != NULL);
    }
 }

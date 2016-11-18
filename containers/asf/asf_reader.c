@@ -2014,7 +2014,7 @@ static VC_CONTAINER_STATUS_T asf_reader_seek( VC_CONTAINER_T *p_ctx, int64_t *p_
    LOG_DEBUG(p_ctx, "asf_reader_seek");
 
    /* Prefer the top-level index to the simple index - it has byte offsets not packet offsets,
-   * and is likely to have seperate tables for every track */
+   * and is likely to have separate tables for every track */
    if (module->top_level_index.block_count)
    {
       status = seek_by_top_level_index(p_ctx, p_time, mode, flags);

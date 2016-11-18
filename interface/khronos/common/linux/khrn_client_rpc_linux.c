@@ -113,7 +113,7 @@ VCHIQ_STATUS_T khan_callback(VCHIQ_REASON_T reason, VCHIQ_HEADER_T *header,
       // TODO should be able to remove this eventually.
       // If incoming message is not addressed to this process, then ignore it.
       // Correct process should then pick it up.
-      uint64_t pid = khronos_platform_get_process_id();
+      uint64_t pid = vchiq_get_client_id(handle);
       if((msg[0] != (uint32_t) pid) || (msg[1] != (uint32_t) (pid >> 32)))
       {
          printf("khan_callback: message for wrong process; pid = %X, msg pid = %X\n",
@@ -503,7 +503,8 @@ void rpc_release(CLIENT_THREAD_STATE_T *thread)
 void rpc_call8_makecurrent(CLIENT_THREAD_STATE_T *thread, uint32_t id, uint32_t p0,
    uint32_t p1, uint32_t p2, uint32_t p3, uint32_t p4, uint32_t p5, uint32_t p6, uint32_t p7)
 {
-   if (thread->merge_pos == CLIENT_MAKE_CURRENT_SIZE && *((uint32_t *)thread->merge_buffer) == EGLINTMAKECURRENT_ID)
+   uint32_t data;
+   if (thread->merge_pos == CLIENT_MAKE_CURRENT_SIZE && (memcpy(&data,thread->merge_buffer,sizeof(data)), data == EGLINTMAKECURRENT_ID))
    {
       rpc_begin(thread);
       vcos_log_trace("rpc_call8_makecurrent collapse onto previous makecurrent");
@@ -519,4 +520,9 @@ void rpc_call8_makecurrent(CLIENT_THREAD_STATE_T *thread, uint32_t id, uint32_t 
    {
       RPC_CALL8(eglIntMakeCurrent_impl, thread, EGLINTMAKECURRENT_ID, p0, p1, p2, p3, p4, p5, p6, p7);
    }
+}
+
+uint64_t rpc_get_client_id(CLIENT_THREAD_STATE_T *thread)
+{
+   return vchiq_get_client_id(get_handle(thread));
 }

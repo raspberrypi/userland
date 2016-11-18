@@ -457,6 +457,7 @@ typedef enum {
    HDMI_3D_STRUCT_SIDE_BY_SIDE_HALF_ODD_LEFT_EVEN_RIGHT  = (1<<9),
    HDMI_3D_STRUCT_SIDE_BY_SIDE_HALF_EVEN_LEFT_ODD_RIGHT  = (1<<10),
    HDMI_3D_STRUCT_SIDE_BY_SIDE_HALF_EVEN_LEFT_EVEN_RIGHT = (1<<11),
+   HDMI_3D_STRUCT_FRAME_SEQUENTIAL                       = (1<<12),
 } HDMI_3D_STRUCT_T;
 
 /**
@@ -536,7 +537,7 @@ typedef enum {
    VC_HDMI_ERROR_INVALID_INFOFRAME  = 5, /** invalid infoframe */
 } VC_HDMI_ERROR_T;
 
-/* Defines for backward code compatibilty (these were originally in hdmi.h) */
+/* Defines for backward code compatibility (these were originally in hdmi.h) */
 typedef VC_HDMI_ERROR_T HDMI_RESULT_T;
 #define HDMI_RESULT_SUCCESS (VC_HDMI_SUCCESS)
 #define HDMI_RESULT_FAILED  (VC_HDMI_ERROR_FORMAT_UNSUPPORTED)

@@ -63,7 +63,7 @@ void raspitexutil_gl_term(RASPITEX_STATE *raspitex_state)
 
    glDeleteTextures(1, &raspitex_state->v_texture);
    eglDestroyImageKHR(raspitex_state->display, raspitex_state->v_egl_image);
-   raspitex_state->u_egl_image = EGL_NO_IMAGE_KHR;
+   raspitex_state->v_egl_image = EGL_NO_IMAGE_KHR;
 
    /* Terminate EGL */
    eglMakeCurrent(raspitex_state->display, EGL_NO_SURFACE,

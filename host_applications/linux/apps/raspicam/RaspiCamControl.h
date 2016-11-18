@@ -105,20 +105,20 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 // There isn't actually a MMAL structure for the following, so make one
-typedef struct
+typedef struct mmal_param_colourfx_s
 {
    int enable;       /// Turn colourFX on or off
    int u,v;          /// U and V to use
 } MMAL_PARAM_COLOURFX_T;
 
-typedef struct
+typedef struct mmal_param_thumbnail_config_s
 {
    int enable;
    int width,height;
    int quality;
 } MMAL_PARAM_THUMBNAIL_CONFIG_T;
 
-typedef struct
+typedef struct param_float_rect_s
 {
    double x;
    double y;
@@ -127,7 +127,7 @@ typedef struct
 } PARAM_FLOAT_RECT_T;
 
 /// struct contain camera settings
-typedef struct
+typedef struct raspicam_camera_parameters_s
 {
    int sharpness;             /// -100 to 100
    int contrast;              /// -100 to 100
@@ -153,7 +153,10 @@ typedef struct
    MMAL_BOOL_T stats_pass;    /// Stills capture statistics pass on/off
    int enable_annotate;       /// Flag to enable the annotate, 0 = disabled, otherwise a bitmask of what needs to be displayed
    char annotate_string[MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V2]; /// String to use for annotate - overrides certain bitmask settings
-
+   int annotate_text_size;    // Text size for annotation
+   int annotate_text_colour;  // Text colour for annotation
+   int annotate_bg_colour;    // Background colour for annotation
+   MMAL_PARAMETER_STEREOSCOPIC_MODE_T stereo_mode;
 } RASPICAM_CAMERA_PARAMETERS;
 
 
@@ -191,7 +194,9 @@ int raspicamcontrol_set_ROI(MMAL_COMPONENT_T *camera, PARAM_FLOAT_RECT_T rect);
 int raspicamcontrol_set_shutter_speed(MMAL_COMPONENT_T *camera, int speed_ms);
 int raspicamcontrol_set_DRC(MMAL_COMPONENT_T *camera, MMAL_PARAMETER_DRC_STRENGTH_T strength);
 int raspicamcontrol_set_stats_pass(MMAL_COMPONENT_T *camera, int stats_pass);
-int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int bitmask, const char *string);
+int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int bitmask, const char *string,
+                                 const int text_size, const int text_colour, const int bg_colour);
+int raspicamcontrol_set_stereo_mode(MMAL_PORT_T *port, MMAL_PARAMETER_STEREOSCOPIC_MODE_T *stereo_mode);
 
 //Individual getting functions
 int raspicamcontrol_get_saturation(MMAL_COMPONENT_T *camera);

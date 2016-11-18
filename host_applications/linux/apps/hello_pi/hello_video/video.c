@@ -183,12 +183,11 @@ static int video_decode_test(char *filename)
 
       // wait for EOS from render
       ilclient_wait_for_event(video_render, OMX_EventBufferFlag, 90, 0, OMX_BUFFERFLAG_EOS, 0,
-                              ILCLIENT_BUFFER_FLAG_EOS, 10000);
+                              ILCLIENT_BUFFER_FLAG_EOS, -1);
 
       // need to flush the renderer to allow video_decode to disable its input port
       ilclient_flush_tunnels(tunnel, 0);
 
-      ilclient_disable_port_buffers(video_decode, 130, NULL, NULL, NULL);
    }
 
    fclose(in);
@@ -196,6 +195,7 @@ static int video_decode_test(char *filename)
    ilclient_disable_tunnel(tunnel);
    ilclient_disable_tunnel(tunnel+1);
    ilclient_disable_tunnel(tunnel+2);
+   ilclient_disable_port_buffers(video_decode, 130, NULL, NULL, NULL);
    ilclient_teardown_tunnels(tunnel);
 
    ilclient_state_transition(list, OMX_StateIdle);

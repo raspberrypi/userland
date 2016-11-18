@@ -67,7 +67,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # else
 #  define PAGE_SIZE   4096
 # endif
-#define PAGE_MASK   (~(PAGE_SIZE - 1))
+#endif
+#ifndef PAGE_MASK
+# define PAGE_MASK   (~(PAGE_SIZE - 1))
 #endif
 
 // Offset within the videocore memory map to get the address of the symbol
@@ -136,6 +138,40 @@ int OpenVideoCoreMemory( VC_MEM_ACCESS_HANDLE_T *vcHandlePtr  )
 *   opened successfully.
 *
 ***************************************************************************/
+
+struct fb_dmacopy {
+	uint32_t dst;
+	uint32_t src;
+	uint32_t length;
+};
+#define FBIODMACOPY _IOW('z', 0x22, struct fb_dmacopy)
+
+static int vc_mem_copy(uint32_t dst, uint32_t src, uint32_t length)
+{
+    const char *filename = "/dev/fb0";
+    int memFd;
+    struct fb_dmacopy ioparam;
+
+    ioparam.dst = dst;
+    ioparam.src = src;
+    ioparam.length = length;
+
+    if (( memFd = open( filename, O_RDWR | O_SYNC )) < 0 )
+    {
+        ERR( "Unable to open '%s': %s(%d)\n", filename, strerror( errno ), errno );
+        return -errno;
+    }
+
+    if ( ioctl( memFd, FBIODMACOPY, &ioparam ) != 0 )
+    {
+        ERR( "Failed to get memory size via ioctl: %s(%d)\n",
+            strerror( errno ), errno );
+        close( memFd );
+        return -errno;
+    }
+    close( memFd );
+    return 0;
+}
 
 int OpenVideoCoreMemoryFile( const char *filename, VC_MEM_ACCESS_HANDLE_T *vcHandlePtr )
 {
@@ -531,6 +567,7 @@ static int AccessVideoCoreMemory( VC_MEM_ACCESS_HANDLE_T vcHandle,
                                   VC_MEM_ADDR_T          vcMemAddr,
                                   size_t                 numBytes )
 {
+    VC_MEM_ADDR_T origVcMemAddr = vcMemAddr;
     DBG( "%s %zu bytes @ 0x%08x", mem_op == WRITE_MEM ? "Write" : "Read", numBytes, vcMemAddr );
 
     /*
@@ -585,6 +622,15 @@ static int AccessVideoCoreMemory( VC_MEM_ACCESS_HANDLE_T vcHandle,
         return 0;
     }
 #else
+    // DMA allows memory to be accessed above 1008M and is more coherent so try this first
+    if (mem_op == READ_MEM)
+    {
+        DBG( "AccessVideoCoreMemory: %p, %x, %d", buf, origVcMemAddr, numBytes );
+        int s = vc_mem_copy((uint32_t)buf, (uint32_t)origVcMemAddr, numBytes);
+        if (s == 0)
+            return 1;
+    }
+
     {
         uint8_t    *mapAddr;
         size_t      mapSize;

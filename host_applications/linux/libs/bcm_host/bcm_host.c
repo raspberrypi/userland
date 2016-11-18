@@ -44,11 +44,9 @@ int32_t graphics_get_display_size( const uint16_t display_number,
    DISPMANX_MODEINFO_T mode_info;
    int32_t success = -1;
 
-   if (display_handle == 0) {
-      // Display must be opened first.
-      display_handle = vc_dispmanx_display_open(display_number);
-      vcos_assert(display_handle);
-   }
+   // Display must be opened first.
+   display_handle = vc_dispmanx_display_open(display_number);
+
    if (display_handle) {
       success = vc_dispmanx_display_get_info(display_handle, &mode_info);
          
@@ -64,10 +62,6 @@ int32_t graphics_get_display_size( const uint16_t display_number,
             *height = mode_info.height;
          }
       }
-   }
-      
-   if ( display_handle )
-   {
       vc_dispmanx_display_close(display_handle);
       display_handle = 0;
    }
@@ -170,4 +164,5 @@ unsigned bcm_host_get_sdram_address(void)
    unsigned address = get_dt_ranges("/proc/device-tree/axi/vc_mem/reg", 8);
    return address == ~0 ? 0x40000000 : address;
 }
+
 

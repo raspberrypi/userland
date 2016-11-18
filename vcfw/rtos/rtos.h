@@ -214,7 +214,7 @@ typedef struct opaque_rtos_latch_t* RTOS_LATCH_T;
 // rtos_latch_unlocked() is a better test of lockedness.
 
 // Don't call these functions, use the rtos_latch_get etc macros.
-//Routine to get the latch. Will suspend / busy wait dependant on the rtos implementation
+//Routine to get the latch. Will suspend / busy wait dependent on the rtos implementation
 extern void rtos_latch_get_real( RTOS_LATCH_T *latch );
 //Routine to put the latch.
 extern void rtos_latch_put_real( RTOS_LATCH_T *latch );

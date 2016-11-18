@@ -77,7 +77,9 @@ VCOS_STATUS_T khronos_platform_semaphore_create(PLATFORM_SEMAPHORE_T *sem, int n
 
 uint64_t khronos_platform_get_process_id()
 {
-   return vcos_process_id_current();
+   CLIENT_THREAD_STATE_T *thread = CLIENT_GET_THREAD_STATE();
+
+   return rpc_get_client_id(thread);
 }
 
 static bool process_attached = false;
@@ -271,7 +273,9 @@ static KHRN_IMAGE_FORMAT_T convert_format(uint32_t format)
       case EGL_PIXEL_FORMAT_XRGB_8888_BRCM:     return XBGR_8888;
       case EGL_PIXEL_FORMAT_RGB_565_BRCM:       return RGB_565;
       case EGL_PIXEL_FORMAT_A_8_BRCM:           return A_8;
-      default:                                  vcos_verify(0); return (KHRN_IMAGE_FORMAT_T)0;
+      default:
+         vcos_assert(0);
+         return (KHRN_IMAGE_FORMAT_T)0;
    }
 }
 
@@ -506,7 +510,7 @@ static void dump_ancestors(Window w)
    Window grandparent,parent = w, child = 0;
    unsigned int rlayer = ~0;
    bool bidirectional;
-   vcos_log_trace("walking back up heirarchy");
+   vcos_log_trace("walking back up hierarchy");
    while(parent)
    {
       bidirectional = false;
@@ -584,7 +588,7 @@ uint32_t khrn_platform_get_window_position(EGLNativeWindowType win)
       {
          vcos_log_error("EGL window isn't child of root", i);
 
-         //to try and find out where this window has gone, let us walk back up the heirarchy
+         //to try and find out where this window has gone, let us walk back up the hierarchy
          dump_ancestors(w);
          return ~0;
       }
@@ -753,7 +757,7 @@ static EGL_DISPMANX_WINDOW_T *check_default(EGLNativeWindowType win)
          VC_RECT_T dst_rect;
          VC_RECT_T src_rect;
 
-         int x, y, width, height, layer;
+         int x = 0, y = 0, width = 0, height = 0, layer = 0;
 
          switch(wid)
          {

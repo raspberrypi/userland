@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2012, Broadcom Europe Ltd
+Copyright (c) 2016, Raspberry Pi (Trading) Ltd
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -24,23 +24,9 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-#include <assert.h>
-#include <stdio.h>
-#include <stdarg.h>
-#include <stdlib.h>
 
-#include "interface/vcos/vcos.h"
-int vc_hostreq_set_notify (int reason, int (*f)())
-{
-  vcos_log("vc_hostreq_set_notify %d:%p\n", reason, (void *)f);
-  return 0;
-}
-
-int vmcs_framework_create_hdmi_buttons(void)
-{
-  vcos_log("vmcs_framework_create_hdmi_buttons\n");
-  return 0;
-}
-
-
-
+#if defined(__unix__) && !defined(__ANDROID__)
+#include "linux/vchost_config.h"
+#else
+#include "vchost_config.h"
+#endif

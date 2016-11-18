@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /* VideoCore Shared Memory - user interface library.
 **
 ** This library provides all the necessary abstraction for any application to
-** make use of the shared memory service which is distributed accross a kernel
+** make use of the shared memory service which is distributed across a kernel
 ** driver and a videocore service.
 **
 ** It is an application design decision to choose or not to use this service.
@@ -417,6 +417,27 @@ int vcsm_unlock_hdl( unsigned int handle );
 ** with it.
 */
 int vcsm_unlock_hdl_sp( unsigned int handle, int cache_no_flush );
+
+/* Clean and/or invalidate the memory associated with this user opaque handle
+**
+** Returns:        non-zero on error
+**
+** structure contains a list of flush/invalidate commands. Commands are:
+** 0: nop
+** 1: invalidate       given virtual range in L1/L2
+** 2: clean            given virtual range in L1/L2
+** 3: clean+invalidate given virtual range in L1/L2
+*/
+struct vcsm_user_clean_invalid_s {
+   struct {
+      unsigned int cmd;
+      unsigned int handle;
+      unsigned int addr;
+      unsigned int size;
+   } s[8];
+};
+
+int vcsm_clean_invalid( struct vcsm_user_clean_invalid_s *s );
 
 #ifdef __cplusplus
 }

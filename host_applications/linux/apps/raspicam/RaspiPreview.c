@@ -276,6 +276,6 @@ int raspipreview_parse_cmdline(RASPIPREVIEW_PARAMETERS *params, const char *arg1
  */
 void raspipreview_display_help()
 {
-   fprintf(stderr, "\nPreview parameter commands\n\n");
+   fprintf(stdout, "\nPreview parameter commands\n\n");
    raspicli_display_help(cmdline_commands, cmdline_commands_size);
 }

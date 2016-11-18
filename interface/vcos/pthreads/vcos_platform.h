@@ -29,7 +29,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 VideoCore OS Abstraction Layer - pthreads types
 =============================================================================*/
 
-/* Do not include this file directly - instead include it via vcos.h */
+/* DO NOT include this file directly - instead include it via vcos.h */
 
 /** @file
   *
@@ -450,6 +450,38 @@ VCOS_LLTHREAD_T *vcos_llthread_current(void) {
    return (VCOS_LLTHREAD_T *)pthread_self();
 }
 
+VCOS_INLINE_IMPL
+VCOS_UNSIGNED vcos_thread_get_affinity(VCOS_THREAD_T *thread) {
+   vcos_unused(thread);
+   return _VCOS_AFFINITY_CPU0;
+}
+
+VCOS_INLINE_IMPL
+int vcos_thread_running(VCOS_THREAD_T *thread) {
+   vcos_unused(thread);
+   /* Not applicable to pthreads */
+   return 0;
+}
+
+VCOS_INLINE_IMPL
+VCOS_UNSIGNED vcos_change_preemption(VCOS_UNSIGNED pe) {
+   vcos_unused(pe);
+   /* Nothing to do */
+   return 0;
+}
+
+VCOS_INLINE_IMPL
+void vcos_thread_relinquish(void) {
+   /* Nothing to do */
+}
+
+VCOS_INLINE_IMPL
+void vcos_thread_resume(VCOS_THREAD_T *thread) {
+   vcos_unused(thread);
+   /* Nothing to do */
+}
+
+
 /*
  * Mutexes
  */
@@ -549,7 +581,8 @@ void vcos_event_signal(VCOS_EVENT_T *event)
 fail_sem:
    vcos_mutex_unlock(&event->mutex);
 fail_mtx:
-   vcos_assert(ok);
+   if (!ok)
+      vcos_assert(ok);
 }
 
 VCOS_INLINE_IMPL
@@ -640,6 +673,60 @@ void *vcos_tls_get(VCOS_TLS_KEY_T tls) {
    return pthread_getspecific(tls);
 }
 
+/***********************************************************
+ *
+ * Timers
+ *
+ ***********************************************************/
+
+//Other platforms can call compatible OS implementations directly
+//from inline functions with minimal overhead.
+//Pthreads needs a little bit more, so call functions
+//in vcos_pthreads.c from the inline functions.
+VCOS_STATUS_T vcos_pthreads_timer_create(VCOS_TIMER_T *timer,
+                                const char *name,
+                                void (*expiration_routine)(void *context),
+                                void *context);
+void vcos_pthreads_timer_set(VCOS_TIMER_T *timer, VCOS_UNSIGNED delay_ms);
+void vcos_pthreads_timer_cancel(VCOS_TIMER_T *timer);
+void vcos_pthreads_timer_reset(VCOS_TIMER_T *timer, VCOS_UNSIGNED delay_ms);
+void vcos_pthreads_timer_delete(VCOS_TIMER_T *timer);
+
+/** Create a timer.
+  *
+  * Note that we just cast the expiry function - this assumes that UNSIGNED
+  * and VOID* are the same size.
+  */
+
+
+VCOS_INLINE_IMPL
+VCOS_STATUS_T vcos_timer_create(VCOS_TIMER_T *timer,
+                                const char *name,
+                                void (*expiration_routine)(void *context),
+                                void *context) {
+   return vcos_pthreads_timer_create(timer, name, expiration_routine, context);
+}
+
+VCOS_INLINE_IMPL
+void vcos_timer_set(VCOS_TIMER_T *timer, VCOS_UNSIGNED delay_ms) {
+   return vcos_pthreads_timer_set(timer, delay_ms);
+}
+
+VCOS_INLINE_IMPL
+void vcos_timer_cancel(VCOS_TIMER_T *timer) {
+   return vcos_pthreads_timer_cancel(timer);
+}
+
+VCOS_INLINE_IMPL
+void vcos_timer_reset(VCOS_TIMER_T *timer, VCOS_UNSIGNED delay) {
+   vcos_timer_set(timer, delay);
+}
+
+VCOS_INLINE_IMPL
+void vcos_timer_delete(VCOS_TIMER_T *timer) {
+   vcos_pthreads_timer_delete(timer);
+}
+
 #if VCOS_HAVE_ATOMIC_FLAGS
 
 /*
@@ -684,11 +771,11 @@ void vcos_atomic_flags_delete(VCOS_ATOMIC_FLAGS_T *atomic_flags)
 
 #if defined(linux) || defined(_HAVE_SBRK)
 
-/* not exactly the free memory, but a measure of it */
+/* Returns invalid result, do not use */
 
 VCOS_INLINE_IMPL
-unsigned long vcos_get_free_mem(void) {
-   return (unsigned long)sbrk(0);
+unsigned long VCOS_DEPRECATED("returns invalid result") vcos_get_free_mem(void) {
+   return 0;
 }
 
 #endif
@@ -729,7 +816,13 @@ VCOS_INLINE_DECL void _vcos_thread_sem_post(VCOS_THREAD_T *);
 VCOS_STATIC_INLINE
 char *vcos_strdup(const char *str)
 {
-   return strdup(str);
+   size_t len = strlen(str) + 1;
+   void *p = malloc(len);
+
+   if (p == NULL)
+      return NULL;
+
+   return (char *)memcpy(p, str, len);
 }
 
 typedef void (*VCOS_ISR_HANDLER_T)(VCOS_UNSIGNED vecnum);

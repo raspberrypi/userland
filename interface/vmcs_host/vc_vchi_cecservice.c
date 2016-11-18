@@ -26,7 +26,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 #include <string.h>
 #include <stdio.h>
-#include "vchost_config.h"
+#include "vchost_platform_config.h"
 #include "vchost.h"
 
 #include "interface/vcos/vcos.h"
@@ -466,7 +466,7 @@ static int32_t cecservice_wait_for_bulk_receive(void *buffer, uint32_t max_lengt
  *
  * Arguments: command, parameter buffer, parameter legnth, has reply? (non-zero means yes)
  *
- * Description: send a command and optionally wait for its single value reponse (TV_GENERAL_RESP_T)
+ * Description: send a command and optionally wait for its single value response (TV_GENERAL_RESP_T)
  *
  * Returns: < 0 if there is VCHI error, if tranmission is successful, value
  *          returned is the response from CEC server (which will be VC_CEC_ERROR_T (>= 0))
@@ -512,7 +512,7 @@ static int32_t cecservice_send_command(  uint32_t command, const void *buffer, u
  *
  * Arguments: command, parameter buffer, parameter legnth, reply buffer, buffer length
  *
- * Description: send a command and wait for its non-single value reponse (in a buffer)
+ * Description: send a command and wait for its non-single value response (in a buffer)
  *
  * Returns: error code, host app is responsible to do endian translation
  *
@@ -567,7 +567,8 @@ static void *cecservice_notify_func(void *arg) {
          //Get all notifications in the queue
          success = vchi_msg_dequeue( state->notify_handle[0], state->notify_buffer, sizeof(state->notify_buffer), &state->notify_length, VCHI_FLAGS_NONE );
          if(success != 0 || state->notify_length < sizeof(uint32_t)*5 ) { //reason + 4x32-bit parameter
-            continue;
+            vcos_assert(state->notify_length == sizeof(uint32_t)*5);
+            break;
          }
 
          //if(lock_obtain() != 0)

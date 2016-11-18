@@ -28,7 +28,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef VCHOST_H
 #define VCHOST_H
 
-#include "vchost_config.h"
+#include "vchost_platform_config.h"
 #include "vcfilesys_defs.h"
 #include "interface/vcos/vcos.h" //for VCHPRE_ abd VCHPOST_ macro's for func declaration
 #include "interface/vmcs_host/vc_fileservice_defs.h" // for VC_O_XXX file definitions
@@ -37,7 +37,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define UNUSED_PARAMETER(x) ((void)(x))/* macro to suppress not use warning */
 
 /*---------------------------------------------------------------------------*/
-/* Byte-swapping, dependant on host's orientation */
+/* Byte-swapping, dependent on host's orientation */
 /*---------------------------------------------------------------------------*/
 
 #ifndef VC_HOST_IS_BIG_ENDIAN

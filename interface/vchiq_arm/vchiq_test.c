@@ -130,6 +130,7 @@ static int setup_auto_kill(int timeout_ms);
 #ifdef __linux__
 
 #include <fcntl.h>
+#include <sys/ioctl.h>
 #include "interface/vmcs_host/vc_cma.h"
 
 static void reserve_test(int reserve, int delay)
@@ -717,7 +718,6 @@ vchiq_signal_test(void)
    int fourcc;
 
    static int sizes[] = { 0, 1024, 2048, VCHIQ_MAX_MSG_SIZE };
-   unsigned int i;
 
    fourcc = VCHIQ_MAKE_FOURCC(g_servname[0], g_servname[1], g_servname[2], g_servname[3]);
 
@@ -848,7 +848,7 @@ do_functional_test(void)
    EXPECT(vchiq_queue_bulk_transmit(service2, clnt_service2_data, sizeof(clnt_service2_data), (void *)0x2001), VCHIQ_SUCCESS);
    for (i = 0; i < sizeof(clnt_service1_data); i++)
    {
-      clnt_service1_data[i] = i;
+      clnt_service1_data[i] = (char)i;
    }
    EXPECT(vchiq_queue_bulk_transmit(service, clnt_service1_data, sizeof(clnt_service1_data), (void*)0x1001), VCHIQ_SUCCESS);
 
@@ -896,7 +896,7 @@ bulk_tests_only:
    for (size = 64; size < FUN2_MAX_DATA_SIZE; size<<=1)
    {
       static const int aligns[] = { 0, 1, 31 };
-      unsigned int i;
+
       for (i = 0; i < vcos_countof(aligns); i++)
       {
          int srvr_align = aligns[i];
@@ -1073,7 +1073,6 @@ do_vchi_ping_test(VCHI_SERVICE_HANDLE_T service, int size, int async, int oneway
       start = vcos_getmicrosecs();
       for (i = 0; i < iters; i++)
       {
-         uint32_t actual;
          vchi_msg_queue(service, ping_buf, msg_size, VCHI_FLAGS_BLOCK_UNTIL_QUEUED, 0);
          vchi_msg_dequeue(service, pong_buf, sizeof(pong_buf), &actual, VCHI_FLAGS_BLOCK_UNTIL_OP_COMPLETE);
       }
@@ -1141,7 +1140,7 @@ do_vchi_ping_test(VCHI_SERVICE_HANDLE_T service, int size, int async, int oneway
       }
       end = vcos_getmicrosecs();
 
-      printf("vchi bulk (size %d, async) -> %fus\n", size, ((float)(end - start))/iters);
+      printf("vchi bulk (size %d, %d async, %d oneway) -> %fus\n", size, async, oneway, ((float)(end - start))/iters);
 
       vcos_sleep(40);
    }
@@ -1170,7 +1169,7 @@ do_vchi_ping_test(VCHI_SERVICE_HANDLE_T service, int size, int async, int oneway
       }
       end = vcos_getmicrosecs();
 
-      printf("vchi bulk (size %d, %d async) -> %fus\n", size, async, ((float)(end - start))/iters);
+      printf("vchi bulk (size %d, %d oneway) -> %fus\n", size, oneway, ((float)(end - start))/iters);
 
       vcos_sleep(60);
    }
@@ -1202,15 +1201,15 @@ func_data_test(VCHIQ_SERVICE_HANDLE_T service, int datalen, int align, int serve
    EXPECT(vchiq_queue_message(service, &element, 1), VCHIQ_SUCCESS);
 
    memset(databuf, 0xff, sizeof(databuf));
-   data = (uint8_t *)((uint32_t)databuf & ~(PAGE_SIZE - 1)) + align;
-   data = (uint8_t *)((((int)databuf + PROLOGUE_SIZE) & ~(FUN2_MAX_ALIGN - 1)) + align - PROLOGUE_SIZE);
+   data = (uint8_t *)((uintptr_t)databuf & ~(PAGE_SIZE - 1)) + align;
+   data = (uint8_t *)((((intptr_t)databuf + PROLOGUE_SIZE) & ~(FUN2_MAX_ALIGN - 1)) + align - PROLOGUE_SIZE);
    if (data < databuf)
       data += PAGE_SIZE;
    data += PROLOGUE_SIZE;
 
    EXPECT(vchiq_queue_bulk_receive(service, data, datalen, NULL), VCHIQ_SUCCESS);
 
-   data2 = (uint8_t *)(((uint32_t)databuf2 + PROLOGUE_SIZE) & ~(PAGE_SIZE - 1)) + align - PROLOGUE_SIZE;
+   data2 = (uint8_t *)(((uintptr_t)databuf2 + PROLOGUE_SIZE) & ~(PAGE_SIZE - 1)) + align - PROLOGUE_SIZE;
    if (data2 < databuf2)
       data2 += PAGE_SIZE;
    prologue = data2;
@@ -1273,6 +1272,7 @@ func_data_test(VCHIQ_SERVICE_HANDLE_T service, int datalen, int align, int serve
          {
             vcos_log_error("%d: Data corrupted at %x-%x (datalen %x, align %x, server_align %x) -> %02x", func_data_test_iter, i - diffs, i - 1, datalen, align, server_align, data[i-1]);
             VCOS_BKPT;
+            success = 0;
             diffs = 0;
          }
       }
@@ -1280,12 +1280,16 @@ func_data_test(VCHIQ_SERVICE_HANDLE_T service, int datalen, int align, int serve
       {
          vcos_log_error("%d: Data corrupted at %x-%x (datalen %x, align %x, server_align %x) -> %02x", func_data_test_iter, i - diffs, i - 1, datalen, align, server_align, data[i-1]);
          VCOS_BKPT;
+         success = 0;
       }
    }
 
 skip_iter:
-   func_data_test_iter++;
-   return VCHIQ_SUCCESS;
+   if (success)
+   {
+      func_data_test_iter++;
+      return VCHIQ_SUCCESS;
+   }
 
 error_exit:
    return VCHIQ_ERROR;
@@ -1311,14 +1315,21 @@ static VCHIQ_STATUS_T
 clnt_callback(VCHIQ_REASON_T reason, VCHIQ_HEADER_T *header,
    VCHIQ_SERVICE_HANDLE_T service, void *bulk_userdata)
 {
+   int data;
    vcos_mutex_lock(&g_mutex);
    if (reason == VCHIQ_MESSAGE_AVAILABLE)
    {
-      if (header->size <= 1)
+      /* 
+       * Store the header size as it is going to be released
+       * and the size may be overwritten by the release.
+       */
+      size_t header_size = header->size;
+
+      if (header_size <= 1)
          vchiq_release_message(service, header);
       else
       /* Responses of length 0 are not sync points */
-      if ((header->size >= 4) && (*(int *)header->data == MSG_ECHO))
+      if ((header_size >= 4) && (memcpy(&data, header->data, sizeof(data)), data == MSG_ECHO))
       {
          /* This is a complete echoed packet */
          if (g_params.verify && (mem_check(header->data, bulk_tx_data[ctrl_received % NUM_BULK_BUFS], g_params.blocksize) != 0))
@@ -1329,10 +1340,10 @@ clnt_callback(VCHIQ_REASON_T reason, VCHIQ_HEADER_T *header,
             vcos_event_signal(&g_shutdown);
          vchiq_release_message(service, header);
       }
-      else if (header->size != 0)
+      else if (header_size != 0)
          g_server_error = header->data;
 
-      if ((header->size != 0) || g_server_error)
+      if ((header_size != 0) || g_server_error)
          vcos_event_signal(&g_server_reply);
    }
    else if (reason == VCHIQ_BULK_TRANSMIT_DONE)
@@ -1406,8 +1417,11 @@ vchi_clnt_callback(void *callback_param,
             if (actual > 1)
                g_server_error = pong_buf;
             if (actual != 0)
+            {
                /* Responses of length 0 are not sync points */
                vcos_event_signal(&g_server_reply);
+               break;
+            }
          }
       }
    }
@@ -1628,7 +1642,7 @@ static void check_timer(void)
 
 static char *buf_align(char *buf, int align_size, int align)
 {
-   char *aligned = buf - ((int)buf & (align_size - 1)) + align;
+   char *aligned = buf - ((intptr_t)buf & (align_size - 1)) + align;
    if (aligned < buf)
       aligned += align_size;
    return aligned;
