@@ -243,7 +243,7 @@ RETURNS
 
 int64_t vc_hostfs_lseek64(int fildes, int64_t offset, int whence)
 {
-   DEBUG_MINOR("vc_hostfs_lseek(%d,%lld,%d)", fildes, offset, whence);
+   DEBUG_MINOR("vc_hostfs_lseek(%d,%" PRId64 ",%d)", fildes, offset, whence);
    if (fildes >= file_info_table_len)
    {
       // File descriptor not in table, so this is an error
@@ -283,7 +283,7 @@ int64_t vc_hostfs_lseek64(int fildes, int64_t offset, int whence)
          read_offset = lseek64(fildes, offset, whence);
       }
       p_file_info_table[fildes].read_offset = read_offset;
-      DEBUG_MINOR("vc_hostfs_lseek returning %lld)", read_offset);
+      DEBUG_MINOR("vc_hostfs_lseek returning %" PRId64 ")", read_offset);
       return read_offset;
    }
 }
@@ -611,7 +611,7 @@ int64_t vc_hostfs_freespace64(const char *inPath)
       ret = -1;
    }
 
-   DEBUG_MINOR( "vc_hostfs_freespace64 for '%s' returning %lld", path, ret );
+   DEBUG_MINOR( "vc_hostfs_freespace64 for '%s' returning %" PRId64 "", path, ret );
 
    free( path );
    return ret;
@@ -1016,7 +1016,7 @@ int64_t vc_hostfs_totalspace64(const char *inPath)
       }
    }
 
-   DEBUG_MINOR( "vc_hostfs_totalspace for '%s' returning %lld", path, ret );
+   DEBUG_MINOR( "vc_hostfs_totalspace for '%s' returning %" PRId64 "", path, ret );
 
    if (path)
       free( path );
