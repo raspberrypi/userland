@@ -630,7 +630,6 @@ void raspitexutil_create_param_array(RASPITEXUTIL_SHADER_PROGRAM_T *p)
       array[i].size   = 0;
       array[i].type   = 0;
       array[i].loc    = 0;
-      // uniform_array[i].param  = (float*) malloc(sizeof(float)*16);
       array[i].name   = (GLchar*) malloc(sizeof(GLchar)* p->max_length+1);;
       array[i].flag   = 0;
       for(j=0; j<16; j++)array[i].param[j]=0;
@@ -642,7 +641,6 @@ void raspitexutil_create_param_array(RASPITEXUTIL_SHADER_PROGRAM_T *p)
       array[i].size   = 0;
       array[i].type   = 0;
       array[i].loc    = 0;
-      // attribute_array[i].param  = (float*) malloc(sizeof(float)*16);
       array[i].name   = (GLchar*) malloc(sizeof(GLchar)* p->max_length+1);
       array[i].flag   = 0;
       for(j=0; j<16; j++)array[i].param[j]=0;

@@ -229,7 +229,7 @@ int shader_open(RASPITEX_STATE *state)
 
    pfFile = fopen (state->fragment_shader_filename,"rb");
    if (pfFile==NULL) {
-      printf("No or invalid fragment file provided, used the default one\n");
+      fprintf(stderr,"No or invalid fragment file provided, used the default one\n");
       shader.fragment_source=defaultFragmentShader;
    } else {
 
@@ -240,12 +240,14 @@ int shader_open(RASPITEX_STATE *state)
 
    // allocate memory to contain the whole file:
    shader.fragment_source = (GLchar*) malloc (sizeof(GLchar)*lSize);
-   if (shader.fragment_source == NULL) {fputs ("Memory error",stderr); exit (2);}
 
    // copy the file into the buffer:
    result = fread (shader.fragment_source,1,lSize,pfFile);
-   if (result != lSize) {fputs ("Reading error",stderr); exit (3);}
-   
+   if (result != lSize) {
+    fputs ("Reading error",stderr);
+    return -1;
+  }
+
    printf("fragment shader file : %s\n", state->fragment_shader_filename);
 
    /* the whole file is now loaded in the memory buffer. */
@@ -253,7 +255,7 @@ int shader_open(RASPITEX_STATE *state)
 
    pvFile = fopen (state->vertex_shader_filename,"rb");
    if (pvFile==NULL) {
-      printf("No or invalid vertex file provided, used the default one\n");
+      fprintf(stderr, "No or invalid vertex file provided, used the default one\n");
       shader.vertex_source=defaultVertexShader;
    } else {
 
@@ -264,12 +266,14 @@ int shader_open(RASPITEX_STATE *state)
 
    // allocate memory to contain the whole file:
    shader.vertex_source = (GLchar*) malloc (sizeof(GLchar)*lSize);
-   if (shader.vertex_source == NULL) {fputs ("Memory error",stderr); exit (2);}
 
    // copy the file into the buffer:
    result = fread (shader.vertex_source,1,lSize,pvFile);
-   if (result != lSize) {fputs ("Reading error",stderr); exit (3);}
-   
+   if (result != lSize) {
+    fputs ("Reading error",stderr);
+    return -1;
+  }
+
    printf("vertex shader file : %s\n", state->vertex_shader_filename);
 
    /* the whole file is now loaded in the memory buffer. */
