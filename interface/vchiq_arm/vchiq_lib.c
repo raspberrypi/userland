@@ -948,11 +948,17 @@ vchi_msg_dequeue( VCHI_SERVICE_HANDLE_T handle,
       args.bufsize = max_data_size_to_read;
       args.buf = data;
       RETRY(ret, ioctl(service->fd, VCHIQ_IOC_DEQUEUE_MESSAGE, &args));
+#ifdef __NetBSD__
+      if (ret == 0) {
+         *actual_msg_size = args.bufsize;
+      }
+#else
       if (ret >= 0)
       {
          *actual_msg_size = ret;
          ret = 0;
       }
+#endif
    }
 
    if ((ret < 0) && (errno != EWOULDBLOCK))
@@ -1513,7 +1519,6 @@ completion_thread(void *arg)
       VCHI_CALLBACK_BULK_RECEIVE_ABORTED,  // VCHIQ_BULK_RECEIVE_ABORTED
    };
 
-   args.count = vcos_countof(completions);
    args.buf = completions;
    args.msgbufsize = MSGBUF_SIZE;
    args.msgbufcount = 0;
@@ -1537,12 +1542,13 @@ completion_thread(void *arg)
          }
       }
 
-      RETRY(count, ioctl(instance->fd, VCHIQ_IOC_AWAIT_COMPLETION, &args));
+      args.count = vcos_countof(completions);
+      RETRY(ret, ioctl(instance->fd, VCHIQ_IOC_AWAIT_COMPLETION, &args));
 
-      if (count <= 0)
+      if (ret < 0 || args.count == 0)
          break;
 
-      for (i = 0; i < count; i++)
+      for (i = 0; i < args.count; i++)
       {
          VCHIQ_COMPLETION_DATA_T *completion = &completions[i];
          VCHIQ_SERVICE_T *service = (VCHIQ_SERVICE_T *)completion->service_userdata;
@@ -1684,12 +1690,14 @@ create_service(VCHIQ_INSTANCE_T instance,
    }
    else
    {
-      vcos_mutex_lock(&instance->mutex);
-
       if (service)
+      {
+         vcos_mutex_lock(&instance->mutex);
+
          service->lib_handle = VCHIQ_SERVICE_HANDLE_INVALID;
 
-      vcos_mutex_unlock(&instance->mutex);
+         vcos_mutex_unlock(&instance->mutex);
+      }
 
       *phandle = VCHIQ_SERVICE_HANDLE_INVALID;
    }
@@ -1719,7 +1727,11 @@ fill_peek_buf(VCHI_SERVICE_T *service,
          args.buf = service->peek_buf;
 
          RETRY(ret, ioctl(service->fd, VCHIQ_IOC_DEQUEUE_MESSAGE, &args));
-
+#ifdef __NetBSD__
+         if (ret == 0) {
+            service->peek_size = args.bufsize;
+         }
+#else
          if (ret >= 0)
          {
             service->peek_size = ret;
@@ -1729,6 +1741,7 @@ fill_peek_buf(VCHI_SERVICE_T *service,
          {
             ret = -1;
          }
+#endif
       }
       else
       {

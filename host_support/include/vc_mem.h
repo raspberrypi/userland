@@ -27,8 +27,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #if !defined( VC_MEM_H )
 #define VC_MEM_H
 
-#include <linux/ioctl.h>
-
 #define VC_MEM_IOC_MAGIC  'v'
 
 #define VC_MEM_IOC_MEM_PHYS_ADDR    _IOR( VC_MEM_IOC_MAGIC, 0, unsigned long )

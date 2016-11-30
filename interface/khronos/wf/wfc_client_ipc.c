@@ -327,7 +327,7 @@ VCOS_STATUS_T wfc_client_ipc_send(WFC_IPC_MSG_HEADER_T *msg,
    VCHIQ_STATUS_T vst;
    VCHIQ_ELEMENT_T elems[] = {{msg, size}};
 
-   vcos_log_trace("%s: type %d, len %d", VCOS_FUNCTION, msg->type, size);
+   vcos_log_trace("%s: type %d, len %zu", VCOS_FUNCTION, msg->type, size);
 
    vcos_assert(size >= sizeof(*msg));
 

@@ -42,12 +42,22 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ctype.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#include <sys/statfs.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <assert.h>
 #include <ctype.h>
 #include <limits.h>
+
+#if defined(__NetBSD__)
+#include <sys/statvfs.h>
+#define STRUCT_STATFS	struct statvfs
+#define STATFS		statvfs
+#define lseek64		lseek
+#else
+#include <sys/statfs.h>
+#define STRUCT_STATFS	struct statfs
+#define STATFS		statfs
+#endif
 
 #if defined(__GLIBC__) && !defined( __USE_FILE_OFFSET64 )
 #error   "__USE_FILE_OFFSET64 isn't defined"
@@ -595,12 +605,12 @@ int64_t vc_hostfs_freespace64(const char *inPath)
 {
    char *path = strdup( inPath );
    int64_t ret;
-   struct statfs fsStat;
+   STRUCT_STATFS fsStat;
 
    // Replace all '\' with '/'
    backslash_to_slash( path );
 
-   ret = (int64_t) statfs( path, &fsStat );
+   ret = (int64_t) STATFS( path, &fsStat );
 
    if (ret == 0)
    {
@@ -997,14 +1007,14 @@ int64_t vc_hostfs_totalspace64(const char *inPath)
 {
    char *path = strdup( inPath );
    int64_t ret = -1;
-   struct statfs fsStat;
+   STRUCT_STATFS fsStat;
 
    // Replace all '\' with '/'
    if (path)
    {
       backslash_to_slash( path );
 
-      ret = statfs( path, &fsStat );
+      ret = STATFS( path, &fsStat );
 
       if (ret == 0)
       {

@@ -39,6 +39,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <user-vcsm.h>
 #include "interface/vcos/vcos.h"
 
+#if defined(__NetBSD__)
+#define getopt_long_only getopt_long
+#endif
+
 // ---- Public Variables ----------------------------------------------------
 
 // ---- Private Constants and Types -----------------------------------------

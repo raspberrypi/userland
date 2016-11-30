@@ -37,6 +37,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <assert.h>
 #include <string.h>
 
+#if defined(__NetBSD__)
+#define getopt_long_only getopt_long
+#endif
+
 #include "interface/vmcs_host/vc_tvservice.h"
 
 #define TV_SUPPORTED_MODE_T TV_SUPPORTED_MODE_NEW_T
@@ -180,6 +184,7 @@ static const char *aspect_ratio_str(HDMI_ASPECT_T aspect_ratio) {
    }
 }
 
+#if 0
 /* Return the string presentation of aspect ratio */
 static const char *aspect_ratio_sd_str(SDTV_ASPECT_T aspect_ratio) {
    switch(aspect_ratio) {
@@ -193,6 +198,7 @@ static const char *aspect_ratio_sd_str(SDTV_ASPECT_T aspect_ratio) {
       return "unknown AR";
    }
 }
+#endif
 
 //Print a string and update the offset into the status buffer
 //Return non-zero if string is truncated, zero otherwise
@@ -515,7 +521,7 @@ static int dump_edid( const char *filename )
    if (fp)
       fclose(fp);
    if(written) {
-      LOG_STD( "Written %d bytes to %s", written, filename);
+      LOG_STD( "Written %zu bytes to %s", written, filename);
    } else {
       LOG_STD( "Nothing written!");
    }

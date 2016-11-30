@@ -59,6 +59,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <memory.h>
 #include <sysexits.h>
+#include <libgen.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>

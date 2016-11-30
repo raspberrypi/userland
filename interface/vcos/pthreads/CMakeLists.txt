@@ -33,12 +33,16 @@ set (SOURCES
    ../generic/vcos_generic_blockpool.c
 )
 
+if (CMAKE_SYSTEM_NAME MATCHES "NetBSD")
+   set(LIBEXECINFO execinfo)
+endif ()
+
 if (VCOS_PTHREADS_BUILD_SHARED)
    add_library (vcos SHARED ${SOURCES})
-   target_link_libraries (vcos pthread dl rt)
+   target_link_libraries (vcos pthread rt ${LIBEXECINFO})
 else ()
    add_library (vcos ${SOURCES})
-   target_link_libraries (vcos pthread rt)
+   target_link_libraries (vcos pthread rt ${LIBEXECINFO})
 endif ()
 
 

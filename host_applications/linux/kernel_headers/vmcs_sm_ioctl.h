@@ -36,8 +36,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdint.h>
 #endif
 
-#include <linux/ioctl.h>
-
 /* ---- Constants and Types ---------------------------------------------- */
 
 #define VMCS_SM_RESOURCE_NAME               32
