@@ -2300,8 +2300,52 @@ static int wait_for_next_change(RASPIVID_STATE *state)
       ch = getchar();
       if (ch == 'x' || ch == 'X')
          return 0;
-      else
-         return keep_running;
+      else if (ch == 'a' || ch == 'b') {
+          if (state->verbose)
+              fprintf(stderr, "starting zoom\n");
+
+          MMAL_PARAMETER_INPUT_CROP_T crop;
+          crop.hdr.id = MMAL_PARAMETER_INPUT_CROP;
+          crop.hdr.size = sizeof(crop);
+
+          if (mmal_port_parameter_get(state->camera_component->control, &crop.hdr) == MMAL_SUCCESS) {
+              if (state->verbose)
+                  fprintf(stderr, "Got crop successfully\n");
+
+              crop.rect.x = (65536 * 0.4);
+              crop.rect.y = (65536 * 0.5);
+
+              if (ch == 'a') {
+                  if (state->verbose)
+                      fprintf(stderr, "Increase zoom\n");
+
+                  if (crop.rect.width >= (65536 * 0.89)) {
+                      crop.rect.x = 0;
+                      crop.rect.y = 0;
+                      crop.rect.width = 65536;
+                      crop.rect.height = 65536;
+                  } else {
+                      crop.rect.width = crop.rect.width + (65536 * 0.1);
+                      crop.rect.height = crop.rect.height + (65536 * 0.1);
+                  }
+              } else {
+                  if (state->verbose)
+                      fprintf(stderr, "Decrease zoom\n");
+
+                  if (crop.rect.width <= (65536 * 0.31)) {
+                      crop.rect.width = (65536 * 0.3);
+                      crop.rect.height = (65536 * 0.3);
+                  } else {
+                      crop.rect.width = crop.rect.width - (65536 * 0.1);
+                      crop.rect.height = crop.rect.height - (65536 * 0.1);
+                  }
+              }
+
+              mmal_port_parameter_set(state->camera_component->control, &crop.hdr);
+          }
+      }
+
+       return keep_running;
    }
 
    case WAIT_METHOD_SIGNAL:
