@@ -1355,6 +1355,58 @@ int raspicamcontrol_set_ROI(MMAL_COMPONENT_T *camera, PARAM_FLOAT_RECT_T rect)
 }
 
 /**
+ * Zoom in and Zoom out by changing ROI
+ * @param camera Pointer to camera component
+ * @param zoom_level 1 - zoom in, 2 - zoom out, 3 - reset all zoom and back to normal
+ * @return 0 if successful, non-zero otherwise
+ */
+int raspicamcontrol_zoom_in_zoom_out(MMAL_COMPONENT_T *camera, int zoom_level) {
+   MMAL_PARAMETER_INPUT_CROP_T crop;
+   crop.hdr.id = MMAL_PARAMETER_INPUT_CROP;
+   crop.hdr.size = sizeof(crop);
+
+   unsigned int min_size = 65536 * 0.2;
+   unsigned int max_size = 65536 * 0.9;
+   unsigned int increment = 65536 * 0.1;
+
+   if (mmal_port_parameter_get(camera->control, &crop.hdr) != MMAL_SUCCESS)
+   {
+      vcos_log_error("mmal_port_parameter_get(camera->control, &crop.hdr) failed, skip it");
+      return 0;
+   }
+
+   crop.rect.x = 65536 * 0.25;
+   crop.rect.y = 65536 * 0.25;
+
+   if (zoom_level == 1) {
+      if (crop.rect.width <= min_size)
+      {
+         crop.rect.width = min_size;
+         crop.rect.height = min_size;
+      } else {
+         crop.rect.width -= increment;
+         crop.rect.height -= increment;
+      }
+   }
+   else
+   {
+      if (zoom_level == 3 || crop.rect.width >= max_size)
+      {
+         crop.rect.x = 0;
+         crop.rect.y = 0;
+         crop.rect.width = 65536;
+         crop.rect.height = 65536;
+      } else if (zoom_level == 2)
+      {
+         crop.rect.width += increment;
+         crop.rect.height += increment;
+      }
+   }
+
+   return mmal_port_parameter_set(camera->control, &crop.hdr);
+}
+
+/**
  * Adjust the exposure time used for images
  * @param camera Pointer to camera component
  * @param shutter speed in microseconds
