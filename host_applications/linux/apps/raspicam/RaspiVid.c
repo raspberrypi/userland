@@ -2305,21 +2305,21 @@ static int wait_for_next_change(RASPIVID_STATE *state)
          if (state->verbose)
             fprintf(stderr, "Starting zoom in\n");
 
-         raspicamcontrol_zoom_in_zoom_out(state->camera_component, 1);
+         raspicamcontrol_zoom_in_zoom_out(state->camera_component, ZOOM_IN);
       }
       else if (ch == 'o')
       {
          if (state->verbose)
             fprintf(stderr, "Starting zoom out\n");
 
-         raspicamcontrol_zoom_in_zoom_out(state->camera_component, 2);
+         raspicamcontrol_zoom_in_zoom_out(state->camera_component, ZOOM_OUT);
       }
       else if (ch == 'r')
       {
          if (state->verbose)
             fprintf(stderr, "starting reset zoom\n");
 
-         raspicamcontrol_zoom_in_zoom_out(state->camera_component, 3);
+         raspicamcontrol_zoom_in_zoom_out(state->camera_component, ZOOM_RESET);
       }
 
       return keep_running;
