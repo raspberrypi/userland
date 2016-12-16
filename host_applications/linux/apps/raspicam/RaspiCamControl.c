@@ -195,7 +195,7 @@ static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_com
 
 #define parameter_reset -99999
 
-static const unsigned int min_zoom_size_16P16 = 65536 * 0.2;
+static const unsigned int min_zoom_size_16P16 = 65536 * 0.1;
 static const unsigned int max_zoom_size_16P16 = 65536 * 0.9;
 static const unsigned int zoom_increment_16P16 = 65536 * 0.1;
 
@@ -1390,11 +1390,19 @@ int raspicamcontrol_zoom_in_zoom_out(MMAL_COMPONENT_T *camera, ZoomLevel zoom_le
     }
     else if (zoom_level == ZOOM_OUT)
     {
-        crop.rect.width += zoom_increment_16P16;
-        crop.rect.height += zoom_increment_16P16;
+        if (crop.rect.width >= max_zoom_size_16P16)
+        {
+            crop.rect.width = 65536;
+            crop.rect.height = 65536;
+        }
+        else
+        {
+            crop.rect.width += zoom_increment_16P16;
+            crop.rect.height += zoom_increment_16P16;
+        }
     }
 
-    if (zoom_level == ZOOM_RESET || crop.rect.width >= max_zoom_size_16P16)
+    if (zoom_level == ZOOM_RESET)
     {
         crop.rect.x = 0;
         crop.rect.y = 0;
