@@ -834,7 +834,6 @@ void raspicamcontrol_dump_parameters(const RASPICAM_CAMERA_PARAMETERS *params)
    fprintf(stderr, "Metering Mode '%s', Colour Effect Enabled %s with U = %d, V = %d\n", metering_mode, params->colourEffects.enable ? "Yes":"No", params->colourEffects.u, params->colourEffects.v);
    fprintf(stderr, "Rotation %d, hflip %s, vflip %s\n", params->rotation, params->hflip ? "Yes":"No",params->vflip ? "Yes":"No");
    fprintf(stderr, "ROI x %lf, y %f, w %f h %f\n", params->roi.x, params->roi.y, params->roi.w, params->roi.h);
-   fprintf(stderr, "Nostopstate %s\n", params->n, params->roi.y, params->roi.w, params->roi.h);
 }
 
 /**
