@@ -211,6 +211,7 @@ struct RASPIVID_STATE_S
 
    int bCapturing;                     /// State of capture/pause
    int bCircularBuffer;                /// Whether we are writing to a circular buffer
+   int bChangeStateWithoutStopCapture; /// Whether we are changing camera state without stop capturing
 
    int inlineMotionVectors;             /// Encoder outputs inline Motion Vectors
    char *imv_filename;                  /// filename of inline Motion Vectors output
@@ -316,6 +317,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandLevel        31
 #define CommandRaw          32
 #define CommandRawFormat    33
+#define CommandStateNoStop  34
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -333,7 +335,8 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandProfile,       "-profile",    "pf", "Specify H264 profile to use for encoding", 1},
    { CommandTimed,         "-timed",      "td", "Cycle between capture and pause. -cycle on,off where on is record time and off is pause time in ms", 0},
    { CommandSignal,        "-signal",     "s",  "Cycle between capture and pause on Signal", 0},
-   { CommandKeypress,      "-keypress",   "k",  "Cycle between capture and pause on ENTER", 0},
+   { CommandKeypress,      "-keypress",   "k",  "Cycle between capture and pause on ENTER unless nostopstate option specified", 0},
+   { CommandStateNoStop,   "-nostopstate","ns", "Any state modifications without camera capture pausing", 0},
    { CommandInitialState,  "-initial",    "i",  "Initial state. Use 'record' or 'pause'. Default 'record'", 1},
    { CommandQP,            "-qp",         "qp", "Quantisation parameter. Use approximately 10-40. Default 0 (off)", 1},
    { CommandInlineHeaders, "-inline",     "ih", "Insert inline headers (SPS, PPS) to stream", 0},
@@ -410,6 +413,7 @@ static void default_status(RASPIVID_STATE *state)
    state->offTime = 5000;
 
    state->bCapturing = 0;
+   state->bChangeStateWithoutStopCapture = 0;
    state->bInlineHeaders = 0;
 
    state->segmentSize = 0;  // 0 = not segmenting the file.
@@ -698,6 +702,12 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
 
          i++;
          break;
+      }
+
+      case CommandStateNoStop:
+      {
+          state->bChangeStateWithoutStopCapture = 1;
+          break;
       }
 
       case CommandSegmentFile: // Segment file in to chunks of specified time
@@ -2769,8 +2779,7 @@ int main(int argc, const char **argv)
                int initialCapturing=state.bCapturing;
                while (running)
                {
-                  // Change state
-
+                   // Change state
                   state.bCapturing = !state.bCapturing;
 
                   if (mmal_port_parameter_set_boolean(camera_video_port, MMAL_PARAMETER_CAPTURE, state.bCapturing) != MMAL_SUCCESS)
@@ -2787,7 +2796,7 @@ int main(int argc, const char **argv)
                   if (state.verbose)
                   {
                      if (state.bCapturing)
-                        fprintf(stderr, "Starting video capture\n");
+                        fprintf(stderr, "Capturing video\n");
                      else
                         fprintf(stderr, "Pausing video capture\n");
                   }

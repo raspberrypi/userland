@@ -195,9 +195,8 @@ static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_com
 
 #define parameter_reset -99999
 
-static const unsigned int min_zoom_size_16P16 = 65536 * 0.1;
-static const unsigned int max_zoom_size_16P16 = 65536 * 0.9;
-static const unsigned int zoom_increment_16P16 = 65536 * 0.1;
+#define zoom_full_16P16 (65536UL / 10)
+#define zoom_increment_16P16 (65536UL / 10)
 
 /**
  * Update the passed in parameter according to the rest of the parameters
@@ -835,6 +834,7 @@ void raspicamcontrol_dump_parameters(const RASPICAM_CAMERA_PARAMETERS *params)
    fprintf(stderr, "Metering Mode '%s', Colour Effect Enabled %s with U = %d, V = %d\n", metering_mode, params->colourEffects.enable ? "Yes":"No", params->colourEffects.u, params->colourEffects.v);
    fprintf(stderr, "Rotation %d, hflip %s, vflip %s\n", params->rotation, params->hflip ? "Yes":"No",params->vflip ? "Yes":"No");
    fprintf(stderr, "ROI x %lf, y %f, w %f h %f\n", params->roi.x, params->roi.y, params->roi.w, params->roi.h);
+   fprintf(stderr, "Nostopstate %s\n", params->n, params->roi.y, params->roi.w, params->roi.h);
 }
 
 /**
@@ -1377,10 +1377,10 @@ int raspicamcontrol_zoom_in_zoom_out(MMAL_COMPONENT_T *camera, ZoomLevel zoom_le
 
     if (zoom_level == ZOOM_IN)
     {
-        if (crop.rect.width <= min_zoom_size_16P16)
+        if (crop.rect.width <= (zoom_full_16P16 + zoom_increment_16P16))
         {
-            crop.rect.width = min_zoom_size_16P16;
-            crop.rect.height = min_zoom_size_16P16;
+            crop.rect.width = zoom_full_16P16;
+            crop.rect.height = zoom_full_16P16;
         }
         else
         {
@@ -1390,15 +1390,16 @@ int raspicamcontrol_zoom_in_zoom_out(MMAL_COMPONENT_T *camera, ZoomLevel zoom_le
     }
     else if (zoom_level == ZOOM_OUT)
     {
-        if (crop.rect.width >= max_zoom_size_16P16)
+        unsigned int increased_size = crop.rect.width + zoom_increment_16P16;
+        if (increased_size < crop.rect.width) //overflow
         {
             crop.rect.width = 65536;
             crop.rect.height = 65536;
         }
         else
         {
-            crop.rect.width += zoom_increment_16P16;
-            crop.rect.height += zoom_increment_16P16;
+            crop.rect.width = increased_size;
+            crop.rect.height = increased_size;
         }
     }
 
