@@ -195,7 +195,7 @@ static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_com
 
 #define parameter_reset -99999
 
-#define zoom_full_16P16 (65536UL / 10)
+#define zoom_full_16P16 ((unsigned int)(65536 * 0.15))
 #define zoom_increment_16P16 (65536UL / 10)
 
 /**
@@ -1363,7 +1363,7 @@ int raspicamcontrol_set_ROI(MMAL_COMPONENT_T *camera, PARAM_FLOAT_RECT_T rect)
  * @param zoom_level zoom level enum
  * @return 0 if successful, non-zero otherwise
  */
-int raspicamcontrol_zoom_in_zoom_out(MMAL_COMPONENT_T *camera, ZoomLevel zoom_level) {
+int raspicamcontrol_zoom_in_zoom_out(MMAL_COMPONENT_T *camera, ZOOM_COMMAND_T zoom_level, PARAM_FLOAT_RECT_T *roi) {
     MMAL_PARAMETER_INPUT_CROP_T crop;
     crop.hdr.id = MMAL_PARAMETER_INPUT_CROP;
     crop.hdr.size = sizeof(crop);
@@ -1416,7 +1416,19 @@ int raspicamcontrol_zoom_in_zoom_out(MMAL_COMPONENT_T *camera, ZoomLevel zoom_le
         crop.rect.y = centered_top_coordinate;
     }
 
-    return mmal_port_parameter_set(camera->control, &crop.hdr);
+    int ret = mmal_status_to_int(mmal_port_parameter_set(camera->control, &crop.hdr));
+
+    if (ret == 0) {
+       roi->x = roi->y = (double)crop.rect.x/65536;
+       roi->w = roi->h = (double)crop.rect.width/65536;
+    }
+    else
+    {
+        vcos_log_error("Failed to set crop values, x/y: %u, w/h: %u", crop.rect.x, crop.rect.width);
+        ret = 1;
+    }
+
+    return ret;
 }
 
 /**
