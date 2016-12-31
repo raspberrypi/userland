@@ -1360,10 +1360,10 @@ int raspicamcontrol_set_ROI(MMAL_COMPONENT_T *camera, PARAM_FLOAT_RECT_T rect)
 /**
  * Zoom in and Zoom out by changing ROI
  * @param camera Pointer to camera component
- * @param zoom_level zoom level enum
+ * @param zoom_command zoom command enum
  * @return 0 if successful, non-zero otherwise
  */
-int raspicamcontrol_zoom_in_zoom_out(MMAL_COMPONENT_T *camera, ZOOM_COMMAND_T zoom_level, PARAM_FLOAT_RECT_T *roi) {
+int raspicamcontrol_zoom_in_zoom_out(MMAL_COMPONENT_T *camera, ZOOM_COMMAND_T zoom_command, PARAM_FLOAT_RECT_T *roi) {
     MMAL_PARAMETER_INPUT_CROP_T crop;
     crop.hdr.id = MMAL_PARAMETER_INPUT_CROP;
     crop.hdr.size = sizeof(crop);
@@ -1374,7 +1374,7 @@ int raspicamcontrol_zoom_in_zoom_out(MMAL_COMPONENT_T *camera, ZOOM_COMMAND_T zo
         return 0;
     }
 
-    if (zoom_level == ZOOM_IN)
+    if (zoom_command == ZOOM_IN)
     {
         if (crop.rect.width <= (zoom_full_16P16 + zoom_increment_16P16))
         {
@@ -1387,7 +1387,7 @@ int raspicamcontrol_zoom_in_zoom_out(MMAL_COMPONENT_T *camera, ZOOM_COMMAND_T zo
             crop.rect.height -= zoom_increment_16P16;
         }
     }
-    else if (zoom_level == ZOOM_OUT)
+    else if (zoom_command == ZOOM_OUT)
     {
         unsigned int increased_size = crop.rect.width + zoom_increment_16P16;
         if (increased_size < crop.rect.width) //overflow
@@ -1402,7 +1402,7 @@ int raspicamcontrol_zoom_in_zoom_out(MMAL_COMPONENT_T *camera, ZOOM_COMMAND_T zo
         }
     }
 
-    if (zoom_level == ZOOM_RESET)
+    if (zoom_command == ZOOM_RESET)
     {
         crop.rect.x = 0;
         crop.rect.y = 0;
