@@ -52,7 +52,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 // We use some GNU extensions (basename)
-#define _GNU_SOURCE
+#ifndef _GNU_SOURCE
+   #define _GNU_SOURCE
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -83,6 +85,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiCLI.h"
 
 #include <semaphore.h>
+
+#include <stdbool.h>
 
 // Standard port setting for the camera component
 #define MMAL_CAMERA_PREVIEW_PORT 0
@@ -226,6 +230,8 @@ struct RASPIVID_STATE_S
    int save_pts;
    int64_t starttime;
    int64_t lasttime;
+
+   bool netListen;
 };
 
 
@@ -316,6 +322,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandLevel        31
 #define CommandRaw          32
 #define CommandRawFormat    33
+#define CommandNetListen    34
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -323,7 +330,10 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandWidth,         "-width",      "w",  "Set image width <size>. Default 1920", 1 },
    { CommandHeight,        "-height",     "h",  "Set image height <size>. Default 1080", 1 },
    { CommandBitrate,       "-bitrate",    "b",  "Set bitrate. Use bits per second (e.g. 10MBits/s would be -b 10000000)", 1 },
-   { CommandOutput,        "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -')", 1 },
+   { CommandOutput,        "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -').\n"
+         "\t\t  Connect to a remote IPv4 host (e.g. tcp://192.168.1.2:1234, udp://192.168.1.2:1234)\n"
+         "\t\t  To listen on a TCP port (IPv4) and wait for an incoming connection use -l\n"
+         "\t\t  (e.g. raspvid -l -o tcp://0.0.0.0:3333 -> bind to all network interfaces, raspvid -l -o tcp://192.168.1.1:3333 -> bind to a certain local IPv4)", 1 },
    { CommandVerbose,       "-verbose",    "v",  "Output verbose information during run", 0 },
    { CommandTimeout,       "-timeout",    "t",  "Time (in ms) to capture for. If not specified, set to 5s. Zero to disable", 1 },
    { CommandDemoMode,      "-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 1},
@@ -353,6 +363,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandLevel,         "-level",      "lev","Specify H264 level to use for encoding", 1},
    { CommandRaw,           "-raw",        "r",  "Output filename <filename> for raw video", 1 },
    { CommandRawFormat,     "-raw-format", "rf", "Specify output format for raw video. Default is yuv", 1},
+   { CommandNetListen,     "-listen",     "l", "Listen on a TCP socket", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -427,6 +438,8 @@ static void default_status(RASPIVID_STATE *state)
 
    state->frame = 0;
    state->save_pts = 0;
+
+   state->netListen = false;
 
 
    // Setup preview window defaults
@@ -873,6 +886,13 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          break;
       }
 
+      case CommandNetListen:
+      {
+         state->netListen = true;
+
+         break;
+      }
+
       default:
       {
          // Try parsing for any image specific parameters
@@ -1034,42 +1054,115 @@ static FILE *open_filename(RASPIVID_STATE *pState, char *filename)
 
    if (filename)
    {
-      int network = 0, socktype;
+      bool bNetwork = false;
+      int sfd, socktype;
+
       if(!strncmp("tcp://", filename, 6))
       {
-         network = 1;
+         bNetwork = true;
          socktype = SOCK_STREAM;
       }
-      if(!strncmp("udp://", filename, 6))
+      else if(!strncmp("udp://", filename, 6))
       {
-         network = 1;
+         if (pState->netListen)
+         {
+            fprintf(stderr, "No support for listening in UDP mode\n");
+            exit(131);
+         }
+         bNetwork = true;
          socktype = SOCK_DGRAM;
       }
-      if(network)
+
+      if(bNetwork)
       {
+         unsigned short port;
          filename += 6;
          char *colon;
-         colon = strchr(filename, ':');
-         int sfd = socket(AF_INET, socktype, 0);
-         if(sfd < 0)
+         if(NULL == (colon = strchr(filename, ':')))
          {
-              perror("socket");
+            fprintf(stderr, "%s is not a valid IPv4:port, use something like tcp://1.2.3.4:1234 or udp://1.2.3.4:1234\n",
+                    filename);
+            exit(132);
          }
-
-         unsigned short port;
-         sscanf(colon + 1, "%hu", &port);
+         if(1 != sscanf(colon + 1, "%hu", &port))
+         {
+            fprintf(stderr,
+                    "Port parse failed. %s is not a valid network file name, use something like tcp://1.2.3.4:1234 or udp://1.2.3.4:1234\n",
+                    filename);
+            exit(133);
+         }
+         char chTmp = *colon;
          *colon = 0;
 
-         fprintf(stderr, "Connecting to %s:%hu\n", filename, port);
-         
-         struct sockaddr_in saddr;
+         struct sockaddr_in saddr={};
          saddr.sin_family = AF_INET;
          saddr.sin_port = htons(port);
-         inet_aton(filename, &saddr.sin_addr);
-
-         if(connect(sfd, (struct sockaddr *)&saddr, sizeof(struct sockaddr_in)) < 0)
+         if(0 == inet_aton(filename, &saddr.sin_addr))
          {
-            perror("connect");
+            fprintf(stderr, "inet_aton failed. %s is not a valid IPv4 address\n",
+                    filename);
+            exit(134);
+         }
+         *colon = chTmp;
+
+         if (pState->netListen)
+         {
+            int sockListen = socket(AF_INET, SOCK_STREAM, 0);
+            if (sockListen >= 0)
+            {
+               int iTmp = 1;
+               setsockopt(sockListen, SOL_SOCKET, SO_REUSEADDR, &iTmp, sizeof(int));//no error handling, just go on
+               if (bind(sockListen, (struct sockaddr *) &saddr, sizeof(saddr)) >= 0)
+               {
+                  while ((-1 == (iTmp = listen(sockListen, 0))) && (EINTR == errno))
+                     ;
+                  if (-1 != iTmp)
+                  {
+                     fprintf(stderr, "Waiting for a TCP connection on %s:%"SCNu16"...",
+                             inet_ntoa(saddr.sin_addr), ntohs(saddr.sin_port));
+                     struct sockaddr_in cli_addr;
+                     socklen_t clilen = sizeof(cli_addr);
+                     while ((-1 == (sfd = accept(sockListen, (struct sockaddr *) &cli_addr, &clilen))) && (EINTR == errno))
+                        ;
+                     if (sfd >= 0)
+                        fprintf(stderr, "Client connected from %s:%"SCNu16"\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
+                     else
+                        fprintf(stderr, "Error on accept: %s\n", strerror(errno));
+                  }
+                  else//if (-1 != iTmp)
+                  {
+                     fprintf(stderr, "Error trying to listen on a socket: %s\n", strerror(errno));
+                  }
+               }
+               else//if (bind(sockListen, (struct sockaddr *) &saddr, sizeof(saddr)) >= 0)
+               {
+                  fprintf(stderr, "Error on binding socket: %s\n", strerror(errno));
+               }
+            }
+            else//if (sockListen >= 0)
+            {
+               fprintf(stderr, "Error creating socket: %s\n", strerror(errno));
+            }
+
+            if (sockListen >= 0)//regardless success or error
+               close(sockListen);//do not listen on a given port anymore
+         }
+         else//if (pState->netListen)
+         {
+            if(0 <= (sfd = socket(AF_INET, socktype, 0)))
+            {
+               fprintf(stderr, "Connecting to %s:%hu...", inet_ntoa(saddr.sin_addr), port);
+
+               int iTmp = 1;
+               while ((-1 == (iTmp = connect(sfd, (struct sockaddr *) &saddr, sizeof(struct sockaddr_in)))) && (EINTR == errno))
+                  ;
+               if (iTmp < 0)
+                  fprintf(stderr, "error: %s\n", strerror(errno));
+               else
+                  fprintf(stderr, "connected, sending video...\n");
+            }
+            else
+               fprintf(stderr, "Error creating socket: %s\n", strerror(errno));
          }
 
          new_handle = fdopen(sfd, "w");
