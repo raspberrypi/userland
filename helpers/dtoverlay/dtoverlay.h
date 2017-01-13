@@ -28,6 +28,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef DTOVERLAY_H
 #define DTOVERLAY_H
 
+#include <stdarg.h>
+
 #define BE4(x) ((x)>>24)&0xff, ((x)>>16)&0xff, ((x)>>8)&0xff, ((x)>>0)&0xff
 #define GETBE4(p, off) ((((unsigned char *)p)[off + 0]<<24) + (((unsigned char *)p)[off + 1]<<16) + \
                   (((unsigned char *)p)[off + 2]<<8) + (((unsigned char *)p)[off + 3]<<0))
@@ -60,12 +62,13 @@ typedef struct dtoverlay_struct
 typedef struct dtblob_struct
 {
    void *fdt;
-   int fdt_is_malloced;
+   char fdt_is_malloced;
+   char trailer_is_malloced;
+   char fixups_applied;
    int min_phandle;
    int max_phandle;
    void *trailer;
    int trailer_len;
-   int trailer_is_malloced;
 } DTBLOB_T;
 
 
@@ -77,6 +80,15 @@ typedef int (*override_callback_t)(int override_type,
 				   const char *prop_name, int target_phandle,
 				   int target_off, int target_size,
 				   void *callback_value);
+
+uint8_t dtoverlay_read_u8(const void *src, int off);
+uint16_t dtoverlay_read_u16(const void *src, int off);
+uint32_t dtoverlay_read_u32(const void *src, int off);
+uint64_t dtoverlay_read_u64(const void *src, int off);
+void dtoverlay_write_u8(void *dst, int off, uint32_t val);
+void dtoverlay_write_u16(void *dst, int off, uint32_t val);
+void dtoverlay_write_u32(void *dst, int off, uint32_t val);
+void dtoverlay_write_u64(void *dst, int off, uint64_t val);
 
 /* Return values: -ve = fatal error, positive = non-fatal error */
 int dtoverlay_create_node(DTBLOB_T *dtb, const char *node_name, int path_len);
@@ -168,11 +180,18 @@ static inline void dtoverlay_dtb_set_trailer(DTBLOB_T *dtb,
 
 int dtoverlay_find_phandle(DTBLOB_T *dtb, int phandle);
 
+int dtoverlay_find_symbol(DTBLOB_T *dtb, const char *symbol_name);
+
 int dtoverlay_find_matching_node(DTBLOB_T *dtb, const char **node_names,
                                  int pos);
 
+int dtoverlay_node_is_enabled(DTBLOB_T *dtb, int pos);
+
 const void *dtoverlay_get_property(DTBLOB_T *dtb, int pos,
                                    const char *prop_name, int *prop_len);
+
+int dtoverlay_set_property(DTBLOB_T *dtb, int pos,
+                           const char *prop_name, const void *prop, int prop_len);
 
 const char *dtoverlay_get_alias(DTBLOB_T *dtb, const char *alias_name);
 

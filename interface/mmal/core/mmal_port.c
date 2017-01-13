@@ -250,7 +250,7 @@ MMAL_PORT_T **mmal_ports_alloc(MMAL_COMPONENT_T *component, unsigned int ports_n
    MMAL_PORT_T **ports;
    unsigned int i;
 
-   ports = vcos_malloc(sizeof(MMAL_PORT_T *) * ports_num, "mmal ports");
+   ports = vcos_calloc(1, sizeof(MMAL_PORT_T *) * ports_num, "mmal ports");
    if (!ports)
       return 0;
 
@@ -724,7 +724,8 @@ MMAL_STATUS_T mmal_port_send_buffer(MMAL_PORT_T *port,
              buffer ? (int)buffer->length : 0);
 #endif
 
-   if (!buffer->data && !(port->capabilities & MMAL_PORT_CAPABILITY_PASSTHROUGH))
+   if (buffer->alloc_size && !buffer->data &&
+       !(port->capabilities & MMAL_PORT_CAPABILITY_PASSTHROUGH))
    {
       LOG_ERROR("%s(%p) received invalid buffer header", port->name, port);
       return MMAL_EINVAL;

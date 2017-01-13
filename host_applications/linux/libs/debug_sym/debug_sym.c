@@ -89,6 +89,7 @@ struct opaque_vc_mem_access_handle_t
     VC_MEM_ADDR_T       vcSymbolTableOffset;
     unsigned            numSymbols;
     VC_DEBUG_SYMBOL_T  *symbol;
+    int                 use_vc_mem;    /* using mmap-ed memory rather than real file */
 };
 
 #if 1
@@ -140,13 +141,13 @@ int OpenVideoCoreMemory( VC_MEM_ACCESS_HANDLE_T *vcHandlePtr  )
 ***************************************************************************/
 
 struct fb_dmacopy {
-	uint32_t dst;
+	void *dst;
 	uint32_t src;
 	uint32_t length;
 };
 #define FBIODMACOPY _IOW('z', 0x22, struct fb_dmacopy)
 
-static int vc_mem_copy(uint32_t dst, uint32_t src, uint32_t length)
+static int vc_mem_copy(void *dst, uint32_t src, uint32_t length)
 {
     const char *filename = "/dev/fb0";
     int memFd;
@@ -186,7 +187,6 @@ int OpenVideoCoreMemoryFileWithOffset( const char *filename, VC_MEM_ACCESS_HANDL
     VC_MEM_ADDR_T           symAddr;
     size_t                  symTableSize;
     unsigned                symIdx;
-    int                     use_vc_mem = 1;
 
     struct
     {
@@ -204,15 +204,15 @@ int OpenVideoCoreMemoryFileWithOffset( const char *filename, VC_MEM_ACCESS_HANDL
 
     if ( filename == NULL )
     {
-        use_vc_mem = 1;
+        newHandle->use_vc_mem = 1;
         filename = "/dev/vc-mem";
     }
     else
     {
-        use_vc_mem = 0;
+        newHandle->use_vc_mem = 0;
     }
 
-    if (( newHandle->memFd = open( filename, ( use_vc_mem ? O_RDWR : O_RDONLY ) | O_SYNC )) < 0 )
+    if (( newHandle->memFd = open( filename, ( newHandle->use_vc_mem ? O_RDWR : O_RDONLY ) | O_SYNC )) < 0 )
     {
         ERR( "Unable to open '%s': %s(%d)\n", filename, strerror( errno ), errno );
         free(newHandle);
@@ -220,7 +220,7 @@ int OpenVideoCoreMemoryFileWithOffset( const char *filename, VC_MEM_ACCESS_HANDL
     }
     DBG( "Opened %s memFd = %d", filename, newHandle->memFd );
 
-    if ( use_vc_mem )
+    if ( newHandle->use_vc_mem )
     {
         newHandle->memFdBase = 0;
 
@@ -298,7 +298,7 @@ int OpenVideoCoreMemoryFileWithOffset( const char *filename, VC_MEM_ACCESS_HANDL
     // When reading from a file, the VC binary is read into a buffer and the effective base is 0.
     // But that may not be the actual base address the binary is intended to be loaded to.  The
     // following reads the debug header to find out what the actual base address is.
-    if( !use_vc_mem )
+    if( !newHandle->use_vc_mem )
     {
         // Read the complete debug header
         if ( !ReadVideoCoreMemory( newHandle,
@@ -623,10 +623,10 @@ static int AccessVideoCoreMemory( VC_MEM_ACCESS_HANDLE_T vcHandle,
     }
 #else
     // DMA allows memory to be accessed above 1008M and is more coherent so try this first
-    if (mem_op == READ_MEM)
+    if (mem_op == READ_MEM && vcHandle->use_vc_mem)
     {
         DBG( "AccessVideoCoreMemory: %p, %x, %d", buf, origVcMemAddr, numBytes );
-        int s = vc_mem_copy((uint32_t)buf, (uint32_t)origVcMemAddr, numBytes);
+        int s = vc_mem_copy(buf, (uint32_t)origVcMemAddr, numBytes);
         if (s == 0)
             return 1;
     }

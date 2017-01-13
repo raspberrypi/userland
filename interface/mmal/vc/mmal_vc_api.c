@@ -1268,7 +1268,7 @@ static uint8_t *mmal_vc_port_payload_alloc(MMAL_PORT_T *port, uint32_t payload_s
    else
    {
       /* Allocate conventional memory */
-      ret = vcos_malloc(payload_size, "mmal_vc_port payload");
+      ret = vcos_calloc(1, payload_size, "mmal_vc_port payload");
       if (!ret)
       {
          LOG_ERROR("could not allocate %i bytes", (int)payload_size);

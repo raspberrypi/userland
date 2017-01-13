@@ -409,7 +409,7 @@ VCHPRE_ int VCHPOST_ vc_dispmanx_resource_write_data( DISPMANX_RESOURCE_HANDLE_T
  *       void * src_address
  *       const VC_RECT_T * rect
  *
- * Description: Copy the bitmap data to VideoCore memory
+ * Description: Copy the bitmap data from VideoCore memory
  *
  * Returns: 0 or failure
  *

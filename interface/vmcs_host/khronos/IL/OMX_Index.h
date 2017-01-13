@@ -521,11 +521,24 @@ typedef enum OMX_INDEXTYPE {
     OMX_IndexParamCameraRxConfig,                             /**< reference: OMX_PARAM_CAMERARXCONFIG_TYPE */
     OMX_IndexParamCameraRxTiming,                             /**< reference: OMX_PARAM_CAMERARXTIMING_TYPE */
     OMX_IndexParamDynamicParameterConfig,                     /**< reference: OMX_PARAM_U32TYPE */
+
+    // 0x7f000100
     OMX_IndexParamBrcmVideoAVCSPSTimingEnable,                /** reference: OMX_CONFIG_PORTBOOLEANTYPE */
     OMX_IndexParamBrcmBayerOrder,                             /** reference: OMX_PARAM_BAYERORDERTYPE */
     OMX_IndexParamBrcmMaxNumCallbacks,                        /**< reference: OMX_PARAM_U32TYPE */
     OMX_IndexParamBrcmJpegRestartInterval,                    /**< reference: OMX_PARAM_U32TYPE */
-    OMX_IndexParamBrcmSupportsSlices,                         /**< reference: OMX_CONFIG_PORT_BOOLEANTYPE */
+    OMX_IndexParamBrcmSupportsSlices,                         /**< reference: OMX_CONFIG_PORTBOOLEANTYPE */
+    OMX_IndexParamBrcmIspBlockOverride,                       /**< reference: OMX_PARAM_U32TYPE */
+    OMX_IndexParamBrcmSupportsUnalignedSliceheight,           /**< reference: OMX_CONFIG_PORTBOOLEANTYPE */
+    OMX_IndexParamBrcmLensShadingOverride,                    /**< reference: OMX_PARAM_LENSSHADINGOVERRIDETYPE */
+    OMX_IndexParamBrcmBlackLevel,                             /**< reference: OMX_PARAM_U32TYPE */
+    OMX_IndexParamOutputShift,                                /**< reference: OMX_PARAM_S32TYPE */
+    OMX_IndexParamCcmShift,                                   /**< reference: OMX_PARAM_S32TYPE */
+    OMX_IndexParamCustomCcm,                                  /**< reference: OMX_PARAM_CUSTOMCCMTYPE */
+    OMX_IndexConfigCameraAnalogGain,                          /**< reference: OMX_CONFIG_CAMERAGAINTYPE */
+    OMX_IndexConfigCameraDigitalGain,                         /**< reference: OMX_CONFIG_CAMERAGAINTYPE */
+    OMX_IndexConfigBrcmDroppableRunLength,                    /**< reference: OMX_PARAM_U32TYPE */
+    OMX_IndexParamMinimumAlignment,                           /**< reference: OMX_PARAM_MINALIGNTYPE */
     OMX_IndexMax = 0x7FFFFFFF
 } OMX_INDEXTYPE;
 

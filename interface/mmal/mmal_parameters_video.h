@@ -102,6 +102,8 @@ enum {
    MMAL_PARAMETER_VIDEO_ENCODE_SPS_TIMING,         /**< Take a @ref MMAL_PARAMETER_BOOLEAN_T */
    MMAL_PARAMETER_VIDEO_MAX_NUM_CALLBACKS,         /**< Take a @ref MMAL_PARAMETER_UINT32_T */
    MMAL_PARAMETER_VIDEO_SOURCE_PATTERN,         /**< Take a @ref MMAL_PARAMETER_SOURCE_PATTERN_T */
+   MMAL_PARAMETER_VIDEO_ENCODE_SEPARATE_NAL_BUFS,  /**< Take a @ref MMAL_PARAMETER_BOOLEAN_T */
+   MMAL_PARAMETER_VIDEO_DROPPABLE_PFRAME_LENGTH,   /**< Take a @ref MMAL_PARAMETER_UINT32_T */
 };
 
 /** Display transformations.
@@ -151,6 +153,19 @@ typedef enum MMAL_DISPLAYSET_T {
    MMAL_DISPLAY_SET_ALPHA = 0x400,
    MMAL_DISPLAY_SET_DUMMY = 0x7FFFFFFF
 } MMAL_DISPLAYSET_T;
+
+typedef enum MMAL_DISPLAYALPHAFLAGS_T {
+  MMAL_DISPLAY_ALPHA_FLAGS_NONE = 0,
+  /**< Discard all lower layers as if this layer were fullscreen and completely
+   * opaque. This flag removes the lower layers from the display list, therefore
+   * avoiding using resources in wasted effort.
+   */
+  MMAL_DISPLAY_ALPHA_FLAGS_DISCARD_LOWER_LAYERS = 1<<29,
+  /**< Alpha values are already premultiplied */
+  MMAL_DISPLAY_ALPHA_FLAGS_PREMULT = 1<<30,
+  /**< Mix the per pixel alpha (if present) and the per plane alpha. */
+  MMAL_DISPLAY_ALPHA_FLAGS_MIX = 1<<31,
+} MMAL_DISPLAYALPHAFLAGS_T;
 
 /**
 This config sets the output display device, as well as the region used
@@ -212,8 +227,9 @@ typedef struct MMAL_DISPLAYREGION_T {
    /** Set to non-zero to ensure copy protection is used on output.
     */
    MMAL_BOOL_T copyprotect_required;
-   /** Level of opacity of the layer, where zero is fully transparent and
+   /** Bits 7-0: Level of opacity of the layer, where zero is fully transparent and
     * 255 is fully opaque.
+    * Bits 31-8: Flags from \code MMAL_DISPLAYALPHAFLAGS_T for alpha mode selection.
     */
    uint32_t alpha;
 } MMAL_DISPLAYREGION_T;
@@ -503,6 +519,9 @@ typedef struct MMAL_PARAMETER_VIDEO_SOURCE_PATTERN_T {
    MMAL_PARAMETER_HEADER_T hdr;
 
    MMAL_SOURCE_PATTERN_T pattern;
+   uint32_t param;                              /**< Colour for PATTERN_COLOUR mode */
+   uint32_t framecount;                         /**< Number of frames to produce. 0 for continuous. */
+   MMAL_RATIONAL_T framerate;                   /**< Framerate used when determining buffer timestamps */
 } MMAL_PARAMETER_VIDEO_SOURCE_PATTERN_T;
 
 

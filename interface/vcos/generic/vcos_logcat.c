@@ -124,6 +124,11 @@ VCOS_STATUS_T vcos_log_set_cmd( VCOS_CMD_PARAM_T *param )
          vcos_cmd_printf( param, "Category %s level set to %s\n", name, levelStr );
          break;
       }
+      else if ( vcos_strcmp( name, "*") == 0 )
+      {
+         cat->level = level;
+         vcos_cmd_printf( param, "Category %s level set to %s\n", name, levelStr );
+      }
    }
    if ( cat == NULL )
    {
@@ -289,7 +294,7 @@ static int read_tok(char *tok, size_t toklen, const char **pstr, char sep)
 
    while ((ch = *str) != '\0' &&
           ch != sep &&
-          (isalnum((int)ch) || (ch == '_')) &&
+          (isalnum((int)ch) || (ch == '_') || (ch == '*')) &&
           n != toklen-1)
    {
       tok[n++] = ch;
@@ -408,7 +413,7 @@ void vcos_log_register(const char *name, VCOS_LOG_CAT_T *category)
     */
 
    env = _VCOS_LOG_LEVEL();
-   if (env)
+   if (env && env[0])
    {
       do
       {
@@ -417,10 +422,11 @@ void vcos_log_register(const char *name, VCOS_LOG_CAT_T *category)
          if (read_tok(env_name, sizeof(env_name), &env, ':') &&
              read_level(&level, &env, ','))
          {
-            if (strcmp(env_name, name) == 0)
+            if (strcmp(env_name, name) == 0 || strcmp(env_name, "*") == 0)
             {
+               // we could match both * and env_name, so make sure * comes
+               // first in the logging_level string
                category->level = level;
-               break;
             }
          }
          else

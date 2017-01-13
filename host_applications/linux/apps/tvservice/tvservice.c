@@ -119,7 +119,7 @@ static void show_usage( void )
    LOG_STD( "  -e, --explicit=\"GROUP MODE DRIVE\" Power on HDMI with explicit GROUP (CEA, DMT, CEA_3D_SBS, CEA_3D_TB, CEA_3D_FP, CEA_3D_FS)\n"
             "                                      MODE (see --modes) and DRIVE (HDMI, DVI)" );
    LOG_STD( "  -t, --ntsc                        Use NTSC frequency for HDMI mode (e.g. 59.94Hz rather than 60Hz)" );
-   LOG_STD( "  -c, --sdtvon=\"MODE ASPECT\"        Power on SDTV with MODE (PAL or NTSC) and ASPECT (4:3 14:9 or 16:9)" );
+   LOG_STD( "  -c, --sdtvon=\"MODE ASPECT [P]\"    Power on SDTV with MODE (PAL or NTSC) and ASPECT (4:3 14:9 or 16:9) Add P for progressive" );
    LOG_STD( "  -o, --off                         Power off the display" );
    LOG_STD( "  -m, --modes=GROUP                 Get supported modes for GROUP (CEA, DMT)" );
    LOG_STD( "  -M, --monitor                     Monitor HDMI events" );
@@ -664,12 +664,14 @@ static int set_property(HDMI_PROPERTY_T prop, uint32_t param1, uint32_t param2)
 }
 
 static int power_on_sdtv( SDTV_MODE_T mode,
-                              SDTV_ASPECT_T aspect )
+                              SDTV_ASPECT_T aspect, int sdtv_progressive )
 {
    int ret;
    SDTV_OPTIONS_T options;
    memset(&options, 0, sizeof options);
    options.aspect = aspect;
+   if (sdtv_progressive)
+      mode |= SDTV_MODE_PROGRESSIVE;
    LOG_STD( "Powering on SDTV with explicit settings (mode:%d aspect:%d)",
             mode, aspect );
 
@@ -729,6 +731,7 @@ int main( int argc, char **argv )
    HDMI_RES_GROUP_T get_modes_group = HDMI_RES_GROUP_INVALID;
    SDTV_MODE_T sdtvon_mode = SDTV_MODE_NTSC;
    SDTV_ASPECT_T sdtvon_aspect = SDTV_ASPECT_UNKNOWN;
+   int sdtvon_progressive = 0;
 
    // Initialize VCOS
    vcos_init();
@@ -832,10 +835,9 @@ int main( int argc, char **argv )
          }
          case OPT_SDTVON:
          {
-            char mode_str[32], aspect_str[32];
-
-            if ( sscanf( optarg, "%s %s", mode_str,
-                         aspect_str ) != 2 )
+            char mode_str[32], aspect_str[32], progressive_str[32];
+            int s = sscanf( optarg, "%s %s %s", mode_str, aspect_str, progressive_str );
+            if ( s != 2 && s != 3 )
             {
                LOG_ERR( "Invalid arguments '%s'", optarg );
                goto err_out;
@@ -877,6 +879,10 @@ int main( int argc, char **argv )
                sdtvon_aspect = SDTV_ASPECT_16_9;
             }
 
+            if (s == 3 && vcos_strcasecmp( "P", progressive_str ) == 0 )
+            {
+              sdtvon_progressive = 1;
+            }
             opt_sdtvon = 1;
             break;
          }
@@ -1063,7 +1069,7 @@ int main( int argc, char **argv )
    else if ( opt_sdtvon == 1 )
    {
       if ( power_on_sdtv( sdtvon_mode,
-                              sdtvon_aspect ) != 0 )
+                              sdtvon_aspect, sdtvon_progressive ) != 0 )
       {
          goto err_stop_service;
       }

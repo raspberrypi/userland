@@ -681,7 +681,9 @@ static void *tvservice_notify_func(void *arg) {
 
    vcos_log_trace("TV service async thread started");
    /* Check starting state, and put service in use if necessary */
-   tvservice_send_command_reply( VC_TV_GET_DISPLAY_STATE, NULL, 0, &tvstate, sizeof(TV_DISPLAY_STATE_T));
+   success = tvservice_send_command_reply( VC_TV_GET_DISPLAY_STATE, NULL, 0, &tvstate, sizeof(TV_DISPLAY_STATE_T));
+   if (success != 0)
+      return 0;
    if (tvstate.state & VC_HDMI_ATTACHED)
    {
       /* Connected */
@@ -691,6 +693,9 @@ static void *tvservice_notify_func(void *arg) {
          vchi_service_use(state->notify_handle[0]);
       }
    }
+   // the state machine below only wants a single bit to be set
+   if (tvstate.state & (VC_HDMI_ATTACHED|VC_HDMI_UNPLUGGED))
+      tvstate.state &= ~(VC_HDMI_HDMI | VC_HDMI_DVI);
 
    while(1) {
       VCOS_STATUS_T status = vcos_event_wait(&tvservice_notify_available_event);
@@ -716,7 +721,7 @@ static void *tvservice_notify_func(void *arg) {
                         param1, param2);
          switch(reason) {
          case VC_HDMI_UNPLUGGED:
-            if(tvstate.state & (VC_HDMI_HDMI|VC_HDMI_DVI|VC_HDMI_ATTACHED)) {
+            if(tvstate.state & (VC_HDMI_HDMI|VC_HDMI_DVI)) {
                state->copy_protect = 0;
                if((tvstate.state & VC_HDMI_ATTACHED) == 0) {
                   vchi_service_release(state->notify_handle[0]);

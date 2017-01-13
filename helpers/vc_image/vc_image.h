@@ -48,6 +48,7 @@ extern "C" {
 
 /* Definition for VC_IMAGE_TYPE_T live in here */
 #include "vcinclude/vc_image_types.h"
+#include "helpers/vc_image/vc_image_helper.h"
 
 #if !defined __SYMBIAN32__
 
@@ -106,7 +107,8 @@ extern "C" {
       VC_IMAGE_PROP_IS_PACKED,
       VC_IMAGE_PROP_YUV_COLOURSPACE,
       /* Linked-multichannel properties*/
-      VC_IMAGE_PROP_LINKED_MULTICHANN
+      VC_IMAGE_PROP_LINKED_MULTICHANN,
+      VC_IMAGE_PROP_VPITCH
    } VC_IMAGE_PROPERTY_T;
 
    /* A property key and value */
@@ -118,39 +120,6 @@ extern "C" {
 #define VC_IMAGE_PROPLIST_COUNT(x) (sizeof(x)/sizeof(x[0]))
 #define VC_IMAGE_PROPLIST_NULL   ((VC_IMAGE_PROPLIST_T*)0)
 
-   /* Format specific infos for vc images */
-
-   /* YUV information, co-sited h/v flags & colour space words */
-   typedef enum {
-      VC_IMAGE_YUVINFO_UNSPECIFIED    = 0,   /* Unknown or unset - defaults to BT601 interstitial */
-
-      /* colour-space conversions data [4 bits] */
-      /* Note that colour conversions for SMPTE 170M are identical to BT.601 */
-      VC_IMAGE_YUVINFO_CSC_ITUR_BT601      = 1,   /* ITU-R BT.601-5 [SDTV] (compatible with VideoCore-II) */
-      VC_IMAGE_YUVINFO_CSC_ITUR_BT709      = 2,   /* ITU-R BT.709-3 [HDTV] */
-      VC_IMAGE_YUVINFO_CSC_JPEG_JFIF       = 3,   /* JPEG JFIF */
-      VC_IMAGE_YUVINFO_CSC_FCC             = 4,   /* Title 47 Code of Federal Regulations (2003) 73.682 (a) (20) */
-      VC_IMAGE_YUVINFO_CSC_SMPTE_240M      = 5,   /* Society of Motion Picture and Television Engineers 240M (1999) */
-      VC_IMAGE_YUVINFO_CSC_ITUR_BT470_2_M  = 6,  /* ITU-R BT.470-2 System M */
-      VC_IMAGE_YUVINFO_CSC_ITUR_BT470_2_BG = 7,  /* ITU-R BT.470-2 System B,G */
-      VC_IMAGE_YUVINFO_CSC_JPEG_JFIF_Y16_255 = 8, /* JPEG JFIF, but with 16..255 luma */
-      VC_IMAGE_YUVINFO_CSC_CUSTOM          = 15,  /* Custom colour matrix follows header */
-      VC_IMAGE_YUVINFO_CSC_SMPTE_170M      = VC_IMAGE_YUVINFO_CSC_ITUR_BT601,
-
-      /* co-sited flags, assumed interstitial if not co-sited [2 bits] */
-      VC_IMAGE_YUVINFO_H_COSITED      = 256,
-      VC_IMAGE_YUVINFO_V_COSITED      = 512,
-
-      VC_IMAGE_YUVINFO_TOP_BOTTOM     = 1024,
-      VC_IMAGE_YUVINFO_DECIMATED      = 2048,
-      VC_IMAGE_YUVINFO_PACKED         = 4096,
-
-      /* Certain YUV image formats can either be V/U interleaved or U/V interleaved */
-      VC_IMAGE_YUVINFO_IS_VU          = 0x8000,
-
-      /* Force Metaware to use 16 bits */
-      VC_IMAGE_YUVINFO_FORCE_ENUM_16BIT = 0xffff,
-   } VC_IMAGE_YUVINFO_T;
 
    /* Useful bits that can be set, to check validity we'll assume that all other
       bits should be zero and enforce this in vc_image functions to catch people
@@ -160,103 +129,7 @@ extern "C" {
    /* Define the bits of info used to denote the colourspace */
 #define VC_IMAGE_INFO_COLOURSPACE  0x0F
 
-   /* Macro's to determine which format a vc_image is */
-
-   typedef struct
-   {
-      unsigned bits_per_pixel : 8,
-      is_rgb            : 1,
-      is_yuv            : 1,
-      is_raster_order   : 1,
-      is_brcm1_order  : 1,
-      has_alpha         : 1;
-   } VC_IMAGE_TYPE_INFO_T;
-
-#define VC_IMAGE_COMPONENT_ORDER(red_lsb, green_lsb, blue_lsb, alpha_lsb) \
-            ( (((red_lsb)   & 0x1f) <<  0) \
-            | (((green_lsb) & 0x1f) <<  6) \
-            | (((blue_lsb)  & 0x1f) << 12) \
-            | (((alpha_lsb) & 0x1f) << 18) )
-#define VC_IMAGE_RED_OFFSET(component_order)    (((component_order) >>  0) & 0x1f)
-#define VC_IMAGE_GREEN_OFFSET(component_order)  (((component_order) >>  6) & 0x1f)
-#define VC_IMAGE_BLUE_OFFSET(component_order)   (((component_order) >> 12) & 0x1f)
-#define VC_IMAGE_ALPHA_OFFSET(component_order)  (((component_order) >> 18) & 0x1f)
-
-   extern const VC_IMAGE_TYPE_INFO_T vc_image_type_info[VC_IMAGE_MAX + 1];
-   extern const unsigned int vc_image_rgb_component_order[VC_IMAGE_MAX + 1];
-
-#define VC_IMAGE_IS_YUV(type) (vc_image_type_info[type].is_yuv)
-#define VC_IMAGE_IS_RGB(type) (vc_image_type_info[type].is_rgb)
-#define VC_IMAGE_IS_RASTER(type) (vc_image_type_info[type].is_raster_order)
-#define VC_IMAGE_IS_TFORMAT(type) (vc_image_type_info[type].is_brcm1_order)
-#define VC_IMAGE_BITS_PER_PIXEL(type) (vc_image_type_info[type].bits_per_pixel)
-#define VC_IMAGE_HAS_ALPHA(type) (vc_image_type_info[type].has_alpha)
-
-#define case_VC_IMAGE_ANY_YUV case VC_IMAGE_YUV420:      \
-   case VC_IMAGE_YUV420SP:    \
-   case VC_IMAGE_YUV422:      \
-   case VC_IMAGE_YUV_UV:      \
-   case VC_IMAGE_YUV_UV32:    \
-   case VC_IMAGE_YUV422PLANAR
-
-#define case_VC_IMAGE_ANY_RGB case VC_IMAGE_RGB565:      \
-   case VC_IMAGE_RGB2X9:      \
-   case VC_IMAGE_RGB666:      \
-   case VC_IMAGE_RGBA32:      \
-   case VC_IMAGE_RGBX32:      \
-   case VC_IMAGE_RGBA16:      \
-   case VC_IMAGE_RGBA565:     \
-   case VC_IMAGE_RGB888:      \
-   case VC_IMAGE_TF_RGBA32:   \
-   case VC_IMAGE_TF_RGBX32:   \
-   case VC_IMAGE_TF_RGBA16:   \
-   case VC_IMAGE_TF_RGBA5551: \
-   case VC_IMAGE_TF_RGB565:   \
-   case VC_IMAGE_BGR888:      \
-   case VC_IMAGE_BGR888_NP:   \
-   case VC_IMAGE_ARGB8888:    \
-   case VC_IMAGE_XRGB8888
-
-#define case_VC_IMAGE_ANY_RGB_NOT_TF case VC_IMAGE_RGB565:      \
-   case VC_IMAGE_RGB2X9:      \
-   case VC_IMAGE_RGB666:      \
-   case VC_IMAGE_RGBA32:      \
-   case VC_IMAGE_RGBX32:      \
-   case VC_IMAGE_RGBA16:      \
-   case VC_IMAGE_RGBA565:     \
-   case VC_IMAGE_RGB888:      \
-   case VC_IMAGE_BGR888:      \
-   case VC_IMAGE_BGR888_NP:   \
-   case VC_IMAGE_ARGB8888:    \
-   case VC_IMAGE_XRGB8888:    \
-   case VC_IMAGE_RGBX8888:    \
-   case VC_IMAGE_BGRX8888
-
-#define case_VC_IMAGE_ANY_TFORMAT   case VC_IMAGE_TF_RGBA32:   \
-   case VC_IMAGE_TF_RGBX32:   \
-   case VC_IMAGE_TF_FLOAT:    \
-   case VC_IMAGE_TF_RGBA16:   \
-   case VC_IMAGE_TF_RGBA5551: \
-   case VC_IMAGE_TF_RGB565:   \
-   case VC_IMAGE_TF_YA88:     \
-   case VC_IMAGE_TF_BYTE:     \
-   case VC_IMAGE_TF_PAL8:     \
-   case VC_IMAGE_TF_PAL4:     \
-   case VC_IMAGE_TF_ETC1:     \
-   case VC_IMAGE_TF_Y8:       \
-   case VC_IMAGE_TF_U8:       \
-   case VC_IMAGE_TF_V8:       \
-   case VC_IMAGE_TF_A8:       \
-   case VC_IMAGE_TF_SHORT:    \
-   case VC_IMAGE_TF_1BPP
-
 #endif //#if !defined __SYMBIAN32__
-
-#define VC_IMAGE_YUV_UV_STRIPE_WIDTH_LOG2 7
-#define VC_IMAGE_YUV_UV_STRIPE_WIDTH (1 << VC_IMAGE_YUV_UV_STRIPE_WIDTH_LOG2)
-
-#define VC_IMAGE_YUV_UV32_STRIPE_WIDTH_LOG2 5
-#define VC_IMAGE_YUV_UV32_STRIPE_WIDTH (1 << VC_IMAGE_YUV_UV32_STRIPE_WIDTH_LOG2)
 
 #define is_valid_vc_image_hndl(_img, _type) ((_img) != NULL \
                                  && (_img)->image_data == NULL \
@@ -282,142 +155,6 @@ extern "C" {
 
 #if !defined __SYMBIAN32__
 
-   /* The image structure. */
-   typedef struct vc_image_extra_uv_s {
-      void *u, *v;
-      int vpitch;
-   } VC_IMAGE_EXTRA_UV_T;
-
-   typedef struct vc_image_extra_rgba_s {
-      unsigned component_order   : 24, /* diagnostic use only */
-               normalised_alpha  : 1,
-               transparent_colour: 1,
-               unused_26_31      : 6;
-      unsigned int arg;
-   } VC_IMAGE_EXTRA_RGBA_T;
-
-   typedef struct vc_image_extra_pal_s {
-      short *palette;
-      int palette32 : 1;
-   } VC_IMAGE_EXTRA_PAL_T;
-
-// These fields are subject to change / being moved around
-   typedef struct vc_image_extra_tf_s {
-signed int mipmap_levels        : 8;
-unsigned int xxx                : 23;
-unsigned int cube_map           : 1;
-      void *palette;
-   } VC_IMAGE_EXTRA_TF_T;
-
-   typedef struct vc_image_extra_bayer_s {
-      unsigned short order;
-      unsigned short format;
-      int block_length;
-   } VC_IMAGE_EXTRA_BAYER_T;
-
-//The next block can be used with Visual C++
-//which treats enums as long ints
-   typedef struct vc_image_extra_msbayer_s {
-      unsigned char order;
-      unsigned char format;
-      unsigned char dummy1;
-      unsigned char dummy2;
-      int block_length;
-   } VC_IMAGE_EXTRA_MSBAYER_T;
-
-   typedef struct vc_image_extra_codec_s {
-      int fourcc;
-      int maxsize;  //NB this will be copied to image.size in parmalloc()
-   } VC_IMAGE_EXTRA_CODEC_T;
-
-#define VC_IMAGE_OPENGL_RGBA32    0x14011908       //GL_UNSIGNED_BYTE GL_RGBA
-#define VC_IMAGE_OPENGL_RGB24     0x14011907       //GL_UNSIGNED_BYTE GL_RGB
-#define VC_IMAGE_OPENGL_RGBA16    0x80331908       //GL_UNSIGNED_SHORT_4_4_4_4 GL_RGBA
-#define VC_IMAGE_OPENGL_RGBA5551  0x80341908       //GL_UNSIGNED_SHORT_5_5_5_1 GL_RGBA
-#define VC_IMAGE_OPENGL_RGB565    0x83631907       //GL_UNSIGNED_SHORT_5_6_5 GL_RGB
-#define VC_IMAGE_OPENGL_YA88      0x1401190A       //GL_UNSIGNED_BYTE GL_LUMINANCE_ALPHA
-#define VC_IMAGE_OPENGL_Y8        0x14011909       //GL_UNSIGNED_BYTE GL_LUMINANCE
-#define VC_IMAGE_OPENGL_A8        0x14011906       //GL_UNSIGNED_BYTE GL_ALPHA
-#define VC_IMAGE_OPENGL_ETC1      0x8D64           //GL_ETC1_RGB8_OES
-#define VC_IMAGE_OPENGL_PALETTE4_RGB24             0x8B90   //GL_PALETTE4_RGB8_OES
-#define VC_IMAGE_OPENGL_PALETTE4_RGBA32            0x8B91   //GL_PALETTE4_RGBA8_OES
-#define VC_IMAGE_OPENGL_PALETTE4_RGB565            0x8B92   //GL_PALETTE4_R5_G6_B5_OES
-#define VC_IMAGE_OPENGL_PALETTE4_RGBA16            0x8B93   //GL_PALETTE4_RGBA4_OES
-#define VC_IMAGE_OPENGL_PALETTE4_RGB5551           0x8B94   //GL_PALETTE4_RGB5_A1_OES
-#define VC_IMAGE_OPENGL_PALETTE8_RGB24             0x8B95   //GL_PALETTE8_RGB8_OES
-#define VC_IMAGE_OPENGL_PALETTE8_RGBA32            0x8B96   //GL_PALETTE8_RGBA8_OES
-#define VC_IMAGE_OPENGL_PALETTE8_RGB565            0x8B97   //GL_PALETTE8_R5_G6_B5_OES
-#define VC_IMAGE_OPENGL_PALETTE8_RGBA16            0x8B98   //GL_PALETTE8_RGBA4_OES
-#define VC_IMAGE_OPENGL_PALETTE8_RGB5551           0x8B99   //GL_PALETTE8_RGB5_A1_OES
-
-   typedef struct vc_image_extra_opengl_s {
-      unsigned int format_and_type;
-      void const *palette;
-   } VC_IMAGE_EXTRA_OPENGL_T;
-
-   typedef union {
-      VC_IMAGE_EXTRA_UV_T uv;
-      VC_IMAGE_EXTRA_RGBA_T rgba;
-      VC_IMAGE_EXTRA_PAL_T pal;
-      VC_IMAGE_EXTRA_TF_T tf;
-      VC_IMAGE_EXTRA_BAYER_T bayer;
-      VC_IMAGE_EXTRA_MSBAYER_T msbayer;
-      VC_IMAGE_EXTRA_CODEC_T codec;
-      VC_IMAGE_EXTRA_OPENGL_T opengl;
-   } VC_IMAGE_EXTRA_T;
-
-   /* structure containing various colour meta-data for each format */
-   typedef union {
-#ifdef __HIGHC__
-      VC_IMAGE_YUVINFO_T      yuv;   /* We know Metaware will use 16 bits for this enum, so use the correct type for debug info */
-#else
-      unsigned short          yuv;   /* Information pertinent to all YUV implementations */
-#endif
-      unsigned short          info;  /* dummy, force size to min 16 bits */
-   } VC_IMAGE_INFO_T;
-
-
-   /**
-    * Image handle object, which must be locked before image data becomes
-    * accessible.
-    *
-    * A handle to an image where the image data does not have a guaranteed
-    * storage location.  A call to \c vc_image_lock() must be made to convert
-    * this into a \c VC_IMAGE_BUF_T, which guarantees that image data can
-    * be accessed safely.
-    *
-    * This type will also be used in cases where it's unclear whether or not
-    * the buffer is already locked, and in legacy code.
-    */
-   struct VC_IMAGE_T {
-#ifdef __HIGHC__
-      VC_IMAGE_TYPE_T                 type;           /* Metaware will use 16 bits for this enum
-                                                         so use the correct type for debug info */
-#else
-      unsigned short                  type;           /* should restrict to 16 bits */
-#endif
-      VC_IMAGE_INFO_T                 info;           /* format-specific info; zero for VC02 behaviour */
-      unsigned short                  width;          /* width in pixels */
-      unsigned short                  height;         /* height in pixels */
-      int                             pitch;          /* pitch of image_data array in bytes */
-      int                             size;           /* number of bytes available in image_data array */
-      void                           *image_data;     /* pixel data */
-      VC_IMAGE_EXTRA_T                extra;          /* extra data like palette pointer */
-      VC_METADATA_HEADER_T           *metadata;       /* metadata header for the image */
-      struct opaque_vc_pool_object_s *pool_object;    /* nonNULL if image was allocated from a vc_pool */
-      MEM_HANDLE_T                    mem_handle;     /* the mem handle for relocatable memory storage */
-      int                             metadata_size;  /* size of metadata of each channel in bytes */
-      int                             channel_offset; /* offset of consecutive channels in bytes */
-      uint32_t                        video_timestamp;/* 90000 Hz RTP times domain - derived from audio timestamp */
-      uint8_t                         num_channels;   /* number of channels (2 for stereo) */
-      uint8_t                         current_channel;/* the channel this header is currently pointing to */
-      uint8_t                         linked_multichann_flag;/* Indicate the header has the linked-multichannel structure*/
-      uint8_t                         is_channel_linked;     /* Track if the above structure is been used to link the header
-                                                                into a linked-mulitchannel image */
-      uint8_t                         channel_index;         /* index of the channel this header represents while  
-                                                                it is being linked. */
-      uint8_t                         _dummy[3];      /* pad struct to 64 bytes */
-   };
 
    /**
     * \brief storage for pointers to image headers of the previous and next channel
@@ -431,25 +168,6 @@ unsigned int cube_map           : 1;
       VC_IMAGE_T* next;
    };
    typedef struct VC_IMAGE_LINKED_MULTICHANN_T VC_IMAGE_LINKED_MULTICHANN_T;
-
-   /**
-    * \brief Image buffer object, with image data locked in memory and ready for access.
-    *
-    * This data type is fully compatible with \c VC_IMAGE_T for backwards
-    * compatibility.  New code should use this type where the object refers to
-    * a locked image.
-    */
-   typedef VC_IMAGE_T VC_IMAGE_BUF_T;
-
-# ifdef __COVERITY__
-   /* Currently battling with the size of enums when running through static analysis stage */
-   typedef int vc_image_t_size_check[(sizeof(VC_IMAGE_T) == 68) * 2 - 1];
-# else
-   /* compile time assert to ensure size of VC_IMAGE_T is as expected, if the
-      compiler kicks out a "negative subscript" message then the size
-      of VC_IMAGE_T is *not* 64 bytes, which is a problem ... */
-   typedef int vc_image_t_size_check[(sizeof(VC_IMAGE_T) == 64) * 2 - 1];
-#endif
 
    /* Point type for use in polygon drawing. */
    typedef struct vc_image_point_s {
@@ -496,17 +214,9 @@ unsigned int cube_map           : 1;
    General functions.
    ******************************************************************************/
 
-   int vc_image_bits_per_pixel(VC_IMAGE_TYPE_T type);
-
 //routine to return a bitmask (bit referenced by VC_IMAGE_TYPE_T) of the supported image formats built in
 //this particular version of the vc_image library
    unsigned int vc_image_get_supported_image_formats( void );
-
-   int calculate_pitch(VC_IMAGE_TYPE_T type, int width, int height, uint8_t num_channels, VC_IMAGE_INFO_T *info, VC_IMAGE_EXTRA_T *extra);
-
-   /* Check if an image will use an alternate memory layout, in order to cope with
-    * codec limitation. Applies to YUV_UV images taller than 1344 lines. */
-   int vc_image_is_tall_yuv_uv(VC_IMAGE_TYPE_T type, int height);
 
    /******************************************************************************
    Data member access.
@@ -545,108 +255,7 @@ unsigned int cube_map           : 1;
 
    void vc_image_unlock_perma( VC_IMAGE_BUF_T *img );
 
-   /* Set the type of the VC_IMAGE_T. */
-
-   void vc_image_set_type(VC_IMAGE_T *image, VC_IMAGE_TYPE_T type);
-
-   /* Set the image_data field, noting how big it is. */
-
-   void vc_image_set_image_data(VC_IMAGE_BUF_T *image, int size, void *image_data);
-
-   /* Set the image data with added u and v pointers */
-
-   void vc_image_set_image_data_yuv(VC_IMAGE_BUF_T *image, int size, void *image_y, void *image_u, void *image_v);
-
-   /* Set the dimensions of the image. */
-
-   void vc_image_set_dimensions(VC_IMAGE_T *image, int width, int height);
-
-   /* Check the integrity of a VC_IMAGE_T structure - checks structure values + data ptr */
-
-   int vc_image_verify(const VC_IMAGE_T *image);
-
-   /* Set the pitch (internal_width) of the image. */
-
-   void vc_image_set_pitch(VC_IMAGE_T *image, int pitch);
-
-   /* Specify the vertical pitch for YUV planar images */
-
-   void vc_image_set_vpitch(VC_IMAGE_T *image, int vpitch);
-
-   /* Specify that the YUV image is V/U interleaved. */
-
-   void vc_image_set_is_vu(VC_IMAGE_T *image);
-
-   /* Return 1 if the YUV image is V/U interleaved, else return 0. */
-
-   int vc_image_get_is_vu(const VC_IMAGE_T *image);
-   int vc_image_info_get_is_vu(const VC_IMAGE_INFO_T *info);
-
-   /* Reset the shape of an image */
-
-   int vc_image_reshape(VC_IMAGE_T *image, VC_IMAGE_TYPE_T type, int width, int height);
-
-   /* Return the space required (in bytes) for an image of this type and dimensions. */
-
-   int vc_image_required_size(VC_IMAGE_T *image);
-
-   /* Return the space required (in bytes) for an image of this type's palette. */
-   int vc_image_palette_size (VC_IMAGE_T *image);
-
-   /* Return true if palette is 32bpp */
-   int vc_image_palette_is_32bit(VC_IMAGE_T *image);
-
-   /* Return 1 if image is high-definition, else return 0. */
-   int vc_image_is_high_definition(const VC_IMAGE_T *image);
-
-   /* Retrieve Y, U and V pointers from a YUV image. Note that these are macros. */
-
-#define vc_image_get_y(p) ((unsigned char *)((p)->image_data))
-
-// replaced with functions to allow assert - revert to #define when fixed
-//#define vc_image_get_u(p) ((unsigned char *)((p)->extra.uv.u))
-//#define vc_image_get_v(p) ((unsigned char *)((p)->extra.uv.v))
-   unsigned char *vc_image_get_u(const VC_IMAGE_BUF_T *image);
-   unsigned char *vc_image_get_v(const VC_IMAGE_BUF_T *image);
-
-/* Calculate the address of the given pixel coordinate -- the result may point
- * to a word containing data for several pixels (ie., for sub-8bpp and
- * compressed formats).
- */
-void *vc_image_pixel_addr(VC_IMAGE_BUF_T *image, int x, int y);
-void *vc_image_pixel_addr_mm(VC_IMAGE_BUF_T *image, int x, int y, int miplevel);
-void *vc_image_pixel_addr_u(VC_IMAGE_BUF_T *image, int x, int y);
-void *vc_image_pixel_addr_v(VC_IMAGE_BUF_T *image, int x, int y);
-
-/* As above, but with (0,0) in the bottom-left corner */
-void *vc_image_pixel_addr_gl(VC_IMAGE_BUF_T *image, int x, int y, int miplevel);
-
-#define vc_image_get_y_422(p) vc_image_get_y(p)
-#define vc_image_get_u_422(p) vc_image_get_u(p)
-#define vc_image_get_v_422(p) vc_image_get_v(p)
-
-#define vc_image_get_y_422planar(p) vc_image_get_y(p)
-#define vc_image_get_u_422planar(p) vc_image_get_u(p)
-#define vc_image_get_v_422planar(p) vc_image_get_v(p)
-
-
    /* Mipmap-related functions. Image must be brcm1. */
-
-   /* Return the pitch of the selected mipmap */
-   unsigned int vc_image_get_mipmap_pitch(VC_IMAGE_T *image, int miplvl);
-
-   /* Return the padded height of the selected mipmap (mipmaps must be padded to a
-    * power of 2) */
-   unsigned int vc_image_get_mipmap_padded_height(VC_IMAGE_T *image, int miplvl);
-
-   /* Return the offset, in bytes, of the selected mipmap. */
-   int vc_image_get_mipmap_offset(VC_IMAGE_T *image, int miplvl);
-
-   /* Return whether the selected mipmap is stored in brcm1 or linear brcm2
-    * format. */
-#define VC_IMAGE_MIPMAP_TFORMAT 0
-#define VC_IMAGE_MIPMAP_LINEAR_BRCM1 1
-   int vc_image_get_mipmap_type(VC_IMAGE_T const *image, int miplvl);
 
    /* Take the base image of an image and scale it down into its mipmaps. */
    /* The filter argument type is likely to change, but 0 should always be a

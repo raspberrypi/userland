@@ -67,7 +67,13 @@ add_library(GLESv2_static STATIC ${GLES_SOURCE})
 add_library(khrn_static STATIC
    ${EGL_SOURCE} ${GLES_SOURCE} ${VG_SOURCE} ${WFC_SOURCE} ${CLIENT_SOURCE})
 
-target_link_libraries(EGL khrn_client vchiq_arm vcos bcm_host -lm)
+if(KHRONOS_HAVE_VCSM)
+include_directories (../../host_applications/linux/libs/sm )
+set(VCSM_LIBS vcsm)
+add_definitions(-DKHRONOS_HAVE_VCSM)
+endif()
+
+target_link_libraries(EGL khrn_client vchiq_arm vcos bcm_host ${VCSM_LIBS} -lm)
 target_link_libraries(GLESv2 EGL khrn_client vcos)
 target_link_libraries(WFC EGL)
 target_link_libraries(OpenVG EGL)
@@ -81,7 +87,7 @@ add_library(brcmGLESv2 ${SHARED} ${GLES_SOURCE})
 add_library(brcmOpenVG ${SHARED} ${VG_SOURCE})
 add_library(brcmWFC ${SHARED} ${WFC_SOURCE})
 
-target_link_libraries(brcmEGL khrn_client vchiq_arm vcos bcm_host -lm)
+target_link_libraries(brcmEGL khrn_client vchiq_arm vcos bcm_host ${VCSM_LIBS} -lm)
 target_link_libraries(brcmGLESv2 brcmEGL khrn_client vcos)
 target_link_libraries(brcmWFC brcmEGL)
 target_link_libraries(brcmOpenVG brcmEGL)

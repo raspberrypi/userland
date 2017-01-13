@@ -44,10 +44,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiPreview.h"
 #include "RaspiCLI.h"
 
-#define CommandPreview        1
-#define CommandFullScreen     2
-#define CommandOpacity        3
-#define CommandDisablePreview 4
+enum
+{
+   CommandPreview,
+   CommandFullScreen,
+   CommandOpacity,
+   CommandDisablePreview
+};
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -87,7 +90,7 @@ MMAL_STATUS_T raspipreview_create(RASPIPREVIEW_PARAMETERS *state)
    else
    {
       status = mmal_component_create(MMAL_COMPONENT_DEFAULT_VIDEO_RENDERER,
-            &preview);
+                                     &preview);
 
       if (status != MMAL_SUCCESS)
       {
@@ -199,11 +202,11 @@ void raspipreview_set_defaults(RASPIPREVIEW_PARAMETERS *state)
 void raspipreview_dump_parameters(RASPIPREVIEW_PARAMETERS *state)
 {
    fprintf(stderr, "Preview %s, Full screen %s\n", state->wantPreview ? "Yes" : "No",
-      state->wantFullScreenPreview ? "Yes" : "No");
+           state->wantFullScreenPreview ? "Yes" : "No");
 
    fprintf(stderr, "Preview window %d,%d,%d,%d\nOpacity %d\n", state->previewWindow.x,
-      state->previewWindow.y, state->previewWindow.width,
-      state->previewWindow.height, state->opacity);
+           state->previewWindow.y, state->previewWindow.width,
+           state->previewWindow.height, state->opacity);
 };
 
 /**
@@ -217,7 +220,7 @@ int raspipreview_parse_cmdline(RASPIPREVIEW_PARAMETERS *params, const char *arg1
    int command_id, used = 0, num_parameters;
 
    if (!arg1)
-       return 0;
+      return 0;
 
    command_id = raspicli_get_command_id(cmdline_commands, cmdline_commands_size, arg1, &num_parameters);
 
@@ -227,45 +230,45 @@ int raspipreview_parse_cmdline(RASPIPREVIEW_PARAMETERS *params, const char *arg1
 
    switch (command_id)
    {
-      case CommandPreview: // Preview window
-      {
-         int tmp;
+   case CommandPreview: // Preview window
+   {
+      int tmp;
 
-         params->wantPreview = 1;
+      params->wantPreview = 1;
 
-         tmp = sscanf(arg2, "%d,%d,%d,%d",
-               &params->previewWindow.x, &params->previewWindow.y,
-               &params->previewWindow.width, &params->previewWindow.height);
+      tmp = sscanf(arg2, "%d,%d,%d,%d",
+                   &params->previewWindow.x, &params->previewWindow.y,
+                   &params->previewWindow.width, &params->previewWindow.height);
 
-         // Failed to get any window parameters, so revert to full screen
-         if (tmp == 0)
-            params->wantFullScreenPreview = 1;
-         else
-            params->wantFullScreenPreview = 0;
-
-         used = 2;
-
-         break;
-      }
-
-      case CommandFullScreen: // Want full screen preview mode (overrides display rect)
-         params->wantPreview = 1;
+      // Failed to get any window parameters, so revert to full screen
+      if (tmp == 0)
          params->wantFullScreenPreview = 1;
+      else
+         params->wantFullScreenPreview = 0;
 
-         used = 1;
-         break;
+      used = 2;
 
-      case CommandOpacity: // Define preview window opacity
-         if (sscanf(arg2, "%u", &params->opacity) != 1)
-            params->opacity = 255;
-         else
-            used = 2;
-         break;
+      break;
+   }
 
-      case CommandDisablePreview: // Turn off preview output
-         params->wantPreview = 0;
-         used = 1;
-         break;
+   case CommandFullScreen: // Want full screen preview mode (overrides display rect)
+      params->wantPreview = 1;
+      params->wantFullScreenPreview = 1;
+
+      used = 1;
+      break;
+
+   case CommandOpacity: // Define preview window opacity
+      if (sscanf(arg2, "%u", &params->opacity) != 1)
+         params->opacity = 255;
+      else
+         used = 2;
+      break;
+
+   case CommandDisablePreview: // Turn off preview output
+      params->wantPreview = 0;
+      used = 1;
+      break;
    }
 
    return used;

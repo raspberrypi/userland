@@ -102,6 +102,7 @@ const char *work_dir = WORK_DIR;
 const char *overlay_src_dir;
 const char *dt_overlays_dir;
 const char *error_file = NULL;
+int dry_run = 0;
 
 int main(int argc, const char **argv)
 {
@@ -133,6 +134,13 @@ int main(int argc, const char **argv)
             if (opt != OPT_ADD)
                 usage();
             opt = OPT_REMOVE_FROM;
+        }
+        else if (strcmp(arg, "-D") == 0)
+        {
+            if (opt != OPT_ADD)
+                usage();
+            dry_run = 1;
+            work_dir = ".";
         }
         else if ((strcmp(arg, "-l") == 0) ||
                  (strcmp(arg, "--list") == 0))
@@ -232,7 +240,7 @@ int main(int argc, const char **argv)
     error_file = sprintf_dup("%s/%s", work_dir, "error.dtb");
 
     cfg_dir = CFG_DIR_1 DT_SUBDIR;
-    if (!dir_exists(cfg_dir))
+    if (!dry_run && !dir_exists(cfg_dir))
     {
 	root_check();
 
@@ -253,18 +261,24 @@ int main(int argc, const char **argv)
     if (!dir_exists(dt_overlays_dir))
 	fatal_error("configfs overlays folder not found - incompatible kernel");
 
-    state = read_state(work_dir);
-    if (!state)
-	fatal_error("Failed to read state");
+    if (!dry_run)
+    {
+        state = read_state(work_dir);
+        if (!state)
+            fatal_error("Failed to read state");
+    }
 
     switch (opt)
     {
     case OPT_ADD:
     case OPT_REMOVE:
     case OPT_REMOVE_FROM:
-	root_check();
-	run_cmd("which dtoverlay-pre >/dev/null 2>&1 && dtoverlay-pre");
-	break;
+        if (!dry_run)
+        {
+            root_check();
+            run_cmd("which dtoverlay-pre >/dev/null 2>&1 && dtoverlay-pre");
+        }
+        break;
     default:
 	break;
     }
@@ -296,7 +310,8 @@ int main(int argc, const char **argv)
     case OPT_ADD:
     case OPT_REMOVE:
     case OPT_REMOVE_FROM:
-	run_cmd("which dtoverlay-post >/dev/null 2>&1 && dtoverlay-post");
+	if (!dry_run)
+	    run_cmd("which dtoverlay-post >/dev/null 2>&1 && dtoverlay-post");
 	break;
     default:
 	break;
@@ -421,7 +436,10 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
 	overlay_file = sprintf_dup("%s/%s.dtbo", overlay_src_dir, overlay);
     }
 
-    overlay_name = sprintf_dup("%d_%s", state->count, overlay);
+    if (dry_run)
+        overlay_name = "dry_run";
+    else
+	overlay_name = sprintf_dup("%d_%s", state->count, overlay);
     overlay_dtb = dtoverlay_load_dtb(overlay_file, DTOVERLAY_PADDING(4096));
     if (!overlay_dtb)
 	return error("Failed to read '%s'", overlay_file);
@@ -502,6 +520,14 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
         dtoverlay_free_dtb(base_dtb);
     }
 
+    /* Prevent symbol clash by keeping them all private.
+     * In future we could choose to expose some - perhaps using
+     * a naming convention, or an "__exports__" node, at which
+     * point it will no longer be necessary to explictly target
+     * the /__symbols__ node with a fragment.
+     */
+    dtoverlay_delete_node(overlay_dtb, "/__symbols__", 0);
+
     if (param_string)
 	dtoverlay_dtb_set_trailer(overlay_dtb, param_string,
 				  strlen(param_string) + 1);
@@ -514,7 +540,7 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
     dtoverlay_save_dtb(overlay_dtb, overlay_file);
     dtoverlay_free_dtb(overlay_dtb);
 
-    if (!apply_overlay(overlay_file, overlay_name))
+    if (!dry_run && !apply_overlay(overlay_file, overlay_name))
     {
 	if (error_file)
 	{
@@ -836,6 +862,9 @@ static void usage(void)
     printf("  %s                Display help on all parameters\n", cmd_name);
     printf("  %s <param>=<val>...\n", cmd_name);
     printf("  %*s                Add an overlay (with parameters)\n", (int)strlen(cmd_name), "");
+    printf("  %s -D [<idx>]     Dry-run (prepare overlay, but don't apply -\n",
+	   cmd_name);
+    printf("  %*s                save it as dry-run.dtbo)\n", (int)strlen(cmd_name), "");
     printf("  %s -r [<idx>]     Remove an overlay (by index, or the last)\n", cmd_name);
     printf("  %s -R [<idx>]     Remove from an overlay (by index, or all)\n",
 	   cmd_name);
@@ -848,6 +877,9 @@ static void usage(void)
     {
     printf("  %s <overlay> [<param>=<val>...]\n", cmd_name);
     printf("  %*s                Add an overlay (with parameters)\n", (int)strlen(cmd_name), "");
+    printf("  %s -D [<idx>]     Dry-run (prepare overlay, but don't apply -\n",
+	   cmd_name);
+    printf("  %*s                save it as dry-run.dtbo)\n", (int)strlen(cmd_name), "");
     printf("  %s -r [<overlay>] Remove an overlay (by name, index or the last)\n", cmd_name);
     printf("  %s -R [<overlay>] Remove from an overlay (by name, index or all)\n",
 	   cmd_name);
@@ -906,21 +938,26 @@ static void overlay_help(const char *overlay, const char **params)
 			/* This is a parameter name */
 			int param_len = strcspn(line, " ");
 			const char **p = params;
+			const char **q = p;
 			in_param = 0;
 			while (*p)
 			{
 			    if ((param_len == strlen(*p)) &&
 				(memcmp(line, *p, param_len) == 0))
-			    {
 				in_param = 1;
-				break;
-			    }
+			    else
+				*(q++) = *p;
 			    p++;
 			}
+			*(q++) = 0;
 		    }
 		    if (in_param)
 			printf("%s\n", line);
 		}
+		/* This only shows the first unknown parameter, but
+		 * that is enough. */
+		if (*params)
+		    fatal_error("Unknown parameter '%s'", *params);
 	    }
 	    else
 	    {

@@ -6,6 +6,9 @@ else ()
    add_definitions(-Wall -Werror)
 endif ()
 
+# set this as we want all the source of vchostif to be available in libbcm_host
+set (CMAKE_SHARED_LINKER_FLAGS "-u vc_gpuserv_init ${CMAKE_SHARED_LINKER_FLAGS}")
+
 include_directories( ../../../.. 
 		     ../../../../interface/vcos/${VCOS_PLATFORM}
 		     ../../../../host_support/linux/added/include

@@ -329,9 +329,9 @@ STATIC_INLINE VC_CONTAINER_STATUS_T packet_get_byte( VC_CONTAINER_BYTESTREAM_T *
 STATIC_INLINE VC_CONTAINER_STATUS_T bytestream_find_startcode( VC_CONTAINER_BYTESTREAM_T *stream,
    size_t *search_offset, const uint8_t *startcode, unsigned int length )
 {
-   VC_CONTAINER_PACKET_T *packet, *backup_packet;
+   VC_CONTAINER_PACKET_T *packet, *backup_packet = NULL;
    size_t position, start_offset = position = *search_offset;
-   size_t offset, backup_offset;
+   size_t offset, backup_offset = 0;
    unsigned int match = 0;
 
    if( stream->bytes - stream->current_offset - stream->offset < start_offset + length )

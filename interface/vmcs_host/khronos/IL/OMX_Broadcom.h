@@ -63,13 +63,21 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define OMX_BUFFERFLAG_CODECSIDEINFO 0x00002000
 
 // for use in buffer headers - indicated the timestamp is a DTS rather than PTS
-#define OMX_BUFFERFLAG_TIME_IS_DTS 0x000004000
+#define OMX_BUFFERFLAG_TIME_IS_DTS 0x00004000
 
 // for use in buffer headers - signals that a video picture is interlaced
-#define OMX_BUFFERFLAG_INTERLACED 0x000010000
+#define OMX_BUFFERFLAG_INTERLACED 0x00010000
 
 // Signals that the top field of the current interlaced frame should be displayed first
-#define OMX_BUFFERFLAG_TOP_FIELD_FIRST 0x000020000
+#define OMX_BUFFERFLAG_TOP_FIELD_FIRST 0x00020000
+
+// User flags that can be set by the application and will be passed by most
+// components as an alternative to buffer marks.
+#define OMX_BUFFERFLAG_USR0      0x10000000
+#define OMX_BUFFERFLAG_USR1      0x20000000
+#define OMX_BUFFERFLAG_USR2      0x40000000
+#define OMX_BUFFERFLAG_USR3      0x80000000
+#define OMX_BUFFERFLAG_USR_FLAGS 0xF0000000
 
 /**
  * Macros to convert to <code>OMX_TICKS</code> from a signed 64 bit value and
@@ -252,6 +260,17 @@ typedef enum OMX_DISPLAYSETTYPE {
    OMX_DISPLAY_SET_ALPHA = 0x400,
    OMX_DISPLAY_SET_DUMMY = 0x7FFFFFFF
 } OMX_DISPLAYSETTYPE;
+
+typedef enum OMX_DISPLAYASPECTFLAGSTYPE {
+  OMX_DISPLAY_ALPHA_FLAGS_NONE = 0,
+  // All layers below and including this one will be ignored (used for screen
+  // blanking in full screen rendering)
+  OMX_DISPLAY_ALPHA_FLAGS_DISCARD_LOWER_LAYERS = 1<<29,
+  // Alpha values are already premultiplied
+  OMX_DISPLAY_ALPHA_FLAGS_PREMULT = 1<<30,
+  // Mix the per pixel alpha (if present) and the per plane alpha.
+  OMX_DISPLAY_ALPHA_FLAGS_MIX = 1<<31,
+} OMX_DISPLAYASPECTFLAGSTYPE;
 
 typedef struct OMX_CONFIG_DISPLAYREGIONTYPE {
    OMX_U32 nSize;
@@ -2383,6 +2402,7 @@ typedef struct OMX_PARAM_BRCMVIDEODECODECONFIGVD3TYPE {
 Codec specific configuration block to set up internal state in a non-standard manner.
 */
 
+/* OMX_IndexConfigCustomAwbGains: Manual AWB Gains. */
 typedef struct OMX_CONFIG_CUSTOMAWBGAINSTYPE {
    OMX_U32 nSize;                      /**< size of the structure in bytes, including
                                             configuration data */
@@ -2390,6 +2410,8 @@ typedef struct OMX_CONFIG_CUSTOMAWBGAINSTYPE {
    OMX_U32 xGainR;                     /**< Red gain - 16p16 */
    OMX_U32 xGainB;                     /**< Blue gain - 16p16 */
 } OMX_CONFIG_CUSTOMAWBGAINSTYPE;
+
+/* OMX_IndexConfigCustomAwbGains: Manual AWB Gains. */
 
 /* OMX_IndexConfigBrcmRenderStats: Render port statistics */
 typedef struct OMX_CONFIG_BRCMRENDERSTATSTYPE {
@@ -2409,6 +2431,13 @@ typedef struct OMX_CONFIG_BRCMRENDERSTATSTYPE {
 This provides statistics from the renderer to allow more accurate synchronisation
 between the scheduler and display VSYNC.
 */
+
+typedef enum OMX_BRCMANNOTATEJUSTIFYTYPE {
+   OMX_ANNOTATE_CENTRE = 0,
+   OMX_ANNOTATE_LEFT = 1,
+   OMX_ANNOTATE_RIGHT = 2,
+   OMX_ANNOTATE_MAX = 0x7FFFFFFF,
+} OMX_BRCMANNOTATEJUSTIFYTYPE;
 
 #define OMX_BRCM_MAXANNOTATETEXTLEN 256
 typedef struct OMX_CONFIG_BRCMANNOTATETYPE {
@@ -2433,6 +2462,9 @@ typedef struct OMX_CONFIG_BRCMANNOTATETYPE {
    OMX_U8 nTextV;
    OMX_U8 nTextSize;   /**< Text size: 6-150 pixels */
    OMX_U8 sText[OMX_BRCM_MAXANNOTATETEXTLEN];
+   OMX_BRCMANNOTATEJUSTIFYTYPE eJustify;
+   OMX_U32 nXOffset;
+   OMX_U32 nYOffset;
 } OMX_CONFIG_BRCMANNOTATETYPE;
 
 /* OMX_IndexParamBrcmStereoscopicMode: Stereoscopic camera support */
@@ -2596,6 +2628,33 @@ The IL standard does not support a way to specify the Bayer order of Bayer image
 This control adds that missing functionality.
 */
 
+/* OMX_IndexParamBrcmLensShadingOverride: Override or set a lens shading table.*/
+/*
+Allows the lens shading grid to be set.
+Configuration is based on a similar system to the OMAP3 ISP.
+A grid of gains is required for each of the 4 Bayer channels, with each value covering
+a nGridCellSize square of pixels.
+nWidth and nHeight should be equal or greater than the sensor resolution. In the
+case of the camera component, the firmware will crop the table based on the preconfigured
+mode set. nStride allows additional horizontal padding to be including in the table.
+nMemHandleTable needs to be set to a MEM_HANDLE_T, allocated via VC-SM or similar allocator.
+nRefTransform should be set to the transform in force when the reference table was
+captured. This allows correct compensation when the sensor is subsequently used with
+an alternate transform.
+*/
+typedef struct OMX_PARAM_LENSSHADINGOVERRIDETYPE {
+   OMX_U32 nSize;
+   OMX_VERSIONTYPE nVersion;
+
+   OMX_BOOL bEnabled;                     /**< Enable the override grid */
+   OMX_U32 nGridCellSize;                 /**< size of each grid element. Assumes square grid */
+   OMX_U32 nWidth;                        /**< grid width */
+   OMX_U32 nStride;                       /**< grid stride (allows for padding) */
+   OMX_U32 nHeight;                       /**< grid height */
+   OMX_U32 nMemHandleTable;               /**< Handle for grid */
+   OMX_U32 nRefTransform;                 /**< Reference transform taken from raw header */
+} OMX_PARAM_LENSSHADINGOVERRIDETYPE;
+
 /* OMX_IndexConfigBrcmPowerMonitor: Deprecated.*/
 /*
 Deprecated. Do not use.
@@ -2604,6 +2663,76 @@ Deprecated. Do not use.
 /* OMX_IndexParamBrcmZeroCopy: Deprecated */
 /*
 Deprecated. Do not use.
+*/
+
+/* OMX_IndexParamBrcmSupportsSlices: Sliced processing support */
+/*
+Mainly used by the MMAL framework.
+Some components support an nSliceHeight value of 16, to allow images
+to be passed in multiple chunks. All will support an nSliceHeight >=
+nFrameHeight (with some extra constraints).
+If a component supports nSliceHeight of 16, then it will respond to
+OMX_GetParameter on this index with no error and bEnabled set to OMX_TRUE.
+*/
+
+/* OMX_IndexParamBrcmSupportsUnalignedSliceheight: Unaligned nSliceHeight support */
+/*
+Most components require an nSliceHeight value which is a multiple of 16, but
+some components accepting any value >= nFrameHeight. Those ports/components will
+respond to OMX_GetParameter on this index with no error and bEnabled set to OMX_TRUE.
+*/
+
+typedef struct OMX_CCMTYPE {
+   OMX_S32 sCcm[3][3];
+   OMX_S32 soffsets[3];
+} OMX_PARAM_CCMTYPE;
+
+typedef struct OMX_PARAM_CUSTOMCCMTYPE {
+   OMX_U32 nSize;
+   OMX_VERSIONTYPE nVersion;
+   OMX_U32 nPortIndex;
+
+   OMX_BOOL bEnabled;          /**< Enable the custom CCM. */
+   OMX_S32 xColorMatrix[3][3]; /**< Stored in signed Q16 format */
+   OMX_S32 nColorOffset[3];    /**< CCM offsets */
+} OMX_PARAM_CUSTOMCCMTYPE;
+
+/* OMX_IndexConfigCameraDigitalGain: Manual digital gain. */
+/*
+Configures the digital gain within the ISP pipeline.
+*/
+typedef struct OMX_CONFIG_CAMERAGAINTYPE {
+   OMX_U32 nSize;
+   OMX_VERSIONTYPE nVersion;
+   OMX_U32 nPortIndex;
+
+   OMX_U32 xGain;             /**< Gain to be applied, stored as Q16 format */
+   OMX_BOOL bAutoGain;        /**< Whether gain is set automatically */
+} OMX_CONFIG_CAMERAGAINTYPE;
+
+/* OMX_IndexParamMinimumAlignment: Query component alignment requirements. */
+/*
+Allows the component to be queried for the minimum alignment (in bytes) required
+on a port for a given color format.
+Used by the MMAL framework to allow a reduction in the padding.
+*/
+
+typedef struct OMX_PARAM_MINALIGNTYPE {
+   OMX_U32 nSize;
+   OMX_VERSIONTYPE nVersion;
+   OMX_U32 nPortIndex;
+
+   OMX_COLOR_FORMATTYPE eColorFormat;  /**< Format being queried */
+   OMX_U32 nMinHorizontalAlign;  /**< Minimum horizontal alignment required in bytes */
+   OMX_U32 nMinVerticalAlign;    /**< Minimum vertical alignment required in bytes */
+} OMX_PARAM_MINALIGNTYPE;
+
+/* OMX_IndexParamRemoveImagePadding: Query component padding requirements */
+/*
+Queries whether the component can remove all padding from images, or can
+accept images with no padding.
+Used by the MMAL framework predominantly.
+Superceded by OMX_IndexParamMinimumAlignment.
 */
 
 #endif

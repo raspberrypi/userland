@@ -543,7 +543,7 @@ static int ilcs_process_message(ILCS_SERVICE_T *st, int block)
  * -------------------------------------------------------------------- */
 static void ilcs_response(ILCS_SERVICE_T *st, uint32_t xid, const unsigned char *msg, int len)
 {
-   ILCS_WAIT_T *wait;
+   ILCS_WAIT_T *wait = NULL;
    int i, copy = len;
 
    // atomically retrieve given ->wait entry

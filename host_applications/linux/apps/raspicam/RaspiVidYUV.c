@@ -1,7 +1,8 @@
 /*
-Copyright (c) 2014, DSP Group Ltd
+Copyright (c) 2018, Raspberry Pi (Trading) Ltd.
+Copyright (c) 2014, DSP Group Ltd.
 Copyright (c) 2014, James Hughes
-Copyright (c) 2013, Broadcom Europe Ltd
+Copyright (c) 2013, Broadcom Europe Ltd.
 
 All rights reserved.
 
@@ -34,9 +35,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * as uncompressed YUV420 data
  * Also optionally display a preview/viewfinder of current camera input.
  *
- * \date 7th Jan 2014
- * \Author: James Hughes
- *
  * Description
  *
   * 2 components are created; camera and preview.
@@ -50,15 +48,21 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 // We use some GNU extensions (basename)
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <memory.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.12"
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -71,9 +75,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/mmal/util/mmal_default_components.h"
 #include "interface/mmal/util/mmal_connection.h"
 
+#include "RaspiCommonSettings.h"
 #include "RaspiCamControl.h"
 #include "RaspiPreview.h"
 #include "RaspiCLI.h"
+#include "RaspiHelpers.h"
+#include "RaspiGPS.h"
 
 #include <semaphore.h>
 
@@ -95,19 +102,14 @@ const int ABORT_INTERVAL = 100; // ms
 
 
 /// Capture/Pause switch method
-/// Simply capture for time specified
-#define WAIT_METHOD_NONE           0
-/// Cycle between capture and pause for times specified
-#define WAIT_METHOD_TIMED          1
-/// Switch between capture and pause on keypress
-#define WAIT_METHOD_KEYPRESS       2
-/// Switch between capture and pause on signal
-#define WAIT_METHOD_SIGNAL         3
-/// Run/record forever
-#define WAIT_METHOD_FOREVER        4
-
-int mmal_status_to_int(MMAL_STATUS_T status);
-static void signal_handler(int signal_number);
+enum
+{
+   WAIT_METHOD_NONE,       /// Simply capture for time specified
+   WAIT_METHOD_TIMED,      /// Cycle between capture and pause for times specified
+   WAIT_METHOD_KEYPRESS,   /// Switch between capture and pause on keypress
+   WAIT_METHOD_SIGNAL,     /// Switch between capture and pause on signal
+   WAIT_METHOD_FOREVER     /// Run/record forever
+};
 
 // Forward
 typedef struct RASPIVIDYUV_STATE_S RASPIVIDYUV_STATE;
@@ -119,18 +121,19 @@ typedef struct
    FILE *file_handle;                   /// File handle to write buffer data to.
    RASPIVIDYUV_STATE *pstate;           /// pointer to our state in case required in callback
    int abort;                           /// Set to 1 in callback if an error occurs to attempt to abort the capture
+   FILE *pts_file_handle;               /// File timestamps
+   int frame;
+   int64_t starttime;
+   int64_t lasttime;
 } PORT_USERDATA;
 
 /** Structure containing all state information for the current run
  */
 struct RASPIVIDYUV_STATE_S
 {
+   RASPICOMMONSETTINGS_PARAMETERS common_settings;
    int timeout;                        /// Time taken before frame is grabbed and app then shuts down. Units are milliseconds
-   int width;                          /// Requested width of image
-   int height;                         /// requested height of image
    int framerate;                      /// Requested frame rate (fps)
-   char *filename;                     /// filename of output file
-   int verbose;                        /// !0 if want detailed run information
    int demoMode;                       /// Run app in demo mode
    int demoInterval;                   /// Interval between camera settings changes
    int waitMethod;                     /// Method for switching between pause and capture
@@ -152,10 +155,13 @@ struct RASPIVIDYUV_STATE_S
    PORT_USERDATA callback_data;         /// Used to move data to the camera callback
 
    int bCapturing;                      /// State of capture/pause
+   int frame;
+   char *pts_filename;
+   int save_pts;
+   int64_t starttime;
+   int64_t lasttime;
 
-   int cameraNum;                       /// Camera number
-   int settings;                        /// Request settings from the camera
-   int sensor_mode;                     /// Sensor mode. 0=auto. Check docs/forum for modes selected by other values.
+   bool netListen;
 };
 
 static XREF_T  initial_map[] =
@@ -166,35 +172,24 @@ static XREF_T  initial_map[] =
 
 static int initial_map_size = sizeof(initial_map) / sizeof(initial_map[0]);
 
-
-static void display_valid_parameters(char *app_name);
-
 /// Command ID's and Structure defining our command line options
-#define CommandHelp         0
-#define CommandWidth        1
-#define CommandHeight       2
-#define CommandOutput       3
-#define CommandVerbose      4
-#define CommandTimeout      5
-#define CommandDemoMode     6
-#define CommandFramerate    7
-#define CommandTimed        8
-#define CommandSignal       9
-#define CommandKeypress     10
-#define CommandInitialState 11
-#define CommandCamSelect    12
-#define CommandSettings     13
-#define CommandSensorMode   14
-#define CommandOnlyLuma     15
-#define CommandUseRGB       16
+enum
+{
+   CommandTimeout,
+   CommandDemoMode,
+   CommandFramerate,
+   CommandTimed,
+   CommandSignal,
+   CommandKeypress,
+   CommandInitialState,
+   CommandOnlyLuma,
+   CommandUseRGB,
+   CommandSavePTS,
+   CommandNetListen
+};
 
 static COMMAND_LIST cmdline_commands[] =
 {
-   { CommandHelp,          "-help",       "?",  "This help information", 0 },
-   { CommandWidth,         "-width",      "w",  "Set image width <size>. Default 1920", 1 },
-   { CommandHeight,        "-height",     "h",  "Set image height <size>. Default 1080", 1 },
-   { CommandOutput,        "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -')", 1 },
-   { CommandVerbose,       "-verbose",    "v",  "Output verbose information during run", 0 },
    { CommandTimeout,       "-timeout",    "t",  "Time (in ms) to capture for. If not specified, set to 5s. Zero to disable", 1 },
    { CommandDemoMode,      "-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 1},
    { CommandFramerate,     "-framerate",  "fps","Specify the frames per second to record", 1},
@@ -202,11 +197,10 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandSignal,        "-signal",     "s",  "Cycle between capture and pause on Signal", 0},
    { CommandKeypress,      "-keypress",   "k",  "Cycle between capture and pause on ENTER", 0},
    { CommandInitialState,  "-initial",    "i",  "Initial state. Use 'record' or 'pause'. Default 'record'", 1},
-   { CommandCamSelect,     "-camselect",  "cs", "Select camera <number>. Default 0", 1 },
-   { CommandSettings,      "-settings",   "set","Retrieve camera settings and write to stdout", 0},
-   { CommandSensorMode,    "-mode",       "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
    { CommandOnlyLuma,      "-luma",       "y",  "Only output the luma / Y of the YUV data'", 0},
    { CommandUseRGB,        "-rgb",        "rgb","Save as RGB data rather than YUV", 0},
+   { CommandSavePTS,       "-save-pts",   "pts","Save Timestamps to file", 1 },
+   { CommandNetListen,     "-listen",     "l", "Listen on a TCP socket", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -218,11 +212,11 @@ static struct
    int nextWaitMethod;
 } wait_method_description[] =
 {
-      {"Simple capture",         WAIT_METHOD_NONE},
-      {"Capture forever",        WAIT_METHOD_FOREVER},
-      {"Cycle on time",          WAIT_METHOD_TIMED},
-      {"Cycle on keypress",      WAIT_METHOD_KEYPRESS},
-      {"Cycle on signal",        WAIT_METHOD_SIGNAL},
+   {"Simple capture",         WAIT_METHOD_NONE},
+   {"Capture forever",        WAIT_METHOD_FOREVER},
+   {"Cycle on time",          WAIT_METHOD_TIMED},
+   {"Cycle on keypress",      WAIT_METHOD_KEYPRESS},
+   {"Cycle on signal",        WAIT_METHOD_SIGNAL},
 };
 
 static int wait_method_description_size = sizeof(wait_method_description) / sizeof(wait_method_description[0]);
@@ -245,22 +239,19 @@ static void default_status(RASPIVIDYUV_STATE *state)
    // Default everything to zero
    memset(state, 0, sizeof(RASPIVIDYUV_STATE));
 
+   raspicommonsettings_set_defaults(&state->common_settings);
+
    // Now set anything non-zero
-   state->timeout = 5000;     // 5s delay before take image
-   state->width = 1920;       // Default to 1080p
-   state->height = 1080;
+   state->timeout = -1; // replaced with 5000ms later if unset
+   state->common_settings.width = 1920;       // Default to 1080p
+   state->common_settings.height = 1080;
    state->framerate = VIDEO_FRAME_RATE_NUM;
    state->demoMode = 0;
    state->demoInterval = 250; // ms
    state->waitMethod = WAIT_METHOD_NONE;
    state->onTime = 5000;
    state->offTime = 5000;
-
    state->bCapturing = 0;
-
-   state->cameraNum = 0;
-   state->settings = 0;
-   state->sensor_mode = 0;
    state->onlyLuma = 0;
 
    // Setup preview window defaults
@@ -286,7 +277,8 @@ static void dump_status(RASPIVIDYUV_STATE *state)
       return;
    }
 
-   fprintf(stderr, "Width %d, Height %d, filename %s\n", state->width, state->height, state->filename);
+   raspicommonsettings_dump_parameters(&state->common_settings);
+
    fprintf(stderr, "framerate %d, time delay %d\n", state->framerate, state->timeout);
 
    // Calculate the individual image size
@@ -294,8 +286,8 @@ static void dump_status(RASPIVIDYUV_STATE *state)
    // Y height is padded to a 16. U/V height is Y height/2 (ie multiple of 8).
 
    // Y plane
-   ystride = ((state->width + 31) & ~31);
-   yheight = ((state->height + 15) & ~15);
+   ystride = ((state->common_settings.width + 31) & ~31);
+   yheight = ((state->common_settings.height + 15) & ~15);
 
    size = ystride * yheight;
 
@@ -305,16 +297,44 @@ static void dump_status(RASPIVIDYUV_STATE *state)
    fprintf(stderr, "Sub-image size %d bytes in total.\n  Y pitch %d, Y height %d, UV pitch %d, UV Height %d\n", size, ystride, yheight, ystride/2,yheight/2);
 
    fprintf(stderr, "Wait method : ");
-   for (i=0;i<wait_method_description_size;i++)
+   for (i=0; i<wait_method_description_size; i++)
    {
       if (state->waitMethod == wait_method_description[i].nextWaitMethod)
          fprintf(stderr, "%s", wait_method_description[i].description);
    }
    fprintf(stderr, "\nInitial state '%s'\n", raspicli_unmap_xref(state->bCapturing, initial_map, initial_map_size));
-   fprintf(stderr, "\n\n");
+   fprintf(stderr, "\n");
 
    raspipreview_dump_parameters(&state->preview_parameters);
    raspicamcontrol_dump_parameters(&state->camera_parameters);
+}
+
+/**
+ * Display usage information for the application to stdout
+ *
+ * @param app_name String to display as the application name
+ */
+static void application_help_message(char *app_name)
+{
+   fprintf(stdout, "Display camera output to display, and optionally saves an uncompressed YUV420 or RGB file \n\n");
+   fprintf(stdout, "NOTE: High resolutions and/or frame rates may exceed the bandwidth of the system due\n");
+   fprintf(stdout, "to the large amounts of data being moved to the SD card. This will result in undefined\n");
+   fprintf(stdout, "results in the subsequent file.\n");
+   fprintf(stdout, "The single raw file produced contains all the images. Each image in the files will be of size\n");
+   fprintf(stdout, "width*height*1.5 for YUV or width*height*3 for RGB, unless width and/or height are not divisible by 16.");
+   fprintf(stdout, "Use the image size displayed during the run (in verbose mode) for an accurate value\n");
+
+   fprintf(stdout, "The Linux split command can be used to split up the file to individual frames\n");
+
+   fprintf(stdout, "\nusage: %s [options]\n\n", app_name);
+
+   fprintf(stdout, "Image parameter commands\n\n");
+
+   raspicli_display_help(cmdline_commands, cmdline_commands_size);
+
+   fprintf(stdout, "\n");
+
+   return;
 }
 
 /**
@@ -358,47 +378,9 @@ static int parse_cmdline(int argc, const char **argv, RASPIVIDYUV_STATE *state)
       //  We are now dealing with a command line option
       switch (command_id)
       {
-      case CommandHelp:
-         display_valid_parameters(basename(argv[0]));
-         return -1;
-
-      case CommandWidth: // Width > 0
-         if (sscanf(argv[i + 1], "%u", &state->width) != 1)
-            valid = 0;
-         else
-            i++;
-         break;
-
-      case CommandHeight: // Height > 0
-         if (sscanf(argv[i + 1], "%u", &state->height) != 1)
-            valid = 0;
-         else
-            i++;
-         break;
-
-      case CommandOutput:  // output filename
-      {
-         int len = strlen(argv[i + 1]);
-         if (len)
-         {
-            state->filename = malloc(len + 1);
-            vcos_assert(state->filename);
-            if (state->filename)
-               strncpy(state->filename, argv[i + 1], len+1);
-            i++;
-         }
-         else
-            valid = 0;
-         break;
-      }
-
-      case CommandVerbose: // display lots of data during run
-         state->verbose = 1;
-         break;
-
       case CommandTimeout: // Time to run viewfinder/capture
       {
-         if (sscanf(argv[i + 1], "%u", &state->timeout) == 1)
+         if (sscanf(argv[i + 1], "%d", &state->timeout) == 1)
          {
             // Ensure that if previously selected a waitMethod we don't overwrite it
             if (state->timeout == 0 && state->waitMethod == WAIT_METHOD_NONE)
@@ -462,6 +444,9 @@ static int parse_cmdline(int argc, const char **argv, RASPIVIDYUV_STATE *state)
                state->offTime = 1000;
 
             state->waitMethod = WAIT_METHOD_TIMED;
+
+            if (state->timeout == -1)
+               state->timeout = 0;
          }
          else
             valid = 0;
@@ -470,12 +455,20 @@ static int parse_cmdline(int argc, const char **argv, RASPIVIDYUV_STATE *state)
 
       case CommandKeypress:
          state->waitMethod = WAIT_METHOD_KEYPRESS;
+
+         if (state->timeout == -1)
+            state->timeout = 0;
+
          break;
 
       case CommandSignal:
          state->waitMethod = WAIT_METHOD_SIGNAL;
          // Reenable the signal
-         signal(SIGUSR1, signal_handler);
+         signal(SIGUSR1, default_signal_handler);
+
+         if (state->timeout == -1)
+            state->timeout = 0;
+
          break;
 
       case CommandInitialState:
@@ -486,32 +479,6 @@ static int parse_cmdline(int argc, const char **argv, RASPIVIDYUV_STATE *state)
             state->bCapturing = 0;
 
          i++;
-         break;
-      }
-
-      case CommandCamSelect:  //Select camera input port
-      {
-         if (sscanf(argv[i + 1], "%u", &state->cameraNum) == 1)
-         {
-            i++;
-         }
-         else
-            valid = 0;
-         break;
-      }
-
-      case CommandSettings:
-         state->settings = 1;
-         break;
-
-      case CommandSensorMode:
-      {
-         if (sscanf(argv[i + 1], "%u", &state->sensor_mode) == 1)
-         {
-            i++;
-         }
-         else
-            valid = 0;
          break;
       }
 
@@ -533,6 +500,30 @@ static int parse_cmdline(int argc, const char **argv, RASPIVIDYUV_STATE *state)
          state->useRGB = 1;
          break;
 
+      case CommandSavePTS:  // output filename
+      {
+         state->save_pts = 1;
+         int len = strlen(argv[i + 1]);
+         if (len)
+         {
+            state->pts_filename = malloc(len + 1);
+            vcos_assert(state->pts_filename);
+            if (state->pts_filename)
+               strncpy(state->pts_filename, argv[i + 1], len+1);
+            i++;
+         }
+         else
+            valid = 0;
+         break;
+      }
+
+      case CommandNetListen:
+      {
+         state->netListen = true;
+
+         break;
+      }
+
       default:
       {
          // Try parsing for any image specific parameters
@@ -541,10 +532,13 @@ static int parse_cmdline(int argc, const char **argv, RASPIVIDYUV_STATE *state)
          const char *second_arg = (i + 1 < argc) ? argv[i + 1] : NULL;
          int parms_used = (raspicamcontrol_parse_cmdline(&state->camera_parameters, &argv[i][1], second_arg));
 
+         // Still unused, try common settings
+         if (!parms_used)
+            parms_used = raspicommonsettings_parse_cmdline(&state->common_settings, &argv[i][1], second_arg, &application_help_message);
+
          // Still unused, try preview options
          if (!parms_used)
             parms_used = raspipreview_parse_cmdline(&state->preview_parameters, &argv[i][1], second_arg);
-
 
          // If no parms were used, this must be a bad parameters
          if (!parms_used)
@@ -563,109 +557,141 @@ static int parse_cmdline(int argc, const char **argv, RASPIVIDYUV_STATE *state)
       return 1;
    }
 
-   // Always disable verbose if output going to stdout
-   if (state->filename && state->filename[0] == '-')
-   {
-      state->verbose = 0;
-   }
-
    return 0;
 }
-
-/**
- * Display usage information for the application to stdout
- *
- * @param app_name String to display as the application name
- */
-static void display_valid_parameters(char *app_name)
-{
-   fprintf(stdout, "Display camera output to display, and optionally saves an uncompressed YUV420 file \n\n");
-   fprintf(stdout, "NOTE: High resolutions and/or frame rates may exceed the bandwidth of the system due\n");
-   fprintf(stdout, "to the large amounts of data being moved to the SD card. This will result in undefined\n");
-   fprintf(stdout, "results in the subsequent file.\n");
-   fprintf(stdout, "The raw file produced contains all the files. Each image in the files will be of size\n");
-   fprintf(stdout, "width*height*1.5, unless width and/or height are not divisible by 16. Use the image size\n");
-   fprintf(stdout, "displayed during the run (in verbose mode) for an accurate value\n");
-
-   fprintf(stdout, "The Linux split command can be used to split up the file to individual frames\n");
-
-   fprintf(stdout, "\nusage: %s [options]\n\n", app_name);
-
-   fprintf(stdout, "Image parameter commands\n\n");
-
-   raspicli_display_help(cmdline_commands, cmdline_commands_size);
-
-   fprintf(stdout, "\n");
-
-   // Help for preview options
-   raspipreview_display_help();
-
-   // Now display any help information from the camcontrol code
-   raspicamcontrol_display_help();
-
-   fprintf(stdout, "\n");
-
-   return;
-}
-
-/**
- *  buffer header callback function for camera control
- *
- *  Callback will dump buffer data to the specific file
- *
- * @param port Pointer to port from which callback originated
- * @param buffer mmal buffer header pointer
- */
-static void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
-{
-   if (buffer->cmd == MMAL_EVENT_PARAMETER_CHANGED)
-   {
-      MMAL_EVENT_PARAMETER_CHANGED_T *param = (MMAL_EVENT_PARAMETER_CHANGED_T *)buffer->data;
-      switch (param->hdr.id) {
-         case MMAL_PARAMETER_CAMERA_SETTINGS:
-         {
-            MMAL_PARAMETER_CAMERA_SETTINGS_T *settings = (MMAL_PARAMETER_CAMERA_SETTINGS_T*)param;
-            vcos_log_error("Exposure now %u, analog gain %u/%u, digital gain %u/%u",
-			settings->exposure,
-                        settings->analog_gain.num, settings->analog_gain.den,
-                        settings->digital_gain.num, settings->digital_gain.den);
-            vcos_log_error("AWB R=%u/%u, B=%u/%u",
-                        settings->awb_red_gain.num, settings->awb_red_gain.den,
-                        settings->awb_blue_gain.num, settings->awb_blue_gain.den
-                        );
-         }
-         break;
-      }
-   }
-   else if (buffer->cmd == MMAL_EVENT_ERROR)
-   {
-      vcos_log_error("No data received from sensor. Check all connections, including the Sunny one on the camera board");
-   }
-   else
-   {
-      vcos_log_error("Received unexpected camera control callback event, 0x%08x", buffer->cmd);
-   }
-
-   mmal_buffer_header_release(buffer);
-}
-
 
 /**
  * Open a file based on the settings in state
  *
  * @param state Pointer to state
  */
-static FILE *open_filename(RASPIVIDYUV_STATE *pState)
+static FILE *open_filename(RASPIVIDYUV_STATE *pState, char *filename)
 {
    FILE *new_handle = NULL;
-   char *tempname = NULL, *filename = NULL;
-
-   filename = pState->filename;
 
    if (filename)
-      new_handle = fopen(filename, "wb");
+   {
+      bool bNetwork = false;
+      int sfd = -1, socktype;
 
-   if (pState->verbose)
+      if(!strncmp("tcp://", filename, 6))
+      {
+         bNetwork = true;
+         socktype = SOCK_STREAM;
+      }
+      else if(!strncmp("udp://", filename, 6))
+      {
+         if (pState->netListen)
+         {
+            fprintf(stderr, "No support for listening in UDP mode\n");
+            exit(131);
+         }
+         bNetwork = true;
+         socktype = SOCK_DGRAM;
+      }
+
+      if(bNetwork)
+      {
+         unsigned short port;
+         filename += 6;
+         char *colon;
+         if(NULL == (colon = strchr(filename, ':')))
+         {
+            fprintf(stderr, "%s is not a valid IPv4:port, use something like tcp://1.2.3.4:1234 or udp://1.2.3.4:1234\n",
+                    filename);
+            exit(132);
+         }
+         if(1 != sscanf(colon + 1, "%hu", &port))
+         {
+            fprintf(stderr,
+                    "Port parse failed. %s is not a valid network file name, use something like tcp://1.2.3.4:1234 or udp://1.2.3.4:1234\n",
+                    filename);
+            exit(133);
+         }
+         char chTmp = *colon;
+         *colon = 0;
+
+         struct sockaddr_in saddr= {};
+         saddr.sin_family = AF_INET;
+         saddr.sin_port = htons(port);
+         if(0 == inet_aton(filename, &saddr.sin_addr))
+         {
+            fprintf(stderr, "inet_aton failed. %s is not a valid IPv4 address\n",
+                    filename);
+            exit(134);
+         }
+         *colon = chTmp;
+
+         if (pState->netListen)
+         {
+            int sockListen = socket(AF_INET, SOCK_STREAM, 0);
+            if (sockListen >= 0)
+            {
+               int iTmp = 1;
+               setsockopt(sockListen, SOL_SOCKET, SO_REUSEADDR, &iTmp, sizeof(int));//no error handling, just go on
+               if (bind(sockListen, (struct sockaddr *) &saddr, sizeof(saddr)) >= 0)
+               {
+                  while ((-1 == (iTmp = listen(sockListen, 0))) && (EINTR == errno))
+                     ;
+                  if (-1 != iTmp)
+                  {
+                     fprintf(stderr, "Waiting for a TCP connection on %s:%"SCNu16"...",
+                             inet_ntoa(saddr.sin_addr), ntohs(saddr.sin_port));
+                     struct sockaddr_in cli_addr;
+                     socklen_t clilen = sizeof(cli_addr);
+                     while ((-1 == (sfd = accept(sockListen, (struct sockaddr *) &cli_addr, &clilen))) && (EINTR == errno))
+                        ;
+                     if (sfd >= 0)
+                        fprintf(stderr, "Client connected from %s:%"SCNu16"\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
+                     else
+                        fprintf(stderr, "Error on accept: %s\n", strerror(errno));
+                  }
+                  else//if (-1 != iTmp)
+                  {
+                     fprintf(stderr, "Error trying to listen on a socket: %s\n", strerror(errno));
+                  }
+               }
+               else//if (bind(sockListen, (struct sockaddr *) &saddr, sizeof(saddr)) >= 0)
+               {
+                  fprintf(stderr, "Error on binding socket: %s\n", strerror(errno));
+               }
+            }
+            else//if (sockListen >= 0)
+            {
+               fprintf(stderr, "Error creating socket: %s\n", strerror(errno));
+            }
+
+            if (sockListen >= 0)//regardless success or error
+               close(sockListen);//do not listen on a given port anymore
+         }
+         else//if (pState->netListen)
+         {
+            if(0 <= (sfd = socket(AF_INET, socktype, 0)))
+            {
+               fprintf(stderr, "Connecting to %s:%hu...", inet_ntoa(saddr.sin_addr), port);
+
+               int iTmp = 1;
+               while ((-1 == (iTmp = connect(sfd, (struct sockaddr *) &saddr, sizeof(struct sockaddr_in)))) && (EINTR == errno))
+                  ;
+               if (iTmp < 0)
+                  fprintf(stderr, "error: %s\n", strerror(errno));
+               else
+                  fprintf(stderr, "connected, sending video...\n");
+            }
+            else
+               fprintf(stderr, "Error creating socket: %s\n", strerror(errno));
+         }
+
+         if (sfd >= 0)
+            new_handle = fdopen(sfd, "w");
+      }
+      else
+      {
+         new_handle = fopen(filename, "wb");
+      }
+   }
+
+   if (pState->common_settings.verbose)
    {
       if (new_handle)
          fprintf(stderr, "Opening output file \"%s\"\n", filename);
@@ -673,12 +699,8 @@ static FILE *open_filename(RASPIVIDYUV_STATE *pState)
          fprintf(stderr, "Failed to open new file \"%s\"\n", filename);
    }
 
-   if (tempname)
-      free(tempname);
-
    return new_handle;
 }
-
 
 /**
  *  buffer header callback function for camera
@@ -691,24 +713,21 @@ static FILE *open_filename(RASPIVIDYUV_STATE *pState)
 static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
    MMAL_BUFFER_HEADER_T *new_buffer;
-   static int64_t base_time =  -1;
-
-   // All our times based on the receipt of the first callback
-   if (base_time == -1)
-      base_time = vcos_getmicrosecs64()/1000;
+   static int64_t last_second = -1;
 
    // We pass our file handle and other stuff in via the userdata field.
 
    PORT_USERDATA *pData = (PORT_USERDATA *)port->userdata;
+   RASPIVIDYUV_STATE *pstate = pData->pstate;
 
    if (pData)
    {
       int bytes_written = 0;
       int bytes_to_write = buffer->length;
+      int64_t current_time = vcos_getmicrosecs64()/1000000;
 
-      if (buffer->length && pData->pstate->onlyLuma)
-         bytes_to_write = port->format->es->video.width * port->format->es->video.height;
-
+      if (pstate->onlyLuma)
+         bytes_to_write = vcos_min(buffer->length, port->format->es->video.width * port->format->es->video.height);
 
       vcos_assert(pData->file_handle);
 
@@ -723,7 +742,57 @@ static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buff
             vcos_log_error("Failed to write buffer data (%d from %d)- aborting", bytes_written, bytes_to_write);
             pData->abort = 1;
          }
+         if (pData->pts_file_handle)
+         {
+            // Every buffer should be a complete frame, so no need to worry about
+            // fragments or duplicated timestamps. We're also in RESET_STC mode, so
+            // the time on frame 0 should always be 0 anyway, but simply copy the
+            // code from raspivid.
+            // MMAL_TIME_UNKNOWN should never happen, but it'll corrupt the timestamps
+            // file if saved.
+            if(buffer->pts != MMAL_TIME_UNKNOWN)
+            {
+               int64_t pts;
+               if(pstate->frame==0)
+                  pstate->starttime=buffer->pts;
+               pData->lasttime=buffer->pts;
+               pts = buffer->pts - pData->starttime;
+               fprintf(pData->pts_file_handle,"%lld.%03lld\n", pts/1000, pts%1000);
+               pData->frame++;
+            }
+         }
       }
+
+      // See if the second count has changed and we need to update any annotation
+      if (current_time != last_second)
+      {
+         if ((pstate->camera_parameters.enable_annotate & ANNOTATE_APP_TEXT) && pstate->common_settings.gps)
+         {
+            char *text = raspi_gps_location_string();
+            raspicamcontrol_set_annotate(pstate->camera_component, pstate->camera_parameters.enable_annotate,
+                                         text,
+                                         pstate->camera_parameters.annotate_text_size,
+                                         pstate->camera_parameters.annotate_text_colour,
+                                         pstate->camera_parameters.annotate_bg_colour,
+                                         pstate->camera_parameters.annotate_justify,
+                                         pstate->camera_parameters.annotate_x,
+                                         pstate->camera_parameters.annotate_y
+                                        );
+            free(text);
+         }
+         else
+            raspicamcontrol_set_annotate(pstate->camera_component, pstate->camera_parameters.enable_annotate,
+                                         pstate->camera_parameters.annotate_string,
+                                         pstate->camera_parameters.annotate_text_size,
+                                         pstate->camera_parameters.annotate_text_colour,
+                                         pstate->camera_parameters.annotate_bg_colour,
+                                         pstate->camera_parameters.annotate_justify,
+                                         pstate->camera_parameters.annotate_x,
+                                         pstate->camera_parameters.annotate_y
+                                        );
+         last_second = current_time;
+      }
+
    }
    else
    {
@@ -775,7 +844,7 @@ static MMAL_STATUS_T create_camera_component(RASPIVIDYUV_STATE *state)
    }
 
    MMAL_PARAMETER_INT32_T camera_num =
-      {{MMAL_PARAMETER_CAMERA_NUM, sizeof(camera_num)}, state->cameraNum};
+   {{MMAL_PARAMETER_CAMERA_NUM, sizeof(camera_num)}, state->common_settings.cameraNum};
 
    status = mmal_port_parameter_set(camera->control, &camera_num.hdr);
 
@@ -792,7 +861,7 @@ static MMAL_STATUS_T create_camera_component(RASPIVIDYUV_STATE *state)
       goto error;
    }
 
-   status = mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_CAMERA_CUSTOM_SENSOR_CONFIG, state->sensor_mode);
+   status = mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_CAMERA_CUSTOM_SENSOR_CONFIG, state->common_settings.sensor_mode);
 
    if (status != MMAL_SUCCESS)
    {
@@ -804,21 +873,8 @@ static MMAL_STATUS_T create_camera_component(RASPIVIDYUV_STATE *state)
    video_port = camera->output[MMAL_CAMERA_VIDEO_PORT];
    still_port = camera->output[MMAL_CAMERA_CAPTURE_PORT];
 
-   if (state->settings)
-   {
-      MMAL_PARAMETER_CHANGE_EVENT_REQUEST_T change_event_request =
-         {{MMAL_PARAMETER_CHANGE_EVENT_REQUEST, sizeof(MMAL_PARAMETER_CHANGE_EVENT_REQUEST_T)},
-          MMAL_PARAMETER_CAMERA_SETTINGS, 1};
-
-      status = mmal_port_parameter_set(camera->control, &change_event_request.hdr);
-      if ( status != MMAL_SUCCESS )
-      {
-         vcos_log_error("No camera settings events");
-      }
-   }
-
    // Enable the camera, and tell it its control callback function
-   status = mmal_port_enable(camera->control, camera_control_callback);
+   status = mmal_port_enable(camera->control, default_camera_control_callback);
 
    if (status != MMAL_SUCCESS)
    {
@@ -831,12 +887,12 @@ static MMAL_STATUS_T create_camera_component(RASPIVIDYUV_STATE *state)
       MMAL_PARAMETER_CAMERA_CONFIG_T cam_config =
       {
          { MMAL_PARAMETER_CAMERA_CONFIG, sizeof(cam_config) },
-         .max_stills_w = state->width,
-         .max_stills_h = state->height,
+         .max_stills_w = state->common_settings.width,
+         .max_stills_h = state->common_settings.height,
          .stills_yuv422 = 0,
          .one_shot_stills = 0,
-         .max_preview_video_w = state->width,
-         .max_preview_video_h = state->height,
+         .max_preview_video_w = state->common_settings.width,
+         .max_preview_video_h = state->common_settings.height,
          .num_preview_video_frames = 3,
          .stills_capture_circular_buffer_height = 0,
          .fast_preview_resume = 0,
@@ -854,15 +910,17 @@ static MMAL_STATUS_T create_camera_component(RASPIVIDYUV_STATE *state)
 
    if(state->camera_parameters.shutter_speed > 6000000)
    {
-        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
-                                                     { 50, 1000 }, {166, 1000}};
-        mmal_port_parameter_set(preview_port, &fps_range.hdr);
+      MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+         { 50, 1000 }, {166, 1000}
+      };
+      mmal_port_parameter_set(preview_port, &fps_range.hdr);
    }
    else if(state->camera_parameters.shutter_speed > 1000000)
    {
-        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
-                                                     { 166, 1000 }, {999, 1000}};
-        mmal_port_parameter_set(preview_port, &fps_range.hdr);
+      MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+         { 166, 1000 }, {999, 1000}
+      };
+      mmal_port_parameter_set(preview_port, &fps_range.hdr);
    }
 
    //enable dynamic framerate if necessary
@@ -871,18 +929,18 @@ static MMAL_STATUS_T create_camera_component(RASPIVIDYUV_STATE *state)
       if (state->framerate > 1000000./state->camera_parameters.shutter_speed)
       {
          state->framerate=0;
-         if (state->verbose)
+         if (state->common_settings.verbose)
             fprintf(stderr, "Enable dynamic frame rate to fulfil shutter speed requirement\n");
       }
    }
 
    format->encoding = MMAL_ENCODING_OPAQUE;
-   format->es->video.width = VCOS_ALIGN_UP(state->width, 32);
-   format->es->video.height = VCOS_ALIGN_UP(state->height, 16);
+   format->es->video.width = VCOS_ALIGN_UP(state->common_settings.width, 32);
+   format->es->video.height = VCOS_ALIGN_UP(state->common_settings.height, 16);
    format->es->video.crop.x = 0;
    format->es->video.crop.y = 0;
-   format->es->video.crop.width = state->width;
-   format->es->video.crop.height = state->height;
+   format->es->video.crop.width = state->common_settings.width;
+   format->es->video.crop.height = state->common_settings.height;
    format->es->video.frame_rate.num = PREVIEW_FRAME_RATE_NUM;
    format->es->video.frame_rate.den = PREVIEW_FRAME_RATE_DEN;
 
@@ -900,15 +958,17 @@ static MMAL_STATUS_T create_camera_component(RASPIVIDYUV_STATE *state)
 
    if(state->camera_parameters.shutter_speed > 6000000)
    {
-        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
-                                                     { 50, 1000 }, {166, 1000}};
-        mmal_port_parameter_set(video_port, &fps_range.hdr);
+      MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+         { 50, 1000 }, {166, 1000}
+      };
+      mmal_port_parameter_set(video_port, &fps_range.hdr);
    }
    else if(state->camera_parameters.shutter_speed > 1000000)
    {
-        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
-                                                     { 167, 1000 }, {999, 1000}};
-        mmal_port_parameter_set(video_port, &fps_range.hdr);
+      MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+         { 167, 1000 }, {999, 1000}
+      };
+      mmal_port_parameter_set(video_port, &fps_range.hdr);
    }
 
    if (state->useRGB)
@@ -922,12 +982,12 @@ static MMAL_STATUS_T create_camera_component(RASPIVIDYUV_STATE *state)
       format->encoding_variant = MMAL_ENCODING_I420;
    }
 
-   format->es->video.width = VCOS_ALIGN_UP(state->width, 32);
-   format->es->video.height = VCOS_ALIGN_UP(state->height, 16);
+   format->es->video.width = VCOS_ALIGN_UP(state->common_settings.width, 32);
+   format->es->video.height = VCOS_ALIGN_UP(state->common_settings.height, 16);
    format->es->video.crop.x = 0;
    format->es->video.crop.y = 0;
-   format->es->video.crop.width = state->width;
-   format->es->video.crop.height = state->height;
+   format->es->video.crop.width = state->common_settings.width;
+   format->es->video.crop.height = state->common_settings.height;
    format->es->video.frame_rate.num = state->framerate;
    format->es->video.frame_rate.den = VIDEO_FRAME_RATE_DEN;
 
@@ -943,6 +1003,13 @@ static MMAL_STATUS_T create_camera_component(RASPIVIDYUV_STATE *state)
    if (video_port->buffer_num < VIDEO_OUTPUT_BUFFERS_NUM)
       video_port->buffer_num = VIDEO_OUTPUT_BUFFERS_NUM;
 
+   status = mmal_port_parameter_set_boolean(video_port, MMAL_PARAMETER_ZERO_COPY, MMAL_TRUE);
+   if (status != MMAL_SUCCESS)
+   {
+      vcos_log_error("Failed to select zero copy");
+      goto error;
+   }
+
    // Set the encode format on the still  port
 
    format = still_port->format;
@@ -950,12 +1017,12 @@ static MMAL_STATUS_T create_camera_component(RASPIVIDYUV_STATE *state)
    format->encoding = MMAL_ENCODING_OPAQUE;
    format->encoding_variant = MMAL_ENCODING_I420;
 
-   format->es->video.width = VCOS_ALIGN_UP(state->width, 32);
-   format->es->video.height = VCOS_ALIGN_UP(state->height, 16);
+   format->es->video.width = VCOS_ALIGN_UP(state->common_settings.width, 32);
+   format->es->video.height = VCOS_ALIGN_UP(state->common_settings.height, 16);
    format->es->video.crop.x = 0;
    format->es->video.crop.y = 0;
-   format->es->video.crop.width = state->width;
-   format->es->video.crop.height = state->height;
+   format->es->video.crop.width = state->common_settings.width;
+   format->es->video.crop.height = state->common_settings.height;
    format->es->video.frame_rate.num = 0;
    format->es->video.frame_rate.den = 1;
 
@@ -993,7 +1060,7 @@ static MMAL_STATUS_T create_camera_component(RASPIVIDYUV_STATE *state)
    state->camera_pool = pool;
    state->camera_component = camera;
 
-   if (state->verbose)
+   if (state->common_settings.verbose)
       fprintf(stderr, "Camera component done\n");
 
    return status;
@@ -1019,66 +1086,6 @@ static void destroy_camera_component(RASPIVIDYUV_STATE *state)
       mmal_component_destroy(state->camera_component);
       state->camera_component = NULL;
    }
-}
-
-
-/**
- * Connect two specific ports together
- *
- * @param output_port Pointer the output port
- * @param input_port Pointer the input port
- * @param Pointer to a mmal connection pointer, reassigned if function successful
- * @return Returns a MMAL_STATUS_T giving result of operation
- *
- */
-static MMAL_STATUS_T connect_ports(MMAL_PORT_T *output_port, MMAL_PORT_T *input_port, MMAL_CONNECTION_T **connection)
-{
-   MMAL_STATUS_T status;
-
-   status =  mmal_connection_create(connection, output_port, input_port, MMAL_CONNECTION_FLAG_TUNNELLING | MMAL_CONNECTION_FLAG_ALLOCATION_ON_INPUT);
-
-   if (status == MMAL_SUCCESS)
-   {
-      status =  mmal_connection_enable(*connection);
-      if (status != MMAL_SUCCESS)
-         mmal_connection_destroy(*connection);
-   }
-
-   return status;
-}
-
-/**
- * Checks if specified port is valid and enabled, then disables it
- *
- * @param port  Pointer the port
- *
- */
-static void check_disable_port(MMAL_PORT_T *port)
-{
-   if (port && port->is_enabled)
-      mmal_port_disable(port);
-}
-
-/**
- * Handler for sigint signals
- *
- * @param signal_number ID of incoming signal.
- *
- */
-static void signal_handler(int signal_number)
-{
-   if (signal_number == SIGUSR1)
-   {
-      // Handle but ignore - prevents us dropping out if started in none-signal mode
-      // and someone sends us the USR1 signal anyway
-   }
-   else
-   {
-      // Going to abort on all other signals
-      vcos_log_error("Aborting program\n");
-      exit(130);
-   }
-
 }
 
 /**
@@ -1165,7 +1172,7 @@ static int wait_for_next_change(RASPIVIDYUV_STATE *state)
    {
       char ch;
 
-      if (state->verbose)
+      if (state->common_settings.verbose)
          fprintf(stderr, "Press Enter to %s, X then ENTER to exit\n", state->bCapturing ? "pause" : "capture");
 
       ch = getchar();
@@ -1189,14 +1196,14 @@ static int wait_for_next_change(RASPIVIDYUV_STATE *state)
       // variant of procmask to block SIGUSR1 so we can wait on it.
       pthread_sigmask( SIG_BLOCK, &waitset, NULL );
 
-      if (state->verbose)
+      if (state->common_settings.verbose)
       {
          fprintf(stderr, "Waiting for SIGUSR1 to %s\n", state->bCapturing ? "pause" : "capture");
       }
 
       result = sigwait( &waitset, &sig );
 
-      if (state->verbose && result != 0)
+      if (state->common_settings.verbose && result != 0)
          fprintf(stderr, "Bad signal received - error %d\n", errno);
 
       return keep_running;
@@ -1227,21 +1234,21 @@ int main(int argc, const char **argv)
    // Register our application with the logging system
    vcos_log_register("RaspiVid", VCOS_LOG_CATEGORY);
 
-   signal(SIGINT, signal_handler);
+   signal(SIGINT, default_signal_handler);
 
    // Disable USR1 for the moment - may be reenabled if go in to signal capture mode
    signal(SIGUSR1, SIG_IGN);
 
-   default_status(&state);
+   set_app_name(argv[0]);
 
    // Do we have any parameters
    if (argc == 1)
    {
-      fprintf(stdout, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
-
-      display_valid_parameters(basename(argv[0]));
+      display_valid_parameters(basename(get_app_name()), &application_help_message);
       exit(EX_USAGE);
    }
+
+   default_status(&state);
 
    // Parse the command line and put options in to our status structure
    if (parse_cmdline(argc, argv, &state))
@@ -1250,11 +1257,22 @@ int main(int argc, const char **argv)
       exit(EX_USAGE);
    }
 
-   if (state.verbose)
+   if (state.timeout == -1)
+      state.timeout = 5000;
+
+   // Setup for sensor specific parameters, only set W/H settings if zero on entry
+   get_sensor_defaults(state.common_settings.cameraNum, state.common_settings.camera_name,
+                       &state.common_settings.width, &state.common_settings.height);
+
+   if (state.common_settings.verbose)
    {
-      fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
+      print_app_details(stderr);
       dump_status(&state);
    }
+
+   if (state.common_settings.gps)
+      if (raspi_gps_setup(state.common_settings.verbose))
+         state.common_settings.gps = false;
 
    // OK, we have a nice set of parameters. Now set up our components
    // We have two components. Camera, Preview
@@ -1272,7 +1290,7 @@ int main(int argc, const char **argv)
    }
    else
    {
-      if (state.verbose)
+      if (state.common_settings.verbose)
          fprintf(stderr, "Starting component connection stage\n");
 
       camera_preview_port = state.camera_component->output[MMAL_CAMERA_PREVIEW_PORT];
@@ -1282,7 +1300,7 @@ int main(int argc, const char **argv)
 
       if (state.preview_parameters.wantPreview )
       {
-         if (state.verbose)
+         if (state.common_settings.verbose)
          {
             fprintf(stderr, "Connecting camera preview port to preview input port\n");
             fprintf(stderr, "Starting video preview\n");
@@ -1303,24 +1321,44 @@ int main(int argc, const char **argv)
       {
          state.callback_data.file_handle = NULL;
 
-         if (state.filename)
+         if (state.common_settings.filename)
          {
-            if (state.filename[0] == '-')
+            if (state.common_settings.filename[0] == '-')
             {
                state.callback_data.file_handle = stdout;
-
-               // Ensure we don't upset the output stream with diagnostics/info
-               state.verbose = 0;
             }
             else
             {
-               state.callback_data.file_handle = open_filename(&state);
+               state.callback_data.file_handle = open_filename(&state, state.common_settings.filename);
             }
 
             if (!state.callback_data.file_handle)
             {
                // Notify user, carry on but discarding output buffers
-               vcos_log_error("%s: Error opening output file: %s\nNo output file will be generated\n", __func__, state.filename);
+               vcos_log_error("%s: Error opening output file: %s\nNo output file will be generated\n", __func__, state.common_settings.filename);
+            }
+         }
+
+         state.callback_data.pts_file_handle = NULL;
+
+         if (state.pts_filename)
+         {
+            if (state.pts_filename[0] == '-')
+            {
+               state.callback_data.pts_file_handle = stdout;
+            }
+            else
+            {
+               state.callback_data.pts_file_handle = open_filename(&state, state.pts_filename);
+               if (state.callback_data.pts_file_handle) /* save header for mkvmerge */
+                  fprintf(state.callback_data.pts_file_handle, "# timecode format v2\n");
+            }
+
+            if (!state.callback_data.pts_file_handle)
+            {
+               // Notify user, carry on but discarding encoded output buffers
+               fprintf(stderr, "Error opening output file: %s\nNo output file will be generated\n",state.pts_filename);
+               state.save_pts=0;
             }
          }
 
@@ -1330,28 +1368,16 @@ int main(int argc, const char **argv)
 
          camera_video_port->userdata = (struct MMAL_PORT_USERDATA_T *)&state.callback_data;
 
-         if (state.verbose)
-            fprintf(stderr, "Enabling camera video port\n");
-
-         // Enable the camera video port and tell it its callback function
-         status = mmal_port_enable(camera_video_port, camera_buffer_callback);
-
-         if (status != MMAL_SUCCESS)
-         {
-            vcos_log_error("Failed to setup camera output");
-            goto error;
-         }
-
          if (state.demoMode)
          {
             // Run for the user specific time..
             int num_iterations = state.timeout / state.demoInterval;
             int i;
 
-            if (state.verbose)
+            if (state.common_settings.verbose)
                fprintf(stderr, "Running in demo mode\n");
 
-            for (i=0;state.timeout == 0 || i<num_iterations;i++)
+            for (i=0; state.timeout == 0 || i<num_iterations; i++)
             {
                raspicamcontrol_cycle_test(state.camera_component);
                vcos_sleep(state.demoInterval);
@@ -1365,11 +1391,23 @@ int main(int argc, const char **argv)
             {
                int running = 1;
 
+               if (state.common_settings.verbose)
+                  fprintf(stderr, "Enabling camera video port\n");
+
+               // Enable the camera video port and tell it its callback function
+               status = mmal_port_enable(camera_video_port, camera_buffer_callback);
+
+               if (status != MMAL_SUCCESS)
+               {
+                  vcos_log_error("Failed to setup camera output");
+                  goto error;
+               }
+
                // Send all the buffers to the camera video port
                {
                   int num = mmal_queue_length(state.camera_pool->queue);
                   int q;
-                  for (q=0;q<num;q++)
+                  for (q=0; q<num; q++)
                   {
                      MMAL_BUFFER_HEADER_T *buffer = mmal_queue_get(state.camera_pool->queue);
 
@@ -1392,7 +1430,7 @@ int main(int argc, const char **argv)
                      // How to handle?
                   }
 
-                  if (state.verbose)
+                  if (state.common_settings.verbose)
                   {
                      if (state.bCapturing)
                         fprintf(stderr, "Starting video capture\n");
@@ -1403,7 +1441,7 @@ int main(int argc, const char **argv)
                   running = wait_for_next_change(&state);
                }
 
-               if (state.verbose)
+               if (state.common_settings.verbose)
                   fprintf(stderr, "Finished capture\n");
             }
             else
@@ -1429,11 +1467,11 @@ error:
 
       mmal_status_to_int(status);
 
-      if (state.verbose)
+      if (state.common_settings.verbose)
          fprintf(stderr, "Closing down\n");
 
       // Disable all our ports that are not handled by connections
-      check_disable_port(camera_still_port);
+      check_disable_port(camera_video_port);
 
       if (state.preview_parameters.wantPreview && state.preview_connection)
          mmal_connection_destroy(state.preview_connection);
@@ -1448,11 +1486,16 @@ error:
       // problems if we have already closed the file!
       if (state.callback_data.file_handle && state.callback_data.file_handle != stdout)
          fclose(state.callback_data.file_handle);
+      if (state.callback_data.pts_file_handle && state.callback_data.pts_file_handle != stdout)
+         fclose(state.callback_data.pts_file_handle);
 
       raspipreview_destroy(&state.preview_parameters);
       destroy_camera_component(&state);
 
-      if (state.verbose)
+      if (state.common_settings.gps)
+         raspi_gps_shutdown(state.common_settings.verbose);
+
+      if (state.common_settings.verbose)
          fprintf(stderr, "Close down completed, all components disconnected, disabled and destroyed\n\n");
    }
 

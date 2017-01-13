@@ -653,80 +653,55 @@ static void cecservice_logging_init() {
  Actual CEC service API starts here
 ***********************************************************/
 /***********************************************************
- * Name: vc_cec_register_command
+ * Name: vc_cec_register_command (deprecated)
  *
  * Arguments:
- *       opcode to be registered
  *
  * Description
- *       Register an opcode to be forwarded as VC_CEC_RX notification
- *       The following opcode cannot be registered:
- *       <User Control Pressed>, <User Control Released>, 
- *       <Vendor Remote Button Down>, <Vendor Remote Button Up>,
- *       <Feature Abort>, <Abort>
  *
- * Returns: if the command is successful (zero) or not (non-zero)
+ * Returns: zero
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_cec_register_command(CEC_OPCODE_T opcode) {
-   int success = -1;
-   uint32_t param = VC_HTOV32(opcode);
-   success = cecservice_send_command( VC_CEC_REGISTER_CMD, &param, sizeof(param), 0);
-   return success;
+VCHPRE_ int VCOS_DEPRECATED("has no effect") VCHPOST_ vc_cec_register_command(CEC_OPCODE_T opcode) {
+   return 0;
 }
 
 /***********************************************************
- * Name: vc_cec_register_all
+ * Name: vc_cec_register_all (deprecated)
  *
  * Arguments:
- *       None
  *
  * Description
- *       Register all commands except <Abort>
- *       Button presses/release will still be forwarded as 
- *       BUTTON_PRESSED/BUTTON_RELEASE notifications
  *
- * Returns: if the command is successful (zero) or not (non-zero)
+ * Returns: zero
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_cec_register_all( void ) {
-   return cecservice_send_command( VC_CEC_REGISTER_ALL, NULL, 0, 0);
+VCHPRE_ int VCOS_DEPRECATED("has no effect") VCHPOST_ vc_cec_register_all( void ) {
+    return 0;
 }
 
 /***********************************************************
- * Name: vc_cec_deregister_command
+ * Name: vc_cec_deregister_command (deprecated)
  *
  * Arguments:
- *       opcode to be deregistered
  *
  * Description
- *       Deregister an opcode to be forwarded as VC_CEC_RX notification
- *       The following opcode cannot be deregistered:
- *       <User Control Pressed>, <User Control Released>, 
- *       <Vendor Remote Button Down>, <Vendor Remote Button Up>,
- *       <Feature Abort>, <Abort>
  *
- * Returns: if the command is successful (zero) or not (non-zero)
+ * Returns: zero
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_cec_deregister_command(CEC_OPCODE_T opcode) {
-   int success = -1;
-   uint32_t param = VC_HTOV32(opcode);
-   success = cecservice_send_command( VC_CEC_DEREGISTER_CMD, &param, sizeof(param), 0);
-   return success;
+VCHPRE_ int VCOS_DEPRECATED("has no effect") VCHPOST_ vc_cec_deregister_command(CEC_OPCODE_T opcode) {
+   return 0;
 }
 
 /***********************************************************
- * Name: vc_cec_deregister_all
+ * Name: vc_cec_deregister_all (deprecated)
  *
  * Arguments:
- *       None
  *
  * Description
- *       Remove all commands to be forwarded. This does not affect
- *       the button presses which are always forwarded
  *
- * Returns: if the command is successful (zero) or not (non-zero)
+ * Returns: zero
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_cec_deregister_all( void ) {
-   return cecservice_send_command( VC_CEC_DEREGISTER_ALL, NULL, 0, 0);
+VCHPRE_ int VCOS_DEPRECATED("has no effect") VCHPOST_ vc_cec_deregister_all( void ) {
+    return 0;
 }
 
 /***********************************************************
@@ -839,27 +814,23 @@ VCHPRE_ int VCHPOST_ vc_cec_alloc_logical_address( void ) {
  *
  * Returns: if the command is successful (zero) or not (non-zero)
  *         The host should get a callback VC_CEC_LOGICAL_ADDR with
- *         0xF being the logical address and 0xFFFF being the physical address.
+ *         0xF being the logical address and the current physical address.
  ***********************************************************/
 VCHPRE_ int VCHPOST_ vc_cec_release_logical_address( void ) {
    return cecservice_send_command( VC_CEC_RELEASE_LOGICAL_ADDR, NULL, 0, 0);
 }
 
 /***********************************************************
- * Name: vc_cec_get_topology
+ * Name: vc_cec_get_topology (deprecated)
  *
  * Arguments:
- *       pointer to topology struct
  *
  * Description
- *       Get the topology
  *
  * Returns: if the command is successful (zero) or not (non-zero)
- *         If successful, the topology will be set, otherwise it is unchanged
- *         A topology with 1 device (us) means CEC is not supported
- *         If there is no topology available, this also returns a failure.
+ *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_cec_get_topology( VC_CEC_TOPOLOGY_T* topology) {
+VCHPRE_ int VCOS_DEPRECATED("returns invalid result") VCHPOST_ vc_cec_get_topology( VC_CEC_TOPOLOGY_T* topology) {
    int32_t success = -1;
    vchi_service_use(cecservice_client.client_handle[0]);
    success = cecservice_send_command( VC_CEC_GET_TOPOLOGY, NULL, 0, 1);
@@ -1153,21 +1124,15 @@ VCHPRE_ int VCHPOST_ vc_cec_set_logical_address(const CEC_AllDevices_T logical_a
 }
 
 /***********************************************************
- * Name: vc_cec_add_device
+ * Name: vc_cec_add_device (deprecated)
  *
  * Arguments:
- *       logical address, physical address, device type, whether this is the last device
  *
  * Description
- *       Adds a new device to topology. Only available when CEC 
- *       is running in passive mode. Device will be automatically 
- *       removed from topology if a failed xmit is detected. If 
- *       last_device is true, it will trigger a topology computation
- *       (and may trigger a topology callback).
  *
  * Returns: 0 if successful, non-zero otherwise
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_cec_add_device(const CEC_AllDevices_T logical_address,
+VCHPRE_ int  VCOS_DEPRECATED("has no effect") VCHPOST_ vc_cec_add_device(const CEC_AllDevices_T logical_address,
                                        const uint16_t physical_address,
                                        const CEC_DEVICE_TYPE_T device_type,
                                        vcos_bool_t last_device) {
