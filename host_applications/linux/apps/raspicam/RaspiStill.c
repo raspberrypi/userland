@@ -298,7 +298,7 @@ static void set_sensor_defaults(RASPISTILL_STATE *state)
             state->camera_name[MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN-1] = 0;
          }
          else
-            vcos_log_error("Cannot read cameara info, keeping the defaults for OV5647");
+            vcos_log_error("Cannot read camera info, keeping the defaults for OV5647");
       }
       else
       {
