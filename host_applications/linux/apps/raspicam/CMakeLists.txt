@@ -7,6 +7,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/makefiles/cmake/
 
 include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/libs/bcm_host/include)
 include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/apps/raspicam/)
+include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/libs/sm)
 
 set (GL_SCENE_SOURCES
    gl_scenes/models.c
@@ -15,8 +16,9 @@ set (GL_SCENE_SOURCES
    gl_scenes/sobel.c
    gl_scenes/square.c
    gl_scenes/teapot.c
-   gl_scenes/shader.c)
-
+   gl_scenes/shader.c
+   gl_scenes/vcsm_square.c)
+   
 set (COMMON_SOURCES
    RaspiCamControl.c
    RaspiCLI.c

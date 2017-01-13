@@ -48,6 +48,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "gl_scenes/sobel.h"
 #include "gl_scenes/square.h"
 #include "gl_scenes/teapot.h"
+#include "gl_scenes/vcsm_square.h"
 #include "gl_scenes/yuv.h"
 #include "gl_scenes/shader.h"
 
@@ -98,7 +99,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 static COMMAND_LIST cmdline_commands[] =
 {
-   { CommandGLScene, "-glscene",  "gs",  "GL scene square,teapot,mirror,yuv,sobel,shader", 1 },
+   { CommandGLScene, "-glscene",  "gs",  "GL scene square,teapot,mirror,yuv,sobel,shader,vcsm_square", 1 },
    { CommandGLWin,   "-glwin",    "gw",  "GL window settings <'x,y,w,h'>", 1 },
 };
 
@@ -162,6 +163,8 @@ int raspitex_parse_cmdline(RASPITEX_STATE *state,
             state->scene_id = RASPITEX_SCENE_SOBEL;
          else if (strcmp(arg2, "shader") == 0)
             state->scene_id = RASPITEX_SCENE_SHADER;
+         else if (strcmp(arg2, "vcsm_square") == 0)
+            state->scene_id = RASPITEX_SCENE_VCSM_SQUARE;
          else
             vcos_log_error("Unknown scene %s", arg2);
 
@@ -203,7 +206,7 @@ static void update_fps()
       fps = (float) frame_count / ((time_now - time_start) / 1000.0);
       frame_count = 0;
       time_start = time_now;
-      vcos_log_info("%3.2f FPS", fps);
+      vcos_log_error("%3.2f FPS", fps);
    }
 }
 
@@ -590,6 +593,9 @@ int raspitex_init(RASPITEX_STATE *state)
          break;
       case RASPITEX_SCENE_SHADER:
          rc = shader_open(state);
+         break;
+      case RASPITEX_SCENE_VCSM_SQUARE:
+         rc = vcsm_square_open(state);
          break;
       default:
          rc = -1;

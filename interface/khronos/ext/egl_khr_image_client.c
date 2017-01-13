@@ -51,7 +51,70 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "middleware/khronos/common/2708/khrn_prod_4.h"
 #endif
 
+#ifdef KHRONOS_HAVE_VCSM
+#include "user-vcsm.h"
+#else
+#include <dlfcn.h>
+#include <dlfcn.h>
+typedef enum
+{
+   VCSM_CACHE_TYPE_NONE = 0,        // No caching applies.
+   VCSM_CACHE_TYPE_HOST,            // Allocation is cached on host (user space).
+   VCSM_CACHE_TYPE_VC,              // Allocation is cached on videocore.
+   VCSM_CACHE_TYPE_HOST_AND_VC,     // Allocation is cached on both host and videocore.
+
+} VCSM_CACHE_TYPE_T;
+static unsigned int (*vcsm_malloc_cache)(unsigned int size, VCSM_CACHE_TYPE_T cache, char *name);
+static unsigned int (*vcsm_vc_hdl_from_hdl)(unsigned int handle);
+static void (*vcsm_free) (unsigned int handle);
+#endif /* KHRONOS_HAVE_VCSM */
+
 static VCOS_LOG_CAT_T egl_khr_image_client_log = VCOS_LOG_INIT("egl_khr_image_client", VCOS_LOG_WARN);
+
+static bool egl_init_vcsm()
+{
+#ifdef KHRONOS_HAVE_VCSM
+    return true;
+#else
+    static bool warn_once;
+    bool success = false;
+
+    if (vcsm_malloc_cache)
+       return true;
+
+    if (! vcsm_malloc_cache) {
+        /* Try LD_LIBRARY_PATH first */
+        void *dl = dlopen("libvcsm.so", RTLD_LAZY);
+
+        if (!dl)
+           dl = dlopen("/opt/vc/lib/libvcsm.so", RTLD_LAZY);
+
+        if (dl)
+        {
+           vcsm_malloc_cache = dlsym(dl, "vcsm_malloc_cache");
+           vcsm_vc_hdl_from_hdl = dlsym(dl, "vcsm_vc_hdl_from_hdl");
+           vcsm_free = dlsym(dl, "vcsm_free");
+
+           if (vcsm_malloc_cache && vcsm_vc_hdl_from_hdl && vcsm_free) 
+           {
+              success = true;
+           }
+           else
+           {
+              vcsm_malloc_cache = NULL;
+              vcsm_vc_hdl_from_hdl = NULL;
+              vcsm_free = NULL;
+           }
+        }
+    }
+    if (! success && ! warn_once)
+    {
+        vcos_log_error("Unable to load libvcsm.so for target EGL_IMAGE_BRCM_VCSM");
+        warn_once = false;
+    }
+    return success;
+#endif /* KHRONOS_HAVE_VCSM */
+}
 
 EGLAPI EGLImageKHR EGLAPIENTRY eglCreateImageKHR (EGLDisplay dpy, EGLContext ctx, EGLenum target, EGLClientBuffer buffer, const EGLint *attr_list)
 {
@@ -85,6 +148,7 @@ EGLAPI EGLImageKHR EGLAPIENTRY eglCreateImageKHR (EGLDisplay dpy, EGLContext ctx
             || target == EGL_IMAGE_BRCM_MULTIMEDIA_U
             || target == EGL_IMAGE_BRCM_MULTIMEDIA_V
             || target == EGL_IMAGE_BRCM_DUPLICATE
+            || target == EGL_IMAGE_BRCM_VCSM
             ) {
             context = NULL;
             ctx_error = ctx != EGL_NO_CONTEXT;
@@ -240,6 +304,40 @@ EGLAPI EGLImageKHR EGLAPIENTRY eglCreateImageKHR (EGLDisplay dpy, EGLContext ctx
                }
 #endif
 #else /* Not Android */
+            } else if (target == EGL_IMAGE_BRCM_VCSM && egl_init_vcsm()) {
+                  struct egl_image_brcm_vcsm_info *info = (struct egl_image_brcm_vcsm_info *) buffer;
+                  buf_error = true;
+                  vcos_log_info("%s: EGL_IMAGE_BRCM_VCSM", __FUNCTION__); // FIXME
+
+#define IS_POT(X) ((X) && (((X) & (~(X) + 1)) == (X)))
+#define VALID_RSO_DIM(X) (IS_POT(X) && (X) >= 64 && (X) <= 2048)
+
+                  // Allocate the VCSM buffer. This could be moved to VideoCore.
+                  if (info && VALID_RSO_DIM(info->width) && VALID_RSO_DIM(info->height)) {
+                      unsigned int vcsm_handle;
+                      buffer_width = info->width;
+                      buffer_height = info->height;
+                      buffer_format = ABGR_8888_RSO; // Only format supported
+                      buffer_stride = buffer_width << 2;
+
+                      vcsm_handle = vcsm_malloc_cache(buffer_stride * buffer_height,
+                              VCSM_CACHE_TYPE_HOST, "EGL_IMAGE_BRCM_VCSM");
+                      if (vcsm_handle) {
+                          buf[0] = vcsm_vc_hdl_from_hdl(vcsm_handle);
+                          info->vcsm_handle = vcsm_handle;
+                          if (buf[0])
+                              buf_error = false;
+                          else {
+                              vcos_log_error("%s: bad VCSM handle %u", __FUNCTION__, vcsm_handle);
+                              vcsm_free(vcsm_handle);
+                          }
+
+                         vcos_log_trace("%s: VCSM %u VC %u %ux%u %u", __FUNCTION__, vcsm_handle,
+                                 buf[0], buffer_width, buffer_height, buffer_stride);
+                      }
+                  } else {
+                      vcos_log_error("VCSM buffer dimension but be POT between 64 and 2048\n");
+                  }
             } else if (target == EGL_IMAGE_BRCM_MULTIMEDIA) {
                   buf[0] = (uint32_t)buffer;
                   vcos_log_trace("%s: converting buffer handle %u to EGL_IMAGE_BRCM_MULTIMEDIA",
