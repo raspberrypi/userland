@@ -58,7 +58,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <memory.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.12"
+#define VERSION_STRING "v1.3.13"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -706,9 +706,8 @@ static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buff
       int bytes_written = 0;
       int bytes_to_write = buffer->length;
 
-      if (buffer->length && pData->pstate->onlyLuma)
-         bytes_to_write = port->format->es->video.width * port->format->es->video.height;
-
+      if (pData->pstate->onlyLuma)
+         bytes_to_write = vcos_min(buffer->length, port->format->es->video.width * port->format->es->video.height);
 
       vcos_assert(pData->file_handle);
 
