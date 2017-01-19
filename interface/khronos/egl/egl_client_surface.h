@@ -313,6 +313,17 @@ typedef struct {
    struct wl_dispmanx_client_buffer *front_wl_buffer;
 
    /*
+      middle_wl_buffer
+
+      Validity:
+      type == WINDOW
+
+      Invariant:
+      client-side information about the wl_buffer in the middle
+   */
+   struct wl_dispmanx_client_buffer *middle_wl_buffer;
+
+   /*
       back_wl_buffer
 
       Validity:

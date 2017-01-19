@@ -2323,7 +2323,8 @@ EGLAPI EGLBoolean EGLAPIENTRY eglSwapBuffers(EGLDisplay dpy, EGLSurface surf)
 
                   buffer_temp = surface->front_wl_buffer;
                   surface->front_wl_buffer = surface->back_wl_buffer;
-                  surface->back_wl_buffer = buffer_temp;
+                  surface->back_wl_buffer = surface->middle_wl_buffer;
+                  surface->middle_wl_buffer = buffer_temp;
 
                   configid = egl_config_to_id(surface->config);
                   color = egl_config_get_color_format(configid);
