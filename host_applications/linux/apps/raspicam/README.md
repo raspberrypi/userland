@@ -303,9 +303,10 @@ The camera is run for the requested time (-t), and a captures can be initiated t
 
 	--signal			-s	Signal mode
 
-The camera is run for the requested time (-t), and a captures can be initiated throughout that time by sending a USR1 signal to the camera process. This can be done using the kill command. You can find the camera process ID using the 'ps ax' command.
+The camera is run for the requested time (-t), and a captures can be initiated throughout that time by sending a USR1 signal to the camera process. If USR2 signal is received the application makes a capture and exits. This can be done using the kill command. You can find the camera process ID using the 'ps ax' command or using pidof command.
 
 		kill -USR1 <process id of raspistill>
+		kill -USR2 <process id of raspistill>
 
 raspistillyuv
 

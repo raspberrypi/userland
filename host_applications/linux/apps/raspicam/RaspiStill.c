@@ -58,7 +58,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <errno.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.8"
+#define VERSION_STRING "v1.3.9"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -219,7 +219,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandTimelapse,"-timelapse", "tl", "Timelapse mode. Takes a picture every <t>ms. %d == frame number (Try: -o img_%04d.jpg)", 1},
    { CommandFullResPreview,"-fullpreview","fp", "Run the preview using the still capture resolution (may reduce preview fps)", 0},
    { CommandKeypress,"-keypress",   "k",  "Wait between captures for a ENTER, X then ENTER to exit", 0},
-   { CommandSignal,  "-signal",     "s",  "Wait between captures for a SIGUSR1 from another process", 0},
+   { CommandSignal,  "-signal",     "s",  "Wait between captures for a SIGUSR1 or SIGUSR2 from another process", 0},
    { CommandGL,      "-gl",         "g",  "Draw preview to texture instead of using video render component", 0},
    { CommandGLCapture, "-glcapture","gc", "Capture the GL frame-buffer instead of the camera image", 0},
    { CommandSettings, "-settings",  "set","Retrieve camera settings and write to stdout", 0},
@@ -698,10 +698,11 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          state->frameNextMethod = FRAME_NEXT_KEYPRESS;
          break;
 
-      case CommandSignal:   // Set SIGUSR1 between capture mode
+      case CommandSignal:   // Set SIGUSR1 & SIGUSR2 between capture mode
          state->frameNextMethod = FRAME_NEXT_SIGNAL;
          // Reenable the signal
          signal(SIGUSR1, signal_handler);
+         signal(SIGUSR2, signal_handler);
          break;
 
       case CommandGL:
@@ -1534,10 +1535,10 @@ static void check_disable_port(MMAL_PORT_T *port)
  */
 static void signal_handler(int signal_number)
 {
-   if (signal_number == SIGUSR1)
+   if (signal_number == SIGUSR1 || signal_number == SIGUSR2)
    {
       // Handle but ignore - prevents us dropping out if started in none-signal mode
-      // and someone sends us the USR1 signal anyway
+      // and someone sends us the USR1 or USR2 signal anyway
    }
    else
    {
@@ -1680,21 +1681,22 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
 
    case FRAME_NEXT_SIGNAL :
    {
-      // Need to wait for a SIGUSR1 signal
+      // Need to wait for a SIGUSR1 or SIGUSR2 signal
       sigset_t waitset;
       int sig;
       int result = 0;
 
       sigemptyset( &waitset );
       sigaddset( &waitset, SIGUSR1 );
+      sigaddset( &waitset, SIGUSR2 );
 
       // We are multi threaded because we use mmal, so need to use the pthread
-      // variant of procmask to block SIGUSR1 so we can wait on it.
+      // variant of procmask to block until a SIGUSR1 or SIGUSR2 signal appears
       pthread_sigmask( SIG_BLOCK, &waitset, NULL );
 
       if (state->verbose)
       {
-         fprintf(stderr, "Waiting for SIGUSR1 to initiate capture\n");
+         fprintf(stderr, "Waiting for SIGUSR1 to initiate capture and continue or SIGUSR2 to capture and exit\n");
       }
 
       result = sigwait( &waitset, &sig );
@@ -1703,7 +1705,15 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
       {
          if( result == 0)
          {
-            fprintf(stderr, "Received SIGUSR1\n");
+            if (sig == SIGUSR1)
+            {
+               fprintf(stderr, "Received SIGUSR1\n");
+            }
+            else if (sig == SIGUSR2)
+            {
+               fprintf(stderr, "Received SIGUSR2\n");
+               keep_running = 0;
+            }
          }
          else
          {
@@ -1777,8 +1787,9 @@ int main(int argc, const char **argv)
 
    signal(SIGINT, signal_handler);
 
-   // Disable USR1 for the moment - may be reenabled if go in to signal capture mode
+   // Disable USR1 and USR2 for the moment - may be reenabled if go in to signal capture mode
    signal(SIGUSR1, SIG_IGN);
+   signal(SIGUSR2, SIG_IGN);
 
    default_status(&state);
 
