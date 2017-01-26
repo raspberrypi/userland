@@ -58,7 +58,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <errno.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.9"
+#define VERSION_STRING "v1.3.10"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -1701,24 +1701,24 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
 
       result = sigwait( &waitset, &sig );
 
-      if (state->verbose)
+      if (result == 0)
       {
-         if( result == 0)
+         if (sig == SIGUSR1)
          {
-            if (sig == SIGUSR1)
-            {
+            if (state->verbose)
                fprintf(stderr, "Received SIGUSR1\n");
-            }
-            else if (sig == SIGUSR2)
-            {
-               fprintf(stderr, "Received SIGUSR2\n");
-               keep_running = 0;
-            }
          }
-         else
+         else if (sig == SIGUSR2)
          {
-            fprintf(stderr, "Bad signal received - error %d\n", errno);
+            if (state->verbose)
+               fprintf(stderr, "Received SIGUSR2\n");
+            keep_running = 0;
          }
+      }
+      else
+      {
+         if (state->verbose)
+            fprintf(stderr, "Bad signal received - error %d\n", errno);
       }
 
       *frame+=1;
