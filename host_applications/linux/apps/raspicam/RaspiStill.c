@@ -271,8 +271,6 @@ static void set_sensor_defaults(RASPISTILL_STATE *state)
    MMAL_STATUS_T status;
 
    // Default to the OV5647 setup
-   state->width = 2592;
-   state->height = 1944;
    strncpy(state->camera_name, "OV5647", MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN);
 
    // Try to get the camera name and maximum supported resolution
@@ -289,12 +287,14 @@ static void set_sensor_defaults(RASPISTILL_STATE *state)
          // Running on newer firmware
          param.hdr.size = sizeof(param);
          status = mmal_port_parameter_get(camera_info->control, &param.hdr);
-         if (status == MMAL_SUCCESS && param.num_cameras > 0)
+         if (status == MMAL_SUCCESS && param.num_cameras > state->cameraNum)
          {
             // Take the parameters from the first camera listed.
-            state->width = param.cameras[0].max_width;
-            state->height = param.cameras[0].max_height;
-            strncpy(state->camera_name,  param.cameras[0].camera_name, MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN);
+            if (state->width == 0)
+               state->width = param.cameras[state->cameraNum].max_width;
+            if (state->height == 0)
+               state->height = param.cameras[state->cameraNum].max_height;
+            strncpy(state->camera_name,  param.cameras[state->cameraNum].camera_name, MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN);
             state->camera_name[MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN-1] = 0;
          }
          else
@@ -312,6 +312,12 @@ static void set_sensor_defaults(RASPISTILL_STATE *state)
    {
       vcos_log_error("Failed to create camera_info component");
    }
+   //Command line hasn't specified a resolution, and we failed to
+   //get a default resolution from camera_info. Assume OV5647 full res
+   if (state->width == 0)
+      state->width = 2592;
+   if (state->height == 0)
+      state->height = 1944;
 }
 
 /**
@@ -360,9 +366,6 @@ static void default_status(RASPISTILL_STATE *state)
    state->datetime = 0;
    state->timestamp = 0;
    state->restart_interval = 0;
-
-   // Setup for sensor specific parameters
-   set_sensor_defaults(state);
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -1807,6 +1810,9 @@ int main(int argc, const char **argv)
    {
       exit(EX_USAGE);
    }
+
+   // Setup for sensor specific parameters
+   set_sensor_defaults(&state);
 
    if (state.verbose)
    {
