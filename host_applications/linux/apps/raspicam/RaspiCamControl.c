@@ -195,6 +195,9 @@ static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_com
 
 #define parameter_reset -99999
 
+#define zoom_full_16P16 ((unsigned int)(65536 * 0.15))
+#define zoom_increment_16P16 (65536UL / 10)
+
 /**
  * Update the passed in parameter according to the rest of the parameters
  * passed in.
@@ -1352,6 +1355,80 @@ int raspicamcontrol_set_ROI(MMAL_COMPONENT_T *camera, PARAM_FLOAT_RECT_T rect)
    crop.rect.height = (65536 * rect.h);
 
    return mmal_port_parameter_set(camera->control, &crop.hdr);
+}
+
+/**
+ * Zoom in and Zoom out by changing ROI
+ * @param camera Pointer to camera component
+ * @param zoom_command zoom command enum
+ * @return 0 if successful, non-zero otherwise
+ */
+int raspicamcontrol_zoom_in_zoom_out(MMAL_COMPONENT_T *camera, ZOOM_COMMAND_T zoom_command, PARAM_FLOAT_RECT_T *roi) {
+    MMAL_PARAMETER_INPUT_CROP_T crop;
+    crop.hdr.id = MMAL_PARAMETER_INPUT_CROP;
+    crop.hdr.size = sizeof(crop);
+
+    if (mmal_port_parameter_get(camera->control, &crop.hdr) != MMAL_SUCCESS)
+    {
+        vcos_log_error("mmal_port_parameter_get(camera->control, &crop.hdr) failed, skip it");
+        return 0;
+    }
+
+    if (zoom_command == ZOOM_IN)
+    {
+        if (crop.rect.width <= (zoom_full_16P16 + zoom_increment_16P16))
+        {
+            crop.rect.width = zoom_full_16P16;
+            crop.rect.height = zoom_full_16P16;
+        }
+        else
+        {
+            crop.rect.width -= zoom_increment_16P16;
+            crop.rect.height -= zoom_increment_16P16;
+        }
+    }
+    else if (zoom_command == ZOOM_OUT)
+    {
+        unsigned int increased_size = crop.rect.width + zoom_increment_16P16;
+        if (increased_size < crop.rect.width) //overflow
+        {
+            crop.rect.width = 65536;
+            crop.rect.height = 65536;
+        }
+        else
+        {
+            crop.rect.width = increased_size;
+            crop.rect.height = increased_size;
+        }
+    }
+
+    if (zoom_command == ZOOM_RESET)
+    {
+        crop.rect.x = 0;
+        crop.rect.y = 0;
+        crop.rect.width = 65536;
+        crop.rect.height = 65536;
+    }
+    else
+    {
+        unsigned int centered_top_coordinate = (65536 - crop.rect.width) / 2;
+        crop.rect.x = centered_top_coordinate;
+        crop.rect.y = centered_top_coordinate;
+    }
+
+    int ret = mmal_status_to_int(mmal_port_parameter_set(camera->control, &crop.hdr));
+
+    if (ret == 0) {
+       roi->x = roi->y = (double)crop.rect.x/65536;
+       roi->w = roi->h = (double)crop.rect.width/65536;
+    }
+    else
+    {
+        vcos_log_error("Failed to set crop values, x/y: %u, w/h: %u", crop.rect.x, crop.rect.width);
+        ret = 1;
+    }
+
+    return ret;
 }
 
 /**

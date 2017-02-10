@@ -2388,14 +2388,45 @@ static int wait_for_next_change(RASPIVID_STATE *state)
       char ch;
 
       if (state->verbose)
-         fprintf(stderr, "Press Enter to %s, X then ENTER to exit\n", state->bCapturing ? "pause" : "capture");
+         fprintf(stderr, "Press Enter to %s, X then ENTER to exit, [i,o,r] then ENTER to change zoom\n", state->bCapturing ? "pause" : "capture");
 
       ch = getchar();
       if (ch == 'x' || ch == 'X')
          return 0;
-      else
-         return keep_running;
+      else if (ch == 'i' || ch == 'I')
+      {
+         if (state->verbose)
+            fprintf(stderr, "Starting zoom in\n");
+
+         raspicamcontrol_zoom_in_zoom_out(state->camera_component, ZOOM_IN, &(state->camera_parameters).roi);
+
+         if (state->verbose)
+            dump_status(state);
+      }
+      else if (ch == 'o' || ch == 'O')
+      {
+         if (state->verbose)
+            fprintf(stderr, "Starting zoom out\n");
+
+         raspicamcontrol_zoom_in_zoom_out(state->camera_component, ZOOM_OUT, &(state->camera_parameters).roi);
+
+         if (state->verbose)
+            dump_status(state);
+      }
+      else if (ch == 'r' || ch == 'R')
+      {
+         if (state->verbose)
+            fprintf(stderr, "starting reset zoom\n");
+
+         raspicamcontrol_zoom_in_zoom_out(state->camera_component, ZOOM_RESET, &(state->camera_parameters).roi);
+
+         if (state->verbose)
+            dump_status(state);
+      }
+
+      return keep_running;
    }
+
 
    case WAIT_METHOD_SIGNAL:
    {

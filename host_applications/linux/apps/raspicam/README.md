@@ -299,7 +299,9 @@ This runs the preview windows using the full resolution capture mode. Maximum fr
 
 	--keypress		-k	Keypress mode
 
-The camera is run for the requested time (-t), and a captures can be initiated throughout that by pressing the Enter key.  Press X then Enter will exit the application before the timeout is reached. If the timeout is set to 0, the camera will run indefinitely until X then Enter is typed. Using the verbose option (-v) will display a prompt asking for user input, otherwise no prompt is displayed. 
+The camera is run for the requested time (-t), and a captures can be initiated throughout that by pressing the Enter key.  Press X then Enter will exit the application before the timeout is reached. If the timeout is set to 0, the camera will run indefinitely until X then Enter is typed.
+Additional supported keys: 'i', 'o' and 'r'. Press 'i' then Enter will zoom in by 10%. Press 'o' then Enter will zoom out by 10%.  Press 'r' then Enter will reset zoom.
+Using the verbose option (-v) will display a prompt asking for user input, otherwise no prompt is displayed.
 
 	--signal			-s	Signal mode
 
