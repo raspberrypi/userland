@@ -11,7 +11,7 @@ include_directories(${VMCS_TARGET}/vcfiled)
 
 add_library(vchostif
             ${VMCS_TARGET}/vcfilesys.c ${VMCS_TARGET}/vcmisc.c
-            vc_vchi_gencmd.c vc_vchi_filesys.c
+            vc_vchi_gencmd.c vc_vchi_filesys.c vc_vchi_gpuserv.c
             vc_vchi_tvservice.c vc_vchi_cecservice.c
             vc_vchi_dispmanx.c vc_service_common.c)
 #            ${VMCS_TARGET}/vmcs_main.c
