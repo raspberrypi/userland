@@ -168,11 +168,16 @@ static inline void dtoverlay_dtb_set_trailer(DTBLOB_T *dtb,
 
 int dtoverlay_find_phandle(DTBLOB_T *dtb, int phandle);
 
+int dtoverlay_find_symbol(DTBLOB_T *dtb, const char *symbol_name);
+
 int dtoverlay_find_matching_node(DTBLOB_T *dtb, const char **node_names,
                                  int pos);
 
 const void *dtoverlay_get_property(DTBLOB_T *dtb, int pos,
                                    const char *prop_name, int *prop_len);
+
+int dtoverlay_set_property(DTBLOB_T *dtb, int pos,
+                           const char *prop_name, const void *prop, int prop_len);
 
 const char *dtoverlay_get_alias(DTBLOB_T *dtb, const char *alias_name);
 
