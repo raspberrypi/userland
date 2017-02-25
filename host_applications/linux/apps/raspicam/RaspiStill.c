@@ -58,7 +58,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <errno.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.10"
+#define VERSION_STRING "v1.3.11"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -1772,7 +1772,7 @@ static void rename_file(RASPISTILL_STATE *state, FILE *output_file,
 int main(int argc, const char **argv)
 {
    // Our main data storage vessel..
-   RASPISTILL_STATE state;
+   RASPISTILL_STATE state = {0};
    int exit_code = EX_OK;
 
    MMAL_STATUS_T status = MMAL_SUCCESS;
