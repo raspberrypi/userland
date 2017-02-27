@@ -1055,7 +1055,7 @@ static FILE *open_filename(RASPIVID_STATE *pState, char *filename)
    if (filename)
    {
       bool bNetwork = false;
-      int sfd, socktype;
+      int sfd = -1, socktype;
 
       if(!strncmp("tcp://", filename, 6))
       {
@@ -1165,7 +1165,8 @@ static FILE *open_filename(RASPIVID_STATE *pState, char *filename)
                fprintf(stderr, "Error creating socket: %s\n", strerror(errno));
          }
 
-         new_handle = fdopen(sfd, "w");
+         if (sfd >= 0)
+            new_handle = fdopen(sfd, "w");
       }
       else
       {
