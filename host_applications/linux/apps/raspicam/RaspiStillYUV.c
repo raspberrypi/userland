@@ -57,7 +57,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <unistd.h>
 #include <errno.h>
 
-#define VERSION_STRING "v1.3.6"
+#define VERSION_STRING "v1.3.7"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -834,6 +834,13 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
       still_port->buffer_size = still_port->buffer_size_min;
 
    still_port->buffer_num = still_port->buffer_num_recommended;
+
+   status = mmal_port_parameter_set_boolean(video_port, MMAL_PARAMETER_ZERO_COPY, MMAL_TRUE);
+   if (status != MMAL_SUCCESS)
+   {
+      vcos_log_error("Failed to select zero copy");
+      goto error;
+   }
 
    status = mmal_port_format_commit(still_port);
 
