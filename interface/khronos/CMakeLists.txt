@@ -93,3 +93,8 @@ target_link_libraries(brcmWFC brcmEGL)
 target_link_libraries(brcmOpenVG brcmEGL)
 
 install(TARGETS brcmEGL brcmGLESv2 brcmOpenVG brcmWFC DESTINATION lib)
+
+set(DESTDIR \$ENV{DESTDIR})
+include(GNUInstallDirs)
+install(CODE "execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink libbrcmEGL.so ${DESTDIR}/${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libEGL.so.1)")
+install(CODE "execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink libbrcmGLESv2.so ${DESTDIR}/${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libGLESv2.so.2)")
