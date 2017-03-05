@@ -1471,7 +1471,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
    {
       MMAL_STATUS_T status;
 
-      new_buffer = mmal_queue_get(pData->pstate->encoder_pool->queue);
+      new_buffer = pData? mmal_queue_get(pData->pstate->encoder_pool->queue) : NULL;
 
       if (new_buffer)
          status = mmal_port_send_buffer(port, new_buffer);
