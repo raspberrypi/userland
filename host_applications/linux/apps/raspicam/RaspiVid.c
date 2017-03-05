@@ -66,6 +66,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netdb.h>
 
 #define VERSION_STRING "v1.3.12"
 
@@ -1099,9 +1100,15 @@ static FILE *open_filename(RASPIVID_STATE *pState, char *filename)
          saddr.sin_port = htons(port);
          if(0 == inet_aton(filename, &saddr.sin_addr))
          {
-            fprintf(stderr, "inet_aton failed. %s is not a valid IPv4 address\n",
-                    filename);
-            exit(134);
+             struct hostent * phost = gethostbyname(filename);
+             if( 0 == phost){
+                 fprintf(stderr, "inet_aton failed. %s is not a valid IPv4 address or domain name.\n",
+                         filename);
+                 exit(134);
+             }
+             else{
+                 saddr.sin_addr = *(struct in_addr *)phost->h_addr;
+             }
          }
          *colon = chTmp;
 
