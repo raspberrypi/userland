@@ -827,14 +827,43 @@ struct sensor_regs ov5647_mode7[] =
 };
 
 struct mode_def ov5647_modes[] = {
-   { ov5647_5MPix, NUM_ELEMENTS(ov5647_5MPix), 2592, 1944, BAYER_ORDER_BGGR },
-   { ov5647_mode1, NUM_ELEMENTS(ov5647_mode1), 1920, 1080, BAYER_ORDER_BGGR },
-   { ov5647_mode2, NUM_ELEMENTS(ov5647_mode2), 2592, 1944, BAYER_ORDER_BGGR },
-   { ov5647_mode3, NUM_ELEMENTS(ov5647_mode3), 2592, 1944, BAYER_ORDER_BGGR },
-   { ov5647_mode4, NUM_ELEMENTS(ov5647_mode4), 1296,  976, BAYER_ORDER_BGGR },
-   { ov5647_mode5, NUM_ELEMENTS(ov5647_mode5), 1296,  730, BAYER_ORDER_BGGR },
-   { ov5647_mode6, NUM_ELEMENTS(ov5647_mode6),  640,  480, BAYER_ORDER_BGGR },
-   { ov5647_mode7, NUM_ELEMENTS(ov5647_mode7),  640,  480, BAYER_ORDER_BGGR },
+   { ov5647_5MPix, NUM_ELEMENTS(ov5647_5MPix), 2592, 1944, BAYER_ORDER_BGGR, 10 },
+   { ov5647_mode1, NUM_ELEMENTS(ov5647_mode1), 1920, 1080, BAYER_ORDER_BGGR, 10 },
+   { ov5647_mode2, NUM_ELEMENTS(ov5647_mode2), 2592, 1944, BAYER_ORDER_BGGR, 10 },
+   { ov5647_mode3, NUM_ELEMENTS(ov5647_mode3), 2592, 1944, BAYER_ORDER_BGGR, 10 },
+   { ov5647_mode4, NUM_ELEMENTS(ov5647_mode4), 1296,  976, BAYER_ORDER_BGGR, 10 },
+   { ov5647_mode5, NUM_ELEMENTS(ov5647_mode5), 1296,  730, BAYER_ORDER_BGGR, 10 },
+   { ov5647_mode6, NUM_ELEMENTS(ov5647_mode6),  640,  480, BAYER_ORDER_BGGR, 10 },
+   { ov5647_mode7, NUM_ELEMENTS(ov5647_mode7),  640,  480, BAYER_ORDER_BGGR, 10 },
 };
 
 #undef addreg
+
+struct sensor_regs ov5647_stop[] = {
+   { 0x0100, 0x00 },
+};
+
+// ID register settings taken from http://www.mail-archive.com/linux-kernel@vger.kernel.org/msg1298623.html
+struct sensor_def ov5647 = {
+   .name =                 "ov5647",
+   .modes =                ov5647_modes,
+   .num_modes =            NUM_ELEMENTS(ov5647_modes),
+   .stop =                 ov5647_stop,
+   .num_stop_regs =        NUM_ELEMENTS(ov5647_stop),
+
+   .i2c_addr =             0x36,
+   .i2c_ident_length =     2,
+   .i2c_ident_reg =        0x300A,
+   .i2c_ident_value =      0x4756,  //0x5647 byte swapped
+
+   .vflip_reg =            0x3820,
+   .vflip_reg_bit =        0,
+   .hflip_reg =            0x3821,
+   .hflip_reg_bit =        0,
+
+   .exposure_reg =         0x3500,
+   .exposure_reg_num_bits = 20,
+
+   .gain_reg =             0x350A,
+   .gain_reg_num_bits =    10,
+};

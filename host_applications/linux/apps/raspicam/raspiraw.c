@@ -30,8 +30,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <fcntl.h>
 
-//#include <wiringPi.h>
-//#include <wiringPiI2C.h>
+#include <linux/i2c.h>
 #include <linux/i2c-dev.h>
 
 #include "interface/vcos/vcos.h"
@@ -45,11 +44,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <sys/ioctl.h>
 
-// Do the GPIO waggling from here, except that needs root access, plus
-// there is variation on pin allocation between the various Pi platforms.
-// Provided for reference, but needs tweaking to be useful.
-//#define DO_PIN_CONFIG
-
 enum bayer_order {
 	//Carefully ordered so that an hflip is ^1,
 	//and a vflip is ^2.
@@ -60,122 +54,186 @@ enum bayer_order {
 };
 
 struct sensor_regs {
-   uint16_t reg;
-   uint8_t  data;
+	uint16_t reg;
+	uint8_t  data;
 };
 
 struct mode_def
 {
-   struct sensor_regs *regs;
-   int num_regs;
-   int width;
-   int height;
-   enum bayer_order order;
+	struct sensor_regs *regs;
+	int num_regs;
+	int width;
+	int height;
+	enum bayer_order order;
+	int native_bit_depth;
 };
+
+struct sensor_def
+{
+	char *name;
+	struct mode_def *modes;
+	int num_modes;
+	struct sensor_regs *stop;
+	int num_stop_regs;
+	uint8_t i2c_addr;
+	int i2c_ident_length;
+	uint16_t i2c_ident_reg;
+	uint16_t i2c_ident_value;
+
+	uint16_t vflip_reg;
+	int vflip_reg_bit;
+	uint16_t hflip_reg;
+	int hflip_reg_bit;
+
+	uint16_t exposure_reg;
+	int exposure_reg_num_bits;
+
+	uint16_t gain_reg;
+	int gain_reg_num_bits;
+};
+
+
 #define NUM_ELEMENTS(a)  (sizeof(a) / sizeof(a[0]))
 
 #include "ov5647_modes.h"
+#include "imx219_modes.h"
 
-int width = 0;
-int height = 0;
+struct sensor_def *sensors[] = {
+	&ov5647,
+	&imx219,
+	NULL
+};
 
 //#define RAW16
 //#define RAW8
 
 #ifdef RAW16
 	#define BIT_DEPTH 16
-	#define UNPACK MMAL_CAMERA_RX_CONFIG_UNPACK_10;
-	#define PACK MMAL_CAMERA_RX_CONFIG_PACK_16;
 #elif defined RAW8
 	#define BIT_DEPTH 8
-	#define UNPACK MMAL_CAMERA_RX_CONFIG_UNPACK_10;
-	#define PACK MMAL_CAMERA_RX_CONFIG_PACK_8;
 #else
 	#define BIT_DEPTH 10
-	#define UNPACK MMAL_CAMERA_RX_CONFIG_UNPACK_NONE;
-	#define PACK MMAL_CAMERA_RX_CONFIG_PACK_NONE;
 #endif
 
-struct mode_def *sensor_mode = NULL;
+void update_regs(struct sensor_def *sensor, struct mode_def *mode, int hflip, int vflip, int exposure, int gain);
 
-
-struct sensor_regs ov5647_stop[] = {
-   { 0x0100, 0x00 }
-};
-
-void update_regs(struct mode_def *mode, int hflip, int vflip, int exposure, int gain);
-
-const int NUM_REGS_STOP = sizeof(ov5647_stop) / sizeof(struct sensor_regs);
-
-void start_camera_streaming(void)
+static int i2c_rd(int fd, uint8_t i2c_addr, uint16_t reg, uint8_t *values, uint32_t n)
 {
-   int fd, i;
+	int err;
+	uint8_t buf[2] = { reg >> 8, reg & 0xff };
+	struct i2c_rdwr_ioctl_data msgset;
+	struct i2c_msg msgs[2] = {
+		{
+			 .addr = i2c_addr,
+			 .flags = 0,
+			 .len = 2,
+			 .buf = buf,
+		},
+		{
+			.addr = i2c_addr,
+			.flags = I2C_M_RD,
+			.len = n,
+			.buf = values,
+		},
+	};
 
-#ifdef DO_PIN_CONFIG
-   wiringPiSetupGpio();
-   pinModeAlt(0, INPUT);
-   pinModeAlt(1, INPUT);
-   //Toggle these pin modes to ensure they get changed.
-   pinModeAlt(28, INPUT);
-   pinModeAlt(28, 4);	//Alt0
-   pinModeAlt(29, INPUT);
-   pinModeAlt(29, 4);	//Alt0
-   digitalWrite(41, 1); //Shutdown pin on B+ and Pi2
-   digitalWrite(32, 1); //LED pin on B+ and Pi2
-#endif
-   fd = open("/dev/i2c-0", O_RDWR);
-   if (!fd)
-   {
-      vcos_log_error("Couldn't open I2C device");
-      return;
-   }
-   if(ioctl(fd, I2C_SLAVE, 0x36) < 0)
-   {
-      vcos_log_error("Failed to set I2C address");
-      return;
-   }
-   for (i=0; i<sensor_mode->num_regs; i++)
-   {
-      unsigned char msg[3];
-      *((unsigned short*)&msg) = ((0xFF00&(sensor_mode->regs[i].reg<<8)) + (0x00FF&(sensor_mode->regs[i].reg>>8)));
-      msg[2] = sensor_mode->regs[i].data;
-      if(write(fd, msg, 3) != 3)
-      {
-         vcos_log_error("Failed to write register index %d", i);
-      }
-   }
-   close(fd);
+	msgset.msgs = msgs;
+	msgset.nmsgs = 2;
+
+	err = ioctl(fd, I2C_RDWR, &msgset);
+	if(err != msgset.nmsgs)
+		return -1;
+
+	return 0;
 }
 
-void stop_camera_streaming(void)
+struct sensor_def * probe_sensor(void)
 {
-   int fd, i;
-   fd = open("/dev/i2c-0", O_RDWR);
-   if (!fd)
-   {
-      vcos_log_error("Couldn't open I2C device");
-      return;
-   }
-   if(ioctl(fd, I2C_SLAVE, 0x36) < 0)
-   {
-      vcos_log_error("Failed to set I2C address");
-      return;
-   }
-   for (i=0; i<NUM_REGS_STOP; i++)
-   {
-      unsigned char msg[3];
-      *((unsigned short*)&msg) = ((0xFF00&(ov5647_stop[i].reg<<8)) + (0x00FF&(ov5647_stop[i].reg>>8)));
-      msg[2] = ov5647_stop[i].data;
-      if(write(fd, msg, 3) != 3)
-      {
-         vcos_log_error("Failed to write register index %d", i);
-      }
-   }
-   close(fd);
-#ifdef DO_PIN_CONFIG
-   digitalWrite(41, 0); //Shutdown pin on B+ and Pi2
-   digitalWrite(32, 0); //LED pin on B+ and Pi2
-#endif
+	int fd;
+	struct sensor_def **sensor_list = &sensors[0];
+	struct sensor_def *sensor = NULL;
+
+	fd = open("/dev/i2c-0", O_RDWR);
+	if (!fd)
+	{
+		vcos_log_error("Couldn't open I2C device");
+		return NULL;
+	}
+
+	while(*sensor_list != NULL)
+	{
+		uint16_t reg = 0;
+		sensor = *sensor_list;
+		vcos_log_error("Probing sensor %s on addr %02X", sensor->name, sensor->i2c_addr);
+		if(sensor->i2c_ident_length <= 2)
+		{
+			if(!i2c_rd(fd, sensor->i2c_addr, sensor->i2c_ident_reg, (uint8_t*)&reg, sensor->i2c_ident_length))
+			{
+				if (reg == sensor->i2c_ident_value)
+				{
+					vcos_log_error("Found sensor at address %02X", sensor->i2c_addr);
+					break;
+				}
+			}
+	}
+		sensor_list++;
+	}
+	return sensor;
+}
+
+void start_camera_streaming(struct sensor_def *sensor, struct mode_def *mode)
+{
+	int fd, i;
+
+	fd = open("/dev/i2c-0", O_RDWR);
+	if (!fd)
+	{
+		vcos_log_error("Couldn't open I2C device");
+		return;
+	}
+	if(ioctl(fd, I2C_SLAVE, sensor->i2c_addr) < 0)
+	{
+		vcos_log_error("Failed to set I2C address");
+		return;
+	}
+	for (i=0; i<mode->num_regs; i++)
+	{
+		unsigned char msg[3];
+		*((unsigned short*)&msg) = ((0xFF00&(mode->regs[i].reg<<8)) + (0x00FF&(mode->regs[i].reg>>8)));
+		msg[2] = mode->regs[i].data;
+		if(write(fd, msg, 3) != 3)
+		{
+			vcos_log_error("Failed to write register index %d", i);
+		}
+	}
+	close(fd);
+}
+
+void stop_camera_streaming(struct sensor_def *sensor)
+{
+	int fd, i;
+	fd = open("/dev/i2c-0", O_RDWR);
+	if (!fd)
+	{
+		vcos_log_error("Couldn't open I2C device");
+		return;
+	}
+	if(ioctl(fd, I2C_SLAVE, sensor->i2c_addr) < 0)
+	{
+		vcos_log_error("Failed to set I2C address");
+		return;
+	}
+	for (i=0; i<sensor->num_stop_regs; i++)
+	{
+		unsigned char msg[3];
+		*((unsigned short*)&msg) = ((0xFF00&(sensor->stop[i].reg<<8)) + (0x00FF&(sensor->stop[i].reg>>8)));
+		msg[2] = sensor->stop[i].data;
+		if(write(fd, msg, 3) != 3)
+		{
+			vcos_log_error("Failed to write register index %d", i);
+		}
+	}
+	close(fd);
 }
 
 int running = 0;
@@ -265,9 +323,18 @@ int main(int argc, char** args) {
 	int exposure = 0;
 	int gain = 0;
 	uint32_t encoding;
+	struct sensor_def *sensor;
+	struct mode_def *sensor_mode = NULL;
 
 	bcm_host_init();
 	vcos_log_register("RaspiRaw", VCOS_LOG_CATEGORY);
+
+	sensor = probe_sensor();
+	if (!sensor)
+	{
+		vcos_log_error("No sensor found. Aborting");
+		return -1;
+	}
 
 	if(argc > 1) {
 		mode = atoi(args[1]);
@@ -284,8 +351,8 @@ int main(int argc, char** args) {
 	if(argc > 5) {
 		gain = atoi(args[5]);
 	}
-	if(mode >= 0 && mode < NUM_ELEMENTS(ov5647_modes)) {
-		sensor_mode = &ov5647_modes[mode];
+	if(mode >= 0 && mode < sensor->num_modes) {
+		sensor_mode = &sensor->modes[mode];
 	}
 
 	if(!sensor_mode)
@@ -294,7 +361,7 @@ int main(int argc, char** args) {
 		return -2;
 	}
 
-	update_regs(sensor_mode, hflip, vflip, exposure, gain);
+	update_regs(sensor, sensor_mode, hflip, vflip, exposure, gain);
 	encoding = order_and_bit_depth_to_encoding(sensor_mode->order, BIT_DEPTH);
 	if (!encoding)
 	{
@@ -326,8 +393,58 @@ int main(int argc, char** args) {
 		vcos_log_error("Failed to get cfg");
 		goto component_destroy;
 	}
-	rx_cfg.unpack = UNPACK;
-	rx_cfg.pack = PACK;
+	if (BIT_DEPTH == sensor_mode->native_bit_depth)
+	{
+		rx_cfg.unpack = MMAL_CAMERA_RX_CONFIG_UNPACK_NONE;
+		rx_cfg.pack = MMAL_CAMERA_RX_CONFIG_PACK_NONE;
+	}
+	else
+	{
+		switch(sensor_mode->native_bit_depth)
+		{
+			case 8:
+				rx_cfg.unpack = MMAL_CAMERA_RX_CONFIG_UNPACK_8;
+				break;
+			case 10:
+				rx_cfg.unpack = MMAL_CAMERA_RX_CONFIG_UNPACK_10;
+				break;
+			case 12:
+				rx_cfg.unpack = MMAL_CAMERA_RX_CONFIG_UNPACK_12;
+				break;
+			case 14:
+				rx_cfg.unpack = MMAL_CAMERA_RX_CONFIG_UNPACK_16;
+				break;
+			case 16:
+				rx_cfg.unpack = MMAL_CAMERA_RX_CONFIG_UNPACK_16;
+				break;
+			default:
+				vcos_log_error("Unknown native bit depth %d", sensor_mode->native_bit_depth);
+				rx_cfg.unpack = MMAL_CAMERA_RX_CONFIG_UNPACK_NONE;
+				break;
+		}
+		switch(BIT_DEPTH)
+		{
+			case 8:
+				rx_cfg.pack = MMAL_CAMERA_RX_CONFIG_PACK_8;
+				break;
+			case 10:
+				rx_cfg.pack = MMAL_CAMERA_RX_CONFIG_PACK_10;
+				break;
+			case 12:
+				rx_cfg.pack = MMAL_CAMERA_RX_CONFIG_PACK_12;
+				break;
+			case 14:
+				rx_cfg.pack = MMAL_CAMERA_RX_CONFIG_PACK_14;
+				break;
+			case 16:
+				rx_cfg.pack = MMAL_CAMERA_RX_CONFIG_PACK_16;
+				break;
+			default:
+				vcos_log_error("Unknown output bit depth %d", BIT_DEPTH);
+				rx_cfg.pack = MMAL_CAMERA_RX_CONFIG_UNPACK_NONE;
+				break;
+		}
+	}
 	vcos_log_error("Set pack to %d, unpack to %d", rx_cfg.unpack, rx_cfg.pack);
 	status = mmal_port_parameter_set(output, &rx_cfg.hdr);
 	if(status != MMAL_SUCCESS)
@@ -351,8 +468,8 @@ int main(int argc, char** args) {
 
 	output->format->es->video.crop.width = sensor_mode->width;
 	output->format->es->video.crop.height = sensor_mode->height;
-	output->format->es->video.width = VCOS_ALIGN_UP(width, 32);
-	output->format->es->video.height = VCOS_ALIGN_UP(height, 16);
+	output->format->es->video.width = VCOS_ALIGN_UP(sensor_mode->width, 32);
+	output->format->es->video.height = VCOS_ALIGN_UP(sensor_mode->height, 16);
 	output->format->encoding = encoding;
 
 	status = mmal_port_format_commit(output);
@@ -395,13 +512,13 @@ int main(int argc, char** args) {
 		vcos_log_error("Sent buffer %p", buffer);
 	}
 
-	start_camera_streaming();
+	start_camera_streaming(sensor, sensor_mode);
 
 	while(1);
 	//vcos_sleep(30000);
 	running = 0;
 
-	stop_camera_streaming();
+	stop_camera_streaming(sensor);
 
 port_disable:
 	status = mmal_port_disable(output);
@@ -427,54 +544,76 @@ component_destroy:
 //than updates the known registers to the proper values
 //based on: http://www.seeedstudio.com/wiki/images/3/3c/Ov5647_full.pdf
 
-void setRegBit(struct mode_def *mode, uint16_t reg, int bit, int value) {
+void setRegBit(struct mode_def *mode, uint16_t reg, int bit, int value)
+{
 	int i = 0;
 	while(i < mode->num_regs && mode->regs[i].reg != reg) i++;
 	if(i == mode->num_regs) {
-		vcos_log_error("Reg: %d not found!\n", reg);
+		vcos_log_error("Reg: %04X not found!\n", reg);
 		return;
 	}
 	mode->regs[i].data = (mode->regs[i].data | (1 << bit)) & (~( (1 << bit) ^ (value << bit) ));
 }
 
-void setReg(struct mode_def *mode, uint16_t reg, int startBit, int endBit, int value) {
+void setReg(struct mode_def *mode, uint16_t reg, int startBit, int endBit, int value)
+{
 	int i;
 	for(i = startBit; i <= endBit; i++) {
 		setRegBit(mode, reg, i, value >> i & 1);
 	}
 }
 
-unsigned int createMask(unsigned int a, int unsigned b) {
-	unsigned int r = 0;
-	unsigned int i;
-	for(i = a; i <= b; i++) {
-		r |= 1 << i;
+void update_regs(struct sensor_def *sensor, struct mode_def *mode, int hflip, int vflip, int exposure, int gain)
+{
+	if (sensor->vflip_reg)
+	{
+		setRegBit(mode, sensor->vflip_reg, 1, vflip);
+		if(vflip)
+			mode->order ^= 2;
 	}
 
-	return r;
-}
-
-void update_regs(struct mode_def *mode, int hflip, int vflip, int exposure, int gain) {
-	setRegBit(mode, 0x3820, 1, vflip);
-	if(vflip)
-		mode->order ^= 2;
-
-	setRegBit(mode, 0x3821, 1, hflip);
-	if(hflip)
-		mode->order ^= 1;
-
-	if(exposure < 0 || exposure > 262143) {
-		vcos_log_error("Invalid exposurerange:%d, exposure range is 0 to 262143!\n", exposure);
-	} else {
-		setReg(mode, 0x3502, 0, 7, exposure & createMask(0, 7));
-		setReg(mode, 0x3501, 0, 7, (exposure & createMask(8, 15)) >> 8);
-		setReg(mode, 0x3500, 0, 3, (exposure & createMask(16, 19)) >> 16);
+	if (sensor->hflip_reg)
+	{
+		setRegBit(mode, sensor->hflip_reg, 1, hflip);
+		if(hflip)
+			mode->order ^= 1;
 	}
-	if(gain < 0 || gain > 1023) {
-		vcos_log_error("Invalid gain range:%d, gain range is 0 to 1023\n", gain);
-	} else {
-		setReg(mode, 0x350B, 0, 7, gain & createMask(0, 7));
-		setReg(mode, 0x350A, 0, 1, (gain & createMask(8, 9)) >> 8);
+
+	if (sensor->exposure_reg)
+	{
+		if(exposure < 0 || exposure >= (1<<sensor->exposure_reg_num_bits)) {
+			vcos_log_error("Invalid exposure:%d, exposure range is 0 to %u!\n",
+						exposure, (1<<sensor->exposure_reg_num_bits)-1);
+		} else {
+			uint8_t val;
+			int i, j=sensor->exposure_reg_num_bits;
+			int num_regs = (sensor->exposure_reg_num_bits>>3)+1;
+
+			for(i=0; i<num_regs; i++, j-=8)
+			{
+				val = (exposure >> (j&~7)) & 0xFF;
+				setReg(mode, sensor->exposure_reg+i, 0, j&0x7, val);
+				vcos_log_error("Set exposure %04X to %02X", sensor->exposure_reg+i, val);
+			}
+		}
+	}
+	if (sensor->gain_reg)
+	{
+		if(gain < 0 || gain >= (1<<sensor->gain_reg_num_bits)) {
+			vcos_log_error("Invalid gain:%d, gain range is 0 to %u\n",
+						gain, (1<<sensor->gain_reg_num_bits)-1);
+		} else {
+			uint8_t val;
+			int i, j=sensor->gain_reg_num_bits;
+			int num_regs = (sensor->gain_reg_num_bits>>3)+1;
+
+			for(i=0; i<num_regs; i++, j-=8)
+			{
+				val = (gain >> (j&~7)) & 0xFF;
+				setReg(mode, sensor->gain_reg+i, 0, j&0x7, val);
+				vcos_log_error("Set gain %04X to %02X", sensor->gain_reg+i, val);
+			}
+		}
 	}
 }
 
