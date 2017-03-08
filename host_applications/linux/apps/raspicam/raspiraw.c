@@ -39,10 +39,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/mmal/mmal.h"
 #include "interface/mmal/mmal_buffer.h"
 #include "interface/mmal/mmal_logging.h"
+#include "interface/mmal/util/mmal_default_components.h"
 #include "interface/mmal/util/mmal_util.h"
 #include "interface/mmal/util/mmal_util_params.h"
+#include "interface/mmal/util/mmal_connection.h"
 
 #include <sys/ioctl.h>
+
+//If CAPTURE is 1, images are saved to file.
+//If 0, the ISP and render are hooked up instead
+#define CAPTURE	0
 
 enum bayer_order {
 	//Carefully ordered so that an hflip is ^1,
@@ -370,10 +376,12 @@ int main(int argc, char** args) {
 	}
 	vcos_log_error("Encoding %08X", encoding);
 
-	MMAL_COMPONENT_T *rawcam;
+	MMAL_COMPONENT_T *rawcam=NULL, *isp=NULL, *render=NULL;
 	MMAL_STATUS_T status;
-	MMAL_PORT_T *output;
-	MMAL_POOL_T *pool;
+	MMAL_PORT_T *output = NULL;
+	MMAL_POOL_T *pool = NULL;
+	MMAL_CONNECTION_T *rawcam_isp = NULL;
+	MMAL_CONNECTION_T *isp_render = NULL;
 	MMAL_PARAMETER_CAMERA_RX_CONFIG_T rx_cfg = {{MMAL_PARAMETER_CAMERA_RX_CONFIG, sizeof(rx_cfg)}};
 	int i;
 
@@ -386,6 +394,21 @@ int main(int argc, char** args) {
 		vcos_log_error("Failed to create rawcam");
 		return -1;
 	}
+
+	status = mmal_component_create("vc.ril.isp", &isp);
+	if(status != MMAL_SUCCESS)
+	{
+		vcos_log_error("Failed to create isp");
+		goto component_destroy;
+	}
+
+	status = mmal_component_create(MMAL_COMPONENT_DEFAULT_VIDEO_RENDERER, &render);
+	if(status != MMAL_SUCCESS)
+	{
+		vcos_log_error("Failed to create render");
+		goto component_destroy;
+	}
+
 	output = rawcam->output[0];
 	status = mmal_port_parameter_get(output, &rx_cfg.hdr);
 	if(status != MMAL_SUCCESS)
@@ -456,19 +479,25 @@ int main(int argc, char** args) {
 	status = mmal_component_enable(rawcam);
 	if(status != MMAL_SUCCESS)
 	{
-		vcos_log_error("Failed to enable");
+		vcos_log_error("Failed to enable rawcam");
 		goto component_destroy;
 	}
-	status = mmal_port_parameter_set_boolean(output, MMAL_PARAMETER_ZERO_COPY, MMAL_TRUE);
+	status = mmal_component_enable(isp);
 	if(status != MMAL_SUCCESS)
 	{
-		vcos_log_error("Failed to set zero copy");
-		goto component_disable;
+		vcos_log_error("Failed to enable isp");
+		goto component_destroy;
+	}
+	status = mmal_component_enable(render);
+	if(status != MMAL_SUCCESS)
+	{
+		vcos_log_error("Failed to enable render");
+		goto component_destroy;
 	}
 
 	output->format->es->video.crop.width = sensor_mode->width;
 	output->format->es->video.crop.height = sensor_mode->height;
-	output->format->es->video.width = VCOS_ALIGN_UP(sensor_mode->width, 32);
+	output->format->es->video.width = VCOS_ALIGN_UP(sensor_mode->width, 16);
 	output->format->es->video.height = VCOS_ALIGN_UP(sensor_mode->height, 16);
 	output->format->encoding = encoding;
 
@@ -479,43 +508,102 @@ int main(int argc, char** args) {
 		goto component_disable;
 	}
 
-	vcos_log_error("Create pool of %d buffers of size %d", output->buffer_num, output->buffer_size);
-	pool = mmal_port_pool_create(output, output->buffer_num, output->buffer_size);
-	if(!pool)
+	if (CAPTURE)
 	{
-		vcos_log_error("Failed to create pool");
-		goto component_disable;
-	}
-
-	status = mmal_port_enable(output, callback);
-	if(status != MMAL_SUCCESS)
-	{
-		vcos_log_error("Failed to enable port");
-		goto pool_destroy;
-	}
-	running = 1;
-	for(i=0; i<output->buffer_num; i++)
-	{
-		MMAL_BUFFER_HEADER_T *buffer = mmal_queue_get(pool->queue);
-
-		if (!buffer)
-		{
-			vcos_log_error("Where'd my buffer go?!");
-			goto port_disable;
-		}
-		status = mmal_port_send_buffer(output, buffer);
+		status = mmal_port_parameter_set_boolean(output, MMAL_PARAMETER_ZERO_COPY, MMAL_TRUE);
 		if(status != MMAL_SUCCESS)
 		{
-			vcos_log_error("mmal_port_send_buffer failed on buffer %p, status %d", buffer, status);
-			goto port_disable;
+			vcos_log_error("Failed to set zero copy");
+			goto component_disable;
 		}
-		vcos_log_error("Sent buffer %p", buffer);
+
+		vcos_log_error("Create pool of %d buffers of size %d", output->buffer_num, output->buffer_size);
+		pool = mmal_port_pool_create(output, output->buffer_num, output->buffer_size);
+		if(!pool)
+		{
+			vcos_log_error("Failed to create pool");
+			goto component_disable;
+		}
+
+		status = mmal_port_enable(output, callback);
+		if(status != MMAL_SUCCESS)
+		{
+			vcos_log_error("Failed to enable port");
+			goto pool_destroy;
+		}
+		running = 1;
+		for(i=0; i<output->buffer_num; i++)
+		{
+			MMAL_BUFFER_HEADER_T *buffer = mmal_queue_get(pool->queue);
+
+			if (!buffer)
+			{
+				vcos_log_error("Where'd my buffer go?!");
+				goto port_disable;
+			}
+			status = mmal_port_send_buffer(output, buffer);
+			if(status != MMAL_SUCCESS)
+			{
+				vcos_log_error("mmal_port_send_buffer failed on buffer %p, status %d", buffer, status);
+				goto port_disable;
+			}
+			vcos_log_error("Sent buffer %p", buffer);
+		}
+	}
+	else
+	{
+		status = mmal_connection_create(&rawcam_isp, output, isp->input[0], MMAL_CONNECTION_FLAG_TUNNELLING);
+		if(status != MMAL_SUCCESS)
+		{
+			vcos_log_error("Failed to create rawcam->isp connection");
+			goto pool_destroy;
+		}
+
+		MMAL_PORT_T *port = isp->output[0];
+		port->format->es->video.crop.width = sensor_mode->width;
+		port->format->es->video.crop.height = sensor_mode->height;
+		if (port->format->es->video.crop.width > 1920)
+		{
+			//Display can only go up to a certain resolution before underflowing
+			port->format->es->video.crop.width /= 2;
+			port->format->es->video.crop.height /= 2;
+		}
+		port->format->es->video.width = VCOS_ALIGN_UP(port->format->es->video.crop.width, 32);
+		port->format->es->video.height = VCOS_ALIGN_UP(port->format->es->video.crop.height, 16);
+		port->format->encoding = MMAL_ENCODING_I420;
+		status = mmal_port_format_commit(port);
+		if(status != MMAL_SUCCESS)
+		{
+			vcos_log_error("Failed to commit port format on isp output");
+			goto pool_destroy;
+		}
+
+		status = mmal_connection_create(&isp_render, isp->output[0], render->input[0], MMAL_CONNECTION_FLAG_TUNNELLING);
+		if(status != MMAL_SUCCESS)
+		{
+			vcos_log_error("Failed to create isp->render connection");
+			goto pool_destroy;
+		}
+
+		status = mmal_connection_enable(rawcam_isp);
+		if(status != MMAL_SUCCESS)
+		{
+			vcos_log_error("Failed to enable rawcam->isp connection");
+			goto pool_destroy;
+		}
+		status = mmal_connection_enable(isp_render);
+		if(status != MMAL_SUCCESS)
+		{
+			vcos_log_error("Failed to enable isp->render connection");
+			goto pool_destroy;
+		}
 	}
 
 	start_camera_streaming(sensor, sensor_mode);
 
-	while(1);
-	//vcos_sleep(30000);
+	while(1) {
+		vcos_sleep(1000);
+	}
 	running = 0;
 
 	stop_camera_streaming(sensor);
@@ -528,38 +616,89 @@ port_disable:
 		return -1;
 	}
 pool_destroy:
-	mmal_port_pool_destroy(output, pool);
+	if (pool)
+		mmal_port_pool_destroy(output, pool);
+	if (isp_render)
+	{
+		mmal_connection_disable(isp_render);
+		mmal_connection_destroy(isp_render);
+	}
+	if (rawcam_isp)
+	{
+		mmal_connection_disable(rawcam_isp);
+		mmal_connection_destroy(rawcam_isp);
+	}
 component_disable:
+	status = mmal_component_disable(render);
+	if(status != MMAL_SUCCESS)
+	{
+		vcos_log_error("Failed to disable render");
+	}
+	status = mmal_component_disable(isp);
+	if(status != MMAL_SUCCESS)
+	{
+		vcos_log_error("Failed to disable isp");
+	}
 	status = mmal_component_disable(rawcam);
 	if(status != MMAL_SUCCESS)
 	{
-		vcos_log_error("Failed to disable");
+		vcos_log_error("Failed to disable rawcam");
 	}
 component_destroy:
-	mmal_component_destroy(rawcam);
+	if (rawcam)
+		mmal_component_destroy(rawcam);
+	if (isp)
+		mmal_component_destroy(isp);
+	if (render)
+		mmal_component_destroy(render);
 	return 0;
 }
 
-//The process first loads the cleaned up dump of the regiesters
+//The process first loads the cleaned up dump of the registers
 //than updates the known registers to the proper values
 //based on: http://www.seeedstudio.com/wiki/images/3/3c/Ov5647_full.pdf
+enum operation {
+	EQUAL,	//Set bit to value
+	SET,	//Set bit
+	CLEAR,	//Clear bit
+	XOR	//Xor bit
+};
 
-void setRegBit(struct mode_def *mode, uint16_t reg, int bit, int value)
+void modRegBit(struct mode_def *mode, uint16_t reg, int bit, int value, enum operation op)
 {
 	int i = 0;
+	uint8_t val;
 	while(i < mode->num_regs && mode->regs[i].reg != reg) i++;
 	if(i == mode->num_regs) {
 		vcos_log_error("Reg: %04X not found!\n", reg);
 		return;
 	}
-	mode->regs[i].data = (mode->regs[i].data | (1 << bit)) & (~( (1 << bit) ^ (value << bit) ));
+	val = mode->regs[i].data;
+
+	switch(op)
+	{
+		case EQUAL:
+			val = (val | (1 << bit)) & (~( (1 << bit) ^ (value << bit) ));
+			break;
+		case SET:
+			val = val | (1 << bit);
+			break;
+		case CLEAR:
+			val = val & ~(1 << bit);
+			break;
+		case XOR:
+			val = val ^ (value << bit);
+			break;
+	}
+	vcos_log_error("Set reg %04X to %02X", reg, val);
+	mode->regs[i].data = val;
 }
 
-void setReg(struct mode_def *mode, uint16_t reg, int startBit, int endBit, int value)
+void modReg(struct mode_def *mode, uint16_t reg, int startBit, int endBit, int value, enum operation op)
 {
 	int i;
 	for(i = startBit; i <= endBit; i++) {
-		setRegBit(mode, reg, i, value >> i & 1);
+		modRegBit(mode, reg, i, value >> i & 1, op);
 	}
 }
 
@@ -567,14 +706,14 @@ void update_regs(struct sensor_def *sensor, struct mode_def *mode, int hflip, in
 {
 	if (sensor->vflip_reg)
 	{
-		setRegBit(mode, sensor->vflip_reg, 1, vflip);
+		modRegBit(mode, sensor->vflip_reg, 1, vflip, XOR);
 		if(vflip)
 			mode->order ^= 2;
 	}
 
 	if (sensor->hflip_reg)
 	{
-		setRegBit(mode, sensor->hflip_reg, 1, hflip);
+		modRegBit(mode, sensor->hflip_reg, 1, hflip, XOR);
 		if(hflip)
 			mode->order ^= 1;
 	}
@@ -592,7 +731,7 @@ void update_regs(struct sensor_def *sensor, struct mode_def *mode, int hflip, in
 			for(i=0; i<num_regs; i++, j-=8)
 			{
 				val = (exposure >> (j&~7)) & 0xFF;
-				setReg(mode, sensor->exposure_reg+i, 0, j&0x7, val);
+				modReg(mode, sensor->exposure_reg+i, 0, j&0x7, val, EQUAL);
 				vcos_log_error("Set exposure %04X to %02X", sensor->exposure_reg+i, val);
 			}
 		}
@@ -610,7 +749,7 @@ void update_regs(struct sensor_def *sensor, struct mode_def *mode, int hflip, in
 			for(i=0; i<num_regs; i++, j-=8)
 			{
 				val = (gain >> (j&~7)) & 0xFF;
-				setReg(mode, sensor->gain_reg+i, 0, j&0x7, val);
+				modReg(mode, sensor->gain_reg+i, 0, j&0x7, val, EQUAL);
 				vcos_log_error("Set gain %04X to %02X", sensor->gain_reg+i, val);
 			}
 		}
