@@ -326,8 +326,8 @@ int main(int argc, char** args) {
 	int mode = 0;
 	int hflip = 0;
 	int vflip = 0;
-	int exposure = 0;
-	int gain = 0;
+	int exposure = -1;
+	int gain = -1;
 	uint32_t encoding;
 	struct sensor_def *sensor;
 	struct mode_def *sensor_mode = NULL;
@@ -690,7 +690,6 @@ void modRegBit(struct mode_def *mode, uint16_t reg, int bit, int value, enum ope
 			val = val ^ (value << bit);
 			break;
 	}
-	vcos_log_error("Set reg %04X to %02X", reg, val);
 	mode->regs[i].data = val;
 }
 
@@ -718,15 +717,15 @@ void update_regs(struct sensor_def *sensor, struct mode_def *mode, int hflip, in
 			mode->order ^= 1;
 	}
 
-	if (sensor->exposure_reg)
+	if (sensor->exposure_reg && exposure != -1)
 	{
 		if(exposure < 0 || exposure >= (1<<sensor->exposure_reg_num_bits)) {
 			vcos_log_error("Invalid exposure:%d, exposure range is 0 to %u!\n",
 						exposure, (1<<sensor->exposure_reg_num_bits)-1);
 		} else {
 			uint8_t val;
-			int i, j=sensor->exposure_reg_num_bits;
-			int num_regs = (sensor->exposure_reg_num_bits>>3)+1;
+			int i, j=sensor->exposure_reg_num_bits-1;
+			int num_regs = (sensor->exposure_reg_num_bits+7)>>3;
 
 			for(i=0; i<num_regs; i++, j-=8)
 			{
@@ -736,15 +735,15 @@ void update_regs(struct sensor_def *sensor, struct mode_def *mode, int hflip, in
 			}
 		}
 	}
-	if (sensor->gain_reg)
+	if (sensor->gain_reg && gain != -1)
 	{
 		if(gain < 0 || gain >= (1<<sensor->gain_reg_num_bits)) {
 			vcos_log_error("Invalid gain:%d, gain range is 0 to %u\n",
 						gain, (1<<sensor->gain_reg_num_bits)-1);
 		} else {
 			uint8_t val;
-			int i, j=sensor->gain_reg_num_bits;
-			int num_regs = (sensor->gain_reg_num_bits>>3)+1;
+			int i, j=sensor->gain_reg_num_bits-1;
+			int num_regs = (sensor->gain_reg_num_bits+7)>>3;
 
 			for(i=0; i<num_regs; i++, j-=8)
 			{
