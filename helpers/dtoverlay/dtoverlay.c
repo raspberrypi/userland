@@ -1635,10 +1635,15 @@ int dtoverlay_set_property(DTBLOB_T *dtb, int pos,
 const char *dtoverlay_get_alias(DTBLOB_T *dtb, const char *alias_name)
 {
    int node_off;
+   int prop_len;
+   const char *alias;
 
    node_off = fdt_path_offset(dtb->fdt, "/aliases");
 
-   return fdt_getprop(dtb->fdt, node_off, alias_name, NULL);
+   alias = fdt_getprop(dtb->fdt, node_off, alias_name, &prop_len);
+   if (alias && !prop_len)
+       alias = "";
+   return alias;
 }
 
 int dtoverlay_set_alias(DTBLOB_T *dtb, const char *alias_name, const char *value)
