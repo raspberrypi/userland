@@ -1579,7 +1579,7 @@ int dtoverlay_find_symbol(DTBLOB_T *dtb, const char *symbol_name)
 }
 
 int dtoverlay_find_matching_node(DTBLOB_T *dtb, const char **node_names,
-				 int pos)
+                                 int pos)
 {
    while (1)
    {
@@ -1603,6 +1603,19 @@ int dtoverlay_find_matching_node(DTBLOB_T *dtb, const char **node_names,
       }
    }
    return -1;
+}
+
+int dtoverlay_node_is_enabled(DTBLOB_T *dtb, int pos)
+{
+   if (pos >= 0)
+   {
+      const void *prop = dtoverlay_get_property(dtb, pos, "status", NULL);
+      if (prop &&
+          ((strcmp((const char *)prop, "okay") == 0) ||
+           (strcmp((const char *)prop, "ok") == 0)))
+         return 1;
+   }
+   return 0;
 }
 
 const void *dtoverlay_get_property(DTBLOB_T *dtb, int pos, const char *prop_name, int *prop_len)

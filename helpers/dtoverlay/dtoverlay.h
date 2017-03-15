@@ -173,6 +173,8 @@ int dtoverlay_find_symbol(DTBLOB_T *dtb, const char *symbol_name);
 int dtoverlay_find_matching_node(DTBLOB_T *dtb, const char **node_names,
                                  int pos);
 
+int dtoverlay_node_is_enabled(DTBLOB_T *dtb, int pos);
+
 const void *dtoverlay_get_property(DTBLOB_T *dtb, int pos,
                                    const char *prop_name, int *prop_len);
 
