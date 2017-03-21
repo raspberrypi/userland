@@ -150,6 +150,33 @@ error:
 
 /******************************************************************************
 NAME
+
+   vc_gpuserv_deinit
+
+SYNOPSIS
+   void vc_gpuserv_init( void )
+
+FUNCTION
+   Deinitialise the gpu service. Should be called when gpu_service is no longer required
+
+RETURNS
+   zero on success
+******************************************************************************/
+
+void vc_gpuserv_deinit( void )
+{
+   vcos_mutex_lock(&gpuserv_client.lock);
+
+   if (gpuserv_client.refcount > 0 && --gpuserv_client.refcount == 0)
+   {
+      vchi_service_close(gpuserv_client.service);
+      gpuserv_client.service = 0;
+   }
+   vcos_mutex_unlock(&gpuserv_client.lock);
+}
+
+/******************************************************************************
+NAME
    gpuserv_callback
 
 SYNOPSIS
@@ -208,7 +235,15 @@ int32_t vc_gpuserv_execute_code(int num_jobs, struct gpu_job_s jobs[])
    VCHIQ_ELEMENT_T elements[MAX_JOBS];
    int i;
 
-   if (vc_gpuserv_init() != 0)
+   // hack: temporarily allow calling this function without calling vc_gpuserv_init
+   // will be removed later
+   if (!gpuserv_client.service)
+   {
+      vc_gpuserv_init();
+      vcos_log_error("%s: called without calling vc_gpuserv_init", VCOS_FUNCTION);
+   }
+
+   if (!gpuserv_client.service)
    {
       vcos_log_error("%s: vchiq service not initialised", VCOS_FUNCTION);
       return -1;
