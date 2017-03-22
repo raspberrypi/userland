@@ -104,7 +104,7 @@ struct sensor_def
 #include "ov5647_modes.h"
 #include "imx219_modes.h"
 
-struct sensor_def *sensors[] = {
+const struct sensor_def *sensors[] = {
 	&ov5647,
 	&imx219,
 	NULL
@@ -121,7 +121,7 @@ struct sensor_def *sensors[] = {
 	#define BIT_DEPTH 10
 #endif
 
-void update_regs(struct sensor_def *sensor, struct mode_def *mode, int hflip, int vflip, int exposure, int gain);
+void update_regs(const struct sensor_def *sensor, struct mode_def *mode, int hflip, int vflip, int exposure, int gain);
 
 static int i2c_rd(int fd, uint8_t i2c_addr, uint16_t reg, uint8_t *values, uint32_t n)
 {
@@ -153,11 +153,11 @@ static int i2c_rd(int fd, uint8_t i2c_addr, uint16_t reg, uint8_t *values, uint3
 	return 0;
 }
 
-struct sensor_def * probe_sensor(void)
+const struct sensor_def * probe_sensor(void)
 {
 	int fd;
-	struct sensor_def **sensor_list = &sensors[0];
-	struct sensor_def *sensor = NULL;
+	const struct sensor_def **sensor_list = &sensors[0];
+	const struct sensor_def *sensor = NULL;
 
 	fd = open("/dev/i2c-0", O_RDWR);
 	if (!fd)
@@ -187,7 +187,7 @@ struct sensor_def * probe_sensor(void)
 	return sensor;
 }
 
-void start_camera_streaming(struct sensor_def *sensor, struct mode_def *mode)
+void start_camera_streaming(const struct sensor_def *sensor, struct mode_def *mode)
 {
 	int fd, i;
 
@@ -215,7 +215,7 @@ void start_camera_streaming(struct sensor_def *sensor, struct mode_def *mode)
 	close(fd);
 }
 
-void stop_camera_streaming(struct sensor_def *sensor)
+void stop_camera_streaming(const struct sensor_def *sensor)
 {
 	int fd, i;
 	fd = open("/dev/i2c-0", O_RDWR);
@@ -329,7 +329,7 @@ int main(int argc, char** args) {
 	int exposure = -1;
 	int gain = -1;
 	uint32_t encoding;
-	struct sensor_def *sensor;
+	const struct sensor_def *sensor;
 	struct mode_def *sensor_mode = NULL;
 
 	bcm_host_init();
@@ -701,7 +701,7 @@ void modReg(struct mode_def *mode, uint16_t reg, int startBit, int endBit, int v
 	}
 }
 
-void update_regs(struct sensor_def *sensor, struct mode_def *mode, int hflip, int vflip, int exposure, int gain)
+void update_regs(const struct sensor_def *sensor, struct mode_def *mode, int hflip, int vflip, int exposure, int gain)
 {
 	if (sensor->vflip_reg)
 	{
