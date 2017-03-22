@@ -39,6 +39,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // REQUESTS FOR SUPPORT ABOUT THESE REGISTER VALUES WILL
 // BE IGNORED.
 
+#ifndef OV5647MODES_H_
+#define OV5647MODES_H_
+
 struct sensor_regs ov5647_5MPix[] =
 {
    {0x0100, 0x00},
@@ -867,3 +870,5 @@ struct sensor_def ov5647 = {
    .gain_reg =             0x350A,
    .gain_reg_num_bits =    10,
 };
+
+#endif

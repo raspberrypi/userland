@@ -33,6 +33,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // REQUESTS FOR SUPPORT ABOUT THESE REGISTER VALUES WILL
 // BE IGNORED BY PI TOWERS.
 
+#ifndef IMX219MODES_H_
+#define IMX219MODES_H_
+
 struct sensor_regs imx219_8MPix[] =
 {
       /* 3280x2464@15 FPS */
@@ -134,3 +137,5 @@ struct sensor_def imx219 = {
       .gain_reg =             0,
       .gain_reg_num_bits =    0,
 };
+
+#endif
