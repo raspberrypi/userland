@@ -46,9 +46,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <sys/ioctl.h>
 
+#include "raw_header.h"
+
 //If CAPTURE is 1, images are saved to file.
 //If 0, the ISP and render are hooked up instead
 #define CAPTURE	0
+//If CAPTURE is 1, and WRITE_HEADER is 1, then
+//the raw header describing the frame.
+#define WRITE_HEADER 1
+
+struct brcm_raw_header *brcm_header = NULL;
 
 enum bayer_order {
 	//Carefully ordered so that an hflip is ^1,
@@ -260,6 +267,8 @@ static void callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 			file = fopen(filename, "wb");
 			if(file)
 			{
+				if (WRITE_HEADER)
+					fwrite(brcm_header, BRCM_RAW_HEADER_LENGTH, 1, file);
 				fwrite(buffer->data, buffer->length, 1, file);
 				fclose(file);
 			}
@@ -510,6 +519,55 @@ int main(int argc, char** args) {
 
 	if (CAPTURE)
 	{
+		if (WRITE_HEADER)
+		{
+			brcm_header = (struct brcm_raw_header*)malloc(BRCM_RAW_HEADER_LENGTH);
+			if (brcm_header)
+			{
+				memset(brcm_header, 0, BRCM_RAW_HEADER_LENGTH);
+				brcm_header->id = BRCM_ID_SIG;
+				brcm_header->version = HEADER_VERSION;
+				brcm_header->mode.width = sensor_mode->width;
+				brcm_header->mode.height = sensor_mode->height;
+				//FIXME: Ought to check that the sensor is producing
+				//Bayer rather than just assuming.
+				brcm_header->mode.format = VC_IMAGE_BAYER;
+				switch(sensor_mode->order)
+				{
+					case BAYER_ORDER_BGGR:
+						brcm_header->mode.bayer_order = VC_IMAGE_BAYER_BGGR;
+						break;
+					case BAYER_ORDER_GBRG:
+						brcm_header->mode.bayer_order = VC_IMAGE_BAYER_GBRG;
+						break;
+					case BAYER_ORDER_GRBG:
+						brcm_header->mode.bayer_order = VC_IMAGE_BAYER_GRBG;
+						break;
+					case BAYER_ORDER_RGGB:
+						brcm_header->mode.bayer_order = VC_IMAGE_BAYER_RGGB;
+						break;
+				}
+				switch(BIT_DEPTH)
+				{
+					case 8:
+						brcm_header->mode.bayer_format = VC_IMAGE_BAYER_RAW8;
+						break;
+					case 10:
+						brcm_header->mode.bayer_format = VC_IMAGE_BAYER_RAW10;
+						break;
+					case 12:
+						brcm_header->mode.bayer_format = VC_IMAGE_BAYER_RAW12;
+						break;
+					case 14:
+						brcm_header->mode.bayer_format = VC_IMAGE_BAYER_RAW14;
+						break;
+					case 16:
+						brcm_header->mode.bayer_format = VC_IMAGE_BAYER_RAW16;
+						break;
+				}
+			}
+		}
+
 		status = mmal_port_parameter_set_boolean(output, MMAL_PARAMETER_ZERO_COPY, MMAL_TRUE);
 		if(status != MMAL_SUCCESS)
 		{
@@ -629,6 +687,8 @@ pool_destroy:
 		mmal_connection_destroy(rawcam_isp);
 	}
 component_disable:
+	if (brcm_header)
+		free(brcm_header);
 	status = mmal_component_disable(render);
 	if(status != MMAL_SUCCESS)
 	{
