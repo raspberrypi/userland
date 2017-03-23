@@ -29,13 +29,13 @@ elif [ "$1" = "--native" ]; then
 	pushd build/native/$BUILDSUBDIR
 	cmake -DCMAKE_BUILD_TYPE=$BUILDTYPE ../../..
 	shift
-	make -j 6 $*
+	make -j `nproc` $*
 else
 	# Cross compile on a more capable machine
 	mkdir -p build/arm-linux/$BUILDSUBDIR
 	pushd build/arm-linux/$BUILDSUBDIR
 	cmake -DCMAKE_TOOLCHAIN_FILE=../../../makefiles/cmake/toolchains/arm-linux-gnueabihf.cmake -DCMAKE_BUILD_TYPE=$BUILDTYPE ../../..
-	make -j 6
+	make -j `nproc`
 
 	if [ "$1" != "" ]; then
 		sudo make install DESTDIR=$1
