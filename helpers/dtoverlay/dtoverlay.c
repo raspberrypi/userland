@@ -956,6 +956,22 @@ int dtoverlay_override_one_target(int override_type,
              err = fdt_setprop(dtb->fdt, node_off, prop_name, prop_buf, new_prop_len);
 	     free(prop_buf);
 	 }
+
+         if (strcmp(prop_name, "reg") == 0 && target_off == 0)
+         {
+            const char *old_name = fdt_get_name(dtb->fdt, node_off, NULL);
+            const char *atpos = strchr(old_name, '@');
+            if (atpos)
+            {
+               int name_len = (atpos - old_name);
+               char *new_name = malloc(name_len + 1 + 16 + 1);
+               if (!new_name)
+                  return -FDT_ERR_NOSPACE;
+               sprintf(new_name, "%.*s@%x", name_len, old_name, (uint32_t)override_int);
+               fdt_set_name(dtb->fdt, node_off, new_name);
+               free(new_name);
+            }
+         }
 	 break;
 
       case DTOVERRIDE_BOOLEAN:
