@@ -333,7 +333,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandOutput,        "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -').\n"
          "\t\t  Connect to a remote IPv4 host (e.g. tcp://192.168.1.2:1234, udp://192.168.1.2:1234)\n"
          "\t\t  To listen on a TCP port (IPv4) and wait for an incoming connection use -l\n"
-         "\t\t  (e.g. raspvid -l -o tcp://0.0.0.0:3333 -> bind to all network interfaces, raspvid -l -o tcp://192.168.1.1:3333 -> bind to a certain local IPv4)", 1 },
+         "\t\t  (e.g. raspivid -l -o tcp://0.0.0.0:3333 -> bind to all network interfaces, raspivid -l -o tcp://192.168.1.1:3333 -> bind to a certain local IPv4)", 1 },
    { CommandVerbose,       "-verbose",    "v",  "Output verbose information during run", 0 },
    { CommandTimeout,       "-timeout",    "t",  "Time (in ms) to capture for. If not specified, set to 5s. Zero to disable", 1 },
    { CommandDemoMode,      "-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 1},
