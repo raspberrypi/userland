@@ -13,7 +13,7 @@ raspivid -x test.imv -o test.h264
 
 We need to split the buffer first using split:
 
-split -a 4 -d -b $(((120+1)*68*4)) test.imv frame-
+split -a 4 -d -b $(((120+1)\*68\*4)) test.imv frame-
 
 Play:
 -----
