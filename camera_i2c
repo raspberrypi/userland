@@ -4,7 +4,7 @@
 
 # Broadcom GPIO numbers used here
 
-# https://www.element14.com/community/docs/DOC-78141/l/identifying-your-model-of-raspberry-pi
+# http://elinux.org/RPi_HardwareHistory#Board_Revision_History
 rev=`cat /proc/cpuinfo | grep Revision | awk '{print $NF}'`
 echo "setting GPIO for board revsion: $rev"
 
