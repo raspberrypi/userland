@@ -880,6 +880,7 @@ bulk_tests_only:
    if (func_data_test_end < func_data_test_start)
       goto skip_bulk_tests;
 
+   printf("Testing bulk transfer for alignment.\n");
    for (size = 1; size < 64; size++)
    {
       int align, srvr_align;
@@ -888,6 +889,18 @@ bulk_tests_only:
           for (align = 32; align; align >>= 1)
           {
              EXPECT(func_data_test(service, size, align & 31, srvr_align & 31), VCHIQ_SUCCESS);
+          }
+      }
+   }
+
+   printf("Testing bulk transfer at PAGE_SIZE.\n");
+   for (size = 1; size < 64; size++)
+   {
+      int align, srvr_align;
+      for (srvr_align = 32; srvr_align; srvr_align >>= 1)
+      {
+          for (align = 32; align; align >>= 1)
+          {
              EXPECT(func_data_test(service, size, PAGE_SIZE - align, srvr_align & 31), VCHIQ_SUCCESS);
           }
       }
