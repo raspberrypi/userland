@@ -52,6 +52,22 @@ gpio -g write 41 1
 gpio -g write 32 1
 ;;
 
+'9000c1')
+echo "PiZero W - I2C 0 on GPIO 28 & 29. GPIOs 40 & 44 for LED and power"
+# i2c can be on pins 0 and 1, so make sure they are not set to alt0
+gpio -g mode 0 in
+gpio -g mode 1 in
+# i2c on these pins
+gpio -g mode 28 in
+gpio -g mode 28 alt0
+gpio -g mode 29 in
+gpio -g mode 29 alt0
+# shutdown
+gpio -g write 44 1
+# LED
+gpio -g write 40 1
+;;
+
 'a02082'|'a22082')
 echo "Raspberry Pi3"
 # https://www.raspberrypi.org/forums/viewtopic.php?f=38&t=120702&start=100
