@@ -68,6 +68,27 @@ gpio -g write 44 1
 gpio -g write 40 1
 ;;
 
+'0011'|'0014'|'a020a0')
+echo "Compute Module - I2C 0 on GPIO 0 & 1. GPIOs 2 & 3 for LED and power"
+echo "Warning: This is just a default setting for cam1."
+echo "Download dt-blob.bin from https://www.raspberrypi.org/documentation/hardware/computemodule/dt-blob-cam1.bin and place it in /boot/."
+echo "For cable connection, see https://www.raspberrypi.org/documentation/hardware/computemodule/cmio-camera.md"
+# i2c can be on pins 28 and 29, so make sure they are not set to alt0
+gpio -g mode 28 in
+gpio -g mode 29 in
+# i2c on these pins
+gpio -g mode 0 in
+gpio -g mode 0 alt0
+gpio -g mode 1 in
+gpio -g mode 1 alt0
+# shutdown
+gpio -g mode 3 out
+gpio -g write 3 1
+# LED
+gpio -g mode 2 out
+gpio -g write 2 1
+;;
+
 'a02082'|'a22082')
 echo "Raspberry Pi3"
 # https://www.raspberrypi.org/forums/viewtopic.php?f=38&t=120702&start=100
