@@ -283,22 +283,17 @@ void send_regs(int fd, const struct sensor_def *sensor, const struct sensor_regs
 		}
 		else
 		{
-			unsigned char msg[3];
 			if (sensor->i2c_addressing == 1)
 			{
-				int ret;
-				msg[0] = regs[i].reg;
-				msg[1] = regs[i].data;
-				ret = write(fd, msg, 2);
-				if(ret != 2)
+				unsigned char msg[2] = {regs[i].reg, regs[i].data};
+				if(write(fd, msg, 2) != 2)
 				{
 					vcos_log_error("Failed to write register index %d (%02X val %02X)", i, regs[i].reg, regs[i].data);
 				}
 			}
 			else
 			{
-				*((unsigned short*)&msg) = ((0xFF00&(regs[i].reg<<8)) + (0x00FF&(regs[i].reg>>8)));
-				msg[2] = regs[i].data;
+				unsigned char msg[3] = {sensor->stop[i].reg>>8, sensor->stop[i].reg, sensor->stop[i].data};
 				if(write(fd, msg, 3) != 3)
 				{
 					vcos_log_error("Failed to write register index %d", i);
