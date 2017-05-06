@@ -139,6 +139,7 @@ typedef struct RASPIVID_STATE_S RASPIVID_STATE;
 typedef struct
 {
    FILE *file_handle;                   /// File handle to write buffer data to.
+   FILE *preview_stdout_file_handle;            /// File handle to write buffer data to.
    RASPIVID_STATE *pstate;              /// pointer to our state in case required in callback
    int abort;                           /// Set to 1 in callback if an error occurs to attempt to abort the capture
    char *cb_buff;                       /// Circular buffer
@@ -178,7 +179,8 @@ struct RASPIVID_STATE_S
    int framerate;                      /// Requested frame rate (fps)
    int intraperiod;                    /// Intra-refresh period (key frame rate)
    int quantisationParameter;          /// Quantisation parameter - quality. Set bitrate 0 and set this for variable bitrate
-   int bInlineHeaders;                  /// Insert inline headers to stream (SPS, PPS)
+   int bInlineHeaders;                 /// Insert inline headers to stream (SPS, PPS)
+   int preview_over_stdout;            /// Output to the stdout
    char *filename;                     /// filename of output file
    int verbose;                        /// !0 if want detailed run information
    int demoMode;                       /// Run app in demo mode
@@ -323,6 +325,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandRaw          32
 #define CommandRawFormat    33
 #define CommandNetListen    34
+#define CommandPreviewOverStdout 35
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -330,6 +333,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandWidth,         "-width",      "w",  "Set image width <size>. Default 1920", 1 },
    { CommandHeight,        "-height",     "h",  "Set image height <size>. Default 1080", 1 },
    { CommandBitrate,       "-bitrate",    "b",  "Set bitrate. Use bits per second (e.g. 10MBits/s would be -b 10000000)", 1 },
+   { CommandPreviewOverStdout,  "-stdout",     "so", "Output to the stdout", 0 },
    { CommandOutput,        "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -').\n"
          "\t\t  Connect to a remote IPv4 host (e.g. tcp://192.168.1.2:1234, udp://192.168.1.2:1234)\n"
          "\t\t  To listen on a TCP port (IPv4) and wait for an incoming connection use -l\n"
@@ -560,6 +564,12 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
             valid = 0;
 
          break;
+
+      case CommandPreviewOverStdout:  // output to stdout
+      {
+         state->preview_over_stdout = 1;
+         break;
+      }
 
       case CommandOutput:  // output filename
       {
@@ -923,6 +933,12 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
       return 1;
    }
 
+   if (state->preview_over_stdout && !state->filename)
+   {
+      state->preview_over_stdout = 0;
+      state->filename = "-";
+   }
+
    // Always disable verbose if output going to stdout
    if (state->filename && state->filename[0] == '-')
    {
@@ -1255,6 +1271,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
    if (pData)
    {
       int bytes_written = buffer->length;
+      int bytes_written_stdout = 0;
       int64_t current_time = vcos_getmicrosecs64()/1000;
 
       vcos_assert(pData->file_handle);
@@ -1262,182 +1279,212 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 
       if (pData->cb_buff)
       {
-         int space_in_buff = pData->cb_len - pData->cb_wptr;
-         int copy_to_end = space_in_buff > buffer->length ? buffer->length : space_in_buff;
-         int copy_to_start = buffer->length - copy_to_end;
-
-         if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_CONFIG)
+         if (pData->pstate->bCapturing)
          {
-            if(pData->header_wptr + buffer->length > sizeof(pData->header_bytes))
+            int space_in_buff = pData->cb_len - pData->cb_wptr;
+            int copy_to_end = space_in_buff > buffer->length ? buffer->length : space_in_buff;
+            int copy_to_start = buffer->length - copy_to_end;
+
+            if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_CONFIG)
             {
-               vcos_log_error("Error in header bytes\n");
+               if(pData->header_wptr + buffer->length > sizeof(pData->header_bytes))
+               {
+                  vcos_log_error("Error in header bytes\n");
+               }
+               else
+               {
+                  // These are the header bytes, save them for final output
+                  mmal_buffer_header_mem_lock(buffer);
+                  memcpy(pData->header_bytes + pData->header_wptr, buffer->data, buffer->length);
+                  mmal_buffer_header_mem_unlock(buffer);
+                  pData->header_wptr += buffer->length;
+               }
+            }
+            else if((buffer->flags & MMAL_BUFFER_HEADER_FLAG_CODECSIDEINFO))
+            {
+               // Do something with the inline motion vectors...
             }
             else
             {
-               // These are the header bytes, save them for final output
-               mmal_buffer_header_mem_lock(buffer);
-               memcpy(pData->header_bytes + pData->header_wptr, buffer->data, buffer->length);
-               mmal_buffer_header_mem_unlock(buffer);
-               pData->header_wptr += buffer->length;
-            }
-         }
-         else if((buffer->flags & MMAL_BUFFER_HEADER_FLAG_CODECSIDEINFO))
-         {
-            // Do something with the inline motion vectors...
-         }
-         else
-         {
-            static int frame_start = -1;
-            int i;
+               static int frame_start = -1;
+               int i;
 
-            if(frame_start == -1)
-               frame_start = pData->cb_wptr;
+               if(frame_start == -1)
+                  frame_start = pData->cb_wptr;
 
-            if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_KEYFRAME)
-            {
-               pData->iframe_buff[pData->iframe_buff_wpos] = frame_start;
-               pData->iframe_buff_wpos = (pData->iframe_buff_wpos + 1) % IFRAME_BUFSIZE;
-            }
-
-            if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END)
-               frame_start = -1;
-
-            // If we overtake the iframe rptr then move the rptr along
-            if((pData->iframe_buff_rpos + 1) % IFRAME_BUFSIZE != pData->iframe_buff_wpos)
-            {
-               while(
-                  (
-                     pData->cb_wptr <= pData->iframe_buff[pData->iframe_buff_rpos] &&
-                    (pData->cb_wptr + buffer->length) > pData->iframe_buff[pData->iframe_buff_rpos]
-                  ) ||
-                  (
-                    (pData->cb_wptr > pData->iframe_buff[pData->iframe_buff_rpos]) &&
-                    (pData->cb_wptr + buffer->length) > (pData->iframe_buff[pData->iframe_buff_rpos] + pData->cb_len)
-                  )
-               )
-                  pData->iframe_buff_rpos = (pData->iframe_buff_rpos + 1) % IFRAME_BUFSIZE;
-            }
-
-            mmal_buffer_header_mem_lock(buffer);
-            // We are pushing data into a circular buffer
-            memcpy(pData->cb_buff + pData->cb_wptr, buffer->data, copy_to_end);
-            memcpy(pData->cb_buff, buffer->data + copy_to_end, copy_to_start);
-            mmal_buffer_header_mem_unlock(buffer);
-
-            if((pData->cb_wptr + buffer->length) > pData->cb_len)
-               pData->cb_wrap = 1;
-
-            pData->cb_wptr = (pData->cb_wptr + buffer->length) % pData->cb_len;
-
-            for(i = pData->iframe_buff_rpos; i != pData->iframe_buff_wpos; i = (i + 1) % IFRAME_BUFSIZE)
-            {
-               int p = pData->iframe_buff[i];
-               if(pData->cb_buff[p] != 0 || pData->cb_buff[p+1] != 0 || pData->cb_buff[p+2] != 0 || pData->cb_buff[p+3] != 1)
+               if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_KEYFRAME)
                {
-                  vcos_log_error("Error in iframe list\n");
+                  pData->iframe_buff[pData->iframe_buff_wpos] = frame_start;
+                  pData->iframe_buff_wpos = (pData->iframe_buff_wpos + 1) % IFRAME_BUFSIZE;
                }
-            }
+
+               if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END)
+                  frame_start = -1;
+
+               // If we overtake the iframe rptr then move the rptr along
+               if((pData->iframe_buff_rpos + 1) % IFRAME_BUFSIZE != pData->iframe_buff_wpos)
+               {
+                  while(
+                     (
+                        pData->cb_wptr <= pData->iframe_buff[pData->iframe_buff_rpos] &&
+                       (pData->cb_wptr + buffer->length) > pData->iframe_buff[pData->iframe_buff_rpos]
+                     ) ||
+                     (
+                       (pData->cb_wptr > pData->iframe_buff[pData->iframe_buff_rpos]) &&
+                       (pData->cb_wptr + buffer->length) > (pData->iframe_buff[pData->iframe_buff_rpos] + pData->cb_len)
+                     )
+                  )
+                     pData->iframe_buff_rpos = (pData->iframe_buff_rpos + 1) % IFRAME_BUFSIZE;
+               }
+
+               mmal_buffer_header_mem_lock(buffer);
+               // We are pushing data into a circular buffer
+               memcpy(pData->cb_buff + pData->cb_wptr, buffer->data, copy_to_end);
+               memcpy(pData->cb_buff, buffer->data + copy_to_end, copy_to_start);
+               mmal_buffer_header_mem_unlock(buffer);
+
+               if((pData->cb_wptr + buffer->length) > pData->cb_len)
+                  pData->cb_wrap = 1;
+
+               pData->cb_wptr = (pData->cb_wptr + buffer->length) % pData->cb_len;
+
+               for(i = pData->iframe_buff_rpos; i != pData->iframe_buff_wpos; i = (i + 1) % IFRAME_BUFSIZE)
+               {
+                  int p = pData->iframe_buff[i];
+                  if(pData->cb_buff[p] != 0 || pData->cb_buff[p+1] != 0 || pData->cb_buff[p+2] != 0 || pData->cb_buff[p+3] != 1)
+                  {
+                     vcos_log_error("Error in iframe list\n");
+                  }
+               }
+            }            
          }
       }
       else
       {
-         // For segmented record mode, we need to see if we have exceeded our time/size,
-         // but also since we have inline headers turned on we need to break when we get one to
-         // ensure that the new stream has the header in it. If we break on an I-frame, the
-         // SPS/PPS header is actually in the previous chunk.
-         if ((buffer->flags & MMAL_BUFFER_HEADER_FLAG_CONFIG) &&
-             ((pData->pstate->segmentSize && current_time > base_time + pData->pstate->segmentSize) ||
-              (pData->pstate->splitWait && pData->pstate->splitNow)))
+         if (pData->pstate->bCapturing)
          {
-            FILE *new_handle;
-
-            base_time = current_time;
-
-            pData->pstate->splitNow = 0;
-            pData->pstate->segmentNumber++;
-
-            // Only wrap if we have a wrap point set
-            if (pData->pstate->segmentWrap && pData->pstate->segmentNumber > pData->pstate->segmentWrap)
-               pData->pstate->segmentNumber = 1;
-
-            if (pData->pstate->filename && pData->pstate->filename[0] != '-')
+            // For segmented record mode, we need to see if we have exceeded our time/size,
+            // but also since we have inline headers turned on we need to break when we get one to
+            // ensure that the new stream has the header in it. If we break on an I-frame, the
+            // SPS/PPS header is actually in the previous chunk.
+            if ((buffer->flags & MMAL_BUFFER_HEADER_FLAG_CONFIG) &&
+                ((pData->pstate->segmentSize && current_time > base_time + pData->pstate->segmentSize) ||
+                 (pData->pstate->splitWait && pData->pstate->splitNow)))
             {
-               new_handle = open_filename(pData->pstate, pData->pstate->filename);
+               FILE *new_handle;
 
-               if (new_handle)
+               base_time = current_time;
+
+               pData->pstate->splitNow = 0;
+               pData->pstate->segmentNumber++;
+
+               // Only wrap if we have a wrap point set
+               if (pData->pstate->segmentWrap && pData->pstate->segmentNumber > pData->pstate->segmentWrap)
+                  pData->pstate->segmentNumber = 1;
+
+               if (pData->pstate->filename && pData->pstate->filename[0] != '-')
                {
-                  fclose(pData->file_handle);
-                  pData->file_handle = new_handle;
+                  new_handle = open_filename(pData->pstate, pData->pstate->filename);
+
+                  if (new_handle)
+                  {
+                     fclose(pData->file_handle);
+                     pData->file_handle = new_handle;
+                  }
                }
-            }
 
-            if (pData->pstate->imv_filename && pData->pstate->imv_filename[0] != '-')
-            {
-               new_handle = open_filename(pData->pstate, pData->pstate->imv_filename);
-
-               if (new_handle)
+               if (pData->pstate->imv_filename && pData->pstate->imv_filename[0] != '-')
                {
-                  fclose(pData->imv_file_handle);
-                  pData->imv_file_handle = new_handle;
+                  new_handle = open_filename(pData->pstate, pData->pstate->imv_filename);
+
+                  if (new_handle)
+                  {
+                     fclose(pData->imv_file_handle);
+                     pData->imv_file_handle = new_handle;
+                  }
                }
-            }
 
-            if (pData->pstate->pts_filename && pData->pstate->pts_filename[0] != '-')
-            {
-               new_handle = open_filename(pData->pstate, pData->pstate->pts_filename);
-
-               if (new_handle)
+               if (pData->pstate->pts_filename && pData->pstate->pts_filename[0] != '-')
                {
-                  fclose(pData->pts_file_handle);
-                  pData->pts_file_handle = new_handle;
+                  new_handle = open_filename(pData->pstate, pData->pstate->pts_filename);
+
+                  if (new_handle)
+                  {
+                     fclose(pData->pts_file_handle);
+                     pData->pts_file_handle = new_handle;
+                  }
                }
             }
          }
+
          if (buffer->length)
          {
             mmal_buffer_header_mem_lock(buffer);
-            if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_CODECSIDEINFO)
+
+            if (pData->pstate->bCapturing)
             {
-               if(pData->pstate->inlineMotionVectors)
+               if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_CODECSIDEINFO)
                {
-                  bytes_written = fwrite(buffer->data, 1, buffer->length, pData->imv_file_handle);
-                  if(pData->flush_buffers) fflush(pData->imv_file_handle);
+                  if(pData->pstate->inlineMotionVectors)
+                  {
+                     bytes_written = fwrite(buffer->data, 1, buffer->length, pData->imv_file_handle);
+                     if(pData->flush_buffers) fflush(pData->imv_file_handle);
+                  }
+                  else
+                  {
+                     //We do not want to save inlineMotionVectors...
+                     bytes_written = buffer->length;
+                  }
                }
                else
                {
-                  //We do not want to save inlineMotionVectors...
-                  bytes_written = buffer->length;
-               }
-            }
-            else
-            {
-               bytes_written = fwrite(buffer->data, 1, buffer->length, pData->file_handle);
-               if(pData->flush_buffers) fflush(pData->file_handle);
+                  bytes_written = fwrite(buffer->data, 1, buffer->length, pData->file_handle);
+                  if(pData->flush_buffers) fflush(pData->file_handle);
 
-               if(pData->pstate->save_pts &&
-                  (buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END ||
-                   buffer->flags == 0 ||
-                   buffer->flags & MMAL_BUFFER_HEADER_FLAG_KEYFRAME) &&
-                  !(buffer->flags & MMAL_BUFFER_HEADER_FLAG_CONFIG))
-               {
-                  if(buffer->pts != MMAL_TIME_UNKNOWN && buffer->pts != pData->pstate->lasttime)
+
+                  if(pData->pstate->save_pts &&
+                     (buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END ||
+                      buffer->flags == 0 ||
+                      buffer->flags & MMAL_BUFFER_HEADER_FLAG_KEYFRAME) &&
+                     !(buffer->flags & MMAL_BUFFER_HEADER_FLAG_CONFIG))
                   {
-                    int64_t pts;
-                    if(pData->pstate->frame==0)pData->pstate->starttime=buffer->pts;
-                    pData->pstate->lasttime=buffer->pts;
-                    pts = buffer->pts - pData->pstate->starttime;
-                    fprintf(pData->pts_file_handle,"%lld.%03lld\n", pts/1000, pts%1000);
-                    pData->pstate->frame++;
+                     if(buffer->pts != MMAL_TIME_UNKNOWN && buffer->pts != pData->pstate->lasttime)
+                     {
+                       int64_t pts;
+                       if(pData->pstate->frame==0)pData->pstate->starttime=buffer->pts;
+                       pData->pstate->lasttime=buffer->pts;
+                       pts = buffer->pts - pData->pstate->starttime;
+                       fprintf(pData->pts_file_handle,"%lld.%03lld\n", pts/1000, pts%1000);
+                       pData->pstate->frame++;
+                     }
                   }
                }
             }
 
+            if (pData->preview_stdout_file_handle)
+            {
+               bytes_written_stdout = fwrite(buffer->data, 1, buffer->length, pData->preview_stdout_file_handle);
+               if(pData->flush_buffers) fflush(pData->preview_stdout_file_handle);
+            }
+
             mmal_buffer_header_mem_unlock(buffer);
 
-            if (bytes_written != buffer->length)
+            if (pData->pstate->bCapturing)
             {
-               vcos_log_error("Failed to write buffer data (%d from %d)- aborting", bytes_written, buffer->length);
-               pData->abort = 1;
+               if (bytes_written != buffer->length)
+               {
+                  vcos_log_error("Failed to write buffer data (%d from %d)- aborting", bytes_written, buffer->length);
+                  pData->abort = 1;
+               }
+            }
+
+            if (pData->preview_stdout_file_handle)
+            {
+               if (bytes_written_stdout != buffer->length)
+               {
+                  vcos_log_error("Failed to write buffer data (%d from %d)- aborting", bytes_written_stdout, buffer->length);
+                  pData->abort = 1;
+               }
             }
          }
       }
@@ -2666,6 +2713,16 @@ int main(int argc, const char **argv)
             }
          }
 
+         state.callback_data.preview_stdout_file_handle = NULL;
+
+         if (state.preview_over_stdout)
+         {
+            state.callback_data.preview_stdout_file_handle = stdout;
+
+            // Ensure we don't upset the output stream with diagnostics/info
+            state.verbose = 0;
+         }
+
          state.callback_data.file_handle = NULL;
 
          if (state.filename)
@@ -2870,16 +2927,29 @@ int main(int argc, const char **argv)
                }
 
                int initialCapturing=state.bCapturing;
+               if (state.preview_over_stdout)
+               {
+                  if (mmal_port_parameter_set_boolean(camera_video_port, MMAL_PARAMETER_CAPTURE, 1) != MMAL_SUCCESS)
+                  {
+                     // How to handle?
+                  }
+               } 
+
                while (running)
                {
                   // Change state
 
                   state.bCapturing = !state.bCapturing;
 
-                  if (mmal_port_parameter_set_boolean(camera_video_port, MMAL_PARAMETER_CAPTURE, state.bCapturing) != MMAL_SUCCESS)
+                  vcos_log_error("%s: state.bCapturing = %d", __func__, state.bCapturing);
+
+                  if (!state.preview_over_stdout)
                   {
-                     // How to handle?
-                  }
+                     if (mmal_port_parameter_set_boolean(camera_video_port, MMAL_PARAMETER_CAPTURE, state.bCapturing) != MMAL_SUCCESS)
+                     {
+                        // How to handle?
+                     }
+                  } 
 
                   // In circular buffer mode, exit and save the buffer (make sure we do this after having paused the capture
                   if(state.bCircularBuffer && !state.bCapturing)
@@ -2913,6 +2983,14 @@ int main(int argc, const char **argv)
                   }
                   running = wait_for_next_change(&state);
                }
+
+               if (state.preview_over_stdout)
+               {
+                  if (mmal_port_parameter_set_boolean(camera_video_port, MMAL_PARAMETER_CAPTURE, 0) != MMAL_SUCCESS)
+                  {
+                     // How to handle?
+                  }
+               } 
 
                if (state.verbose)
                   fprintf(stderr, "Finished capture\n");
