@@ -53,8 +53,8 @@ struct sensor_regs imx219_8MPix[] =
       {0x0157, 0x00},         // Analog Gain
       {0x0158, 0x00},         // Digital Gain [15:8]
       {0x0159, 0x00},          // Digital Gain [7:0]
-      // {0x015A, 0x01},      // Shutter/Integration Time [15:8]
-      // {0x015B, 0x00},      // Shutter/Integration Time [7:0]
+      {0x015A, 0x01},      // Shutter/Integration Time [15:8]
+      {0x015B, 0x00},      // Shutter/Integration Time [7:0]
       {0x0160, 0x09},      // Frame Length [15:8]
       {0x0161, 0xC8},      // Frame Length [7:0]
       {0x0162, 0x0D},      // Line Length [15:8]
@@ -103,7 +103,7 @@ struct sensor_regs imx219_8MPix[] =
 };
 
 struct mode_def imx219_modes[] = {
-   { imx219_8MPix, NUM_ELEMENTS(imx219_8MPix), 3280, 2464, 0, BAYER_ORDER_BGGR, 10, 0x2B, 2 },
+   { imx219_8MPix, NUM_ELEMENTS(imx219_8MPix), 3280, 2464, 0, BAYER_ORDER_BGGR, 10, 0x2B, 2, 2504 },
 };
 
 //From https://android.googlesource.com/kernel/bcm/+/android-bcm-tetra-3.10-lollipop-wear-release/drivers/media/video/imx219.c
@@ -135,6 +135,9 @@ struct sensor_def imx219 = {
 
       .exposure_reg =         0x015A,
       .exposure_reg_num_bits = 16,
+
+      .vts_reg =              0x0160,
+      .vts_reg_num_bits =     16,
 
       .gain_reg =             0x0157,
       .gain_reg_num_bits =    8,    //Only valid up to 230.

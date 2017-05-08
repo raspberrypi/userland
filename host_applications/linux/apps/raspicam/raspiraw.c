@@ -93,6 +93,7 @@ struct mode_def
 	int native_bit_depth;
 	uint8_t image_id;
 	uint8_t data_lanes;
+	unsigned int min_vts;
 };
 
 struct sensor_def
@@ -115,6 +116,9 @@ struct sensor_def
 
 	uint16_t exposure_reg;
 	int exposure_reg_num_bits;
+
+	uint16_t vts_reg;
+	int vts_reg_num_bits;
 
 	uint16_t gain_reg;
 	int gain_reg_num_bits;
@@ -1079,6 +1083,24 @@ void update_regs(const struct sensor_def *sensor, struct mode_def *mode, int hfl
 				val = (exposure >> (j&~7)) & 0xFF;
 				modReg(mode, sensor->exposure_reg+i, 0, j&0x7, val, EQUAL);
 				vcos_log_error("Set exposure %04X to %02X", sensor->exposure_reg+i, val);
+			}
+		}
+	}
+	if (sensor->vts_reg && exposure != -1 && exposure >= mode->min_vts)
+	{
+		if(exposure < 0 || exposure >= (1<<sensor->vts_reg_num_bits)) {
+			vcos_log_error("Invalid exposure:%d, vts range is 0 to %u!\n",
+						exposure, (1<<sensor->vts_reg_num_bits)-1);
+		} else {
+			uint8_t val;
+			int i, j=sensor->vts_reg_num_bits-1;
+			int num_regs = (sensor->vts_reg_num_bits+7)>>3;
+
+			for(i=0; i<num_regs; i++, j-=8)
+			{
+				val = (exposure >> (j&~7)) & 0xFF;
+				modReg(mode, sensor->vts_reg+i, 0, j&0x7, val, EQUAL);
+				vcos_log_error("Set vts %04X to %02X", sensor->vts_reg+i, val);
 			}
 		}
 	}
