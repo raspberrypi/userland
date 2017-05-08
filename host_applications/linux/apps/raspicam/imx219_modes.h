@@ -112,8 +112,9 @@ struct sensor_regs imx219_stop[] = {
       {0x0100, 0x00},          /* disable streaming  */
 };
 
-// ID register settings taken from
+// ID, exposure, and gain register settings taken from
 // https://android.googlesource.com/kernel/bcm/+/android-bcm-tetra-3.10-lollipop-wear-release/drivers/media/video/imx219.c
+// Flip settings taken from https://github.com/rellimmot/Sony-IMX219-Raspberry-Pi-V2-CMOS/blob/master/imx219mipiraw_Sensor.c#L585
 struct sensor_def imx219 = {
       .name =                 "imx219",
       .modes =                imx219_modes,
@@ -127,16 +128,16 @@ struct sensor_def imx219 = {
       .i2c_ident_reg =        0x0000,
       .i2c_ident_value =      0x0219,
 
-      .vflip_reg =            0,
+      .vflip_reg =            0x172,
       .vflip_reg_bit =        0,
-      .hflip_reg =            0,
-      .hflip_reg_bit =        0,
+      .hflip_reg =            0x172,
+      .hflip_reg_bit =        1,
 
-      .exposure_reg =         0,
-      .exposure_reg_num_bits = 0,
+      .exposure_reg =         0x015A,
+      .exposure_reg_num_bits = 16,
 
-      .gain_reg =             0,
-      .gain_reg_num_bits =    0,
+      .gain_reg =             0x0157,
+      .gain_reg_num_bits =    8,    //Only valid up to 230.
 };
 
 #endif
