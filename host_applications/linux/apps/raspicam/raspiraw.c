@@ -32,7 +32,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
-
+#define I2C_SLAVE_FORCE 0x0706
 #include "interface/vcos/vcos.h"
 #include "bcm_host.h"
 
@@ -82,8 +82,11 @@ struct mode_def
 	int num_regs;
 	int width;
 	int height;
+	MMAL_FOURCC_T encoding;
 	enum bayer_order order;
 	int native_bit_depth;
+	uint8_t image_id;
+	uint8_t data_lanes;
 };
 
 struct sensor_def
@@ -94,6 +97,7 @@ struct sensor_def
 	struct sensor_regs *stop;
 	int num_stop_regs;
 	uint8_t i2c_addr;
+	int i2c_addressing;
 	int i2c_ident_length;
 	uint16_t i2c_ident_reg;
 	uint16_t i2c_ident_value;
@@ -115,10 +119,12 @@ struct sensor_def
 
 #include "ov5647_modes.h"
 #include "imx219_modes.h"
+#include "adv7282m_modes.h"
 
 const struct sensor_def *sensors[] = {
 	&ov5647,
 	&imx219,
+	&adv7282,
 	NULL
 };
 
@@ -135,7 +141,7 @@ const struct sensor_def *sensors[] = {
 
 void update_regs(const struct sensor_def *sensor, struct mode_def *mode, int hflip, int vflip, int exposure, int gain);
 
-static int i2c_rd(int fd, uint8_t i2c_addr, uint16_t reg, uint8_t *values, uint32_t n)
+static int i2c_rd(int fd, uint8_t i2c_addr, uint16_t reg, uint8_t *values, uint32_t n, const struct sensor_def *sensor)
 {
 	int err;
 	uint8_t buf[2] = { reg >> 8, reg & 0xff };
@@ -155,10 +161,15 @@ static int i2c_rd(int fd, uint8_t i2c_addr, uint16_t reg, uint8_t *values, uint3
 		},
 	};
 
+	if (sensor->i2c_addressing == 1)
+	{
+		msgs[0].len = 1;
+	}
 	msgset.msgs = msgs;
 	msgset.nmsgs = 2;
 
 	err = ioctl(fd, I2C_RDWR, &msgset);
+	vcos_log_error("Read i2c addr %02X, reg %04X (len %d), value %02X, err %d", i2c_addr, msgs[0].buf[0], msgs[0].len, values[0], err);
 	if(err != msgset.nmsgs)
 		return -1;
 
@@ -185,7 +196,7 @@ const struct sensor_def * probe_sensor(void)
 		vcos_log_error("Probing sensor %s on addr %02X", sensor->name, sensor->i2c_addr);
 		if(sensor->i2c_ident_length <= 2)
 		{
-			if(!i2c_rd(fd, sensor->i2c_addr, sensor->i2c_ident_reg, (uint8_t*)&reg, sensor->i2c_ident_length))
+			if(!i2c_rd(fd, sensor->i2c_addr, sensor->i2c_ident_reg, (uint8_t*)&reg, sensor->i2c_ident_length, sensor))
 			{
 				if (reg == sensor->i2c_ident_value)
 				{
@@ -193,64 +204,89 @@ const struct sensor_def * probe_sensor(void)
 					break;
 				}
 			}
-	}
+		}
 		sensor_list++;
 	}
 	return sensor;
 }
 
+void send_regs(int fd, const struct sensor_def *sensor, const struct sensor_regs *regs, int num_regs)
+{
+	int i;
+	for (i=0; i<num_regs; i++)
+	{
+		if (regs[i].reg == 0xFFFF)
+		{
+			if(ioctl(fd, I2C_SLAVE_FORCE, regs[i].data) < 0)
+			{
+				vcos_log_error("Failed to set I2C address to %02X", regs[i].data);
+			}
+		}
+		else if (regs[i].reg == 0xFFFE)
+		{
+			vcos_sleep(regs[i].data);
+		}
+		else
+		{
+			unsigned char msg[3];
+			if (sensor->i2c_addressing == 1)
+			{
+				int ret;
+				msg[0] = regs[i].reg;
+				msg[1] = regs[i].data;
+				ret = write(fd, msg, 2);
+				if(ret != 2)
+				{
+					vcos_log_error("Failed to write register index %d (%02X val %02X)", i, regs[i].reg, regs[i].data);
+				}
+			}
+			else
+			{
+				*((unsigned short*)&msg) = ((0xFF00&(regs[i].reg<<8)) + (0x00FF&(regs[i].reg>>8)));
+				msg[2] = regs[i].data;
+				if(write(fd, msg, 3) != 3)
+				{
+					vcos_log_error("Failed to write register index %d", i);
+				}
+			}
+		}
+	}
+}
+
 void start_camera_streaming(const struct sensor_def *sensor, struct mode_def *mode)
 {
-	int fd, i;
-
+	int fd;
 	fd = open("/dev/i2c-0", O_RDWR);
 	if (!fd)
 	{
 		vcos_log_error("Couldn't open I2C device");
 		return;
 	}
-	if(ioctl(fd, I2C_SLAVE, sensor->i2c_addr) < 0)
+	if(ioctl(fd, I2C_SLAVE_FORCE, sensor->i2c_addr) < 0)
 	{
 		vcos_log_error("Failed to set I2C address");
 		return;
 	}
-	for (i=0; i<mode->num_regs; i++)
-	{
-		unsigned char msg[3];
-		*((unsigned short*)&msg) = ((0xFF00&(mode->regs[i].reg<<8)) + (0x00FF&(mode->regs[i].reg>>8)));
-		msg[2] = mode->regs[i].data;
-		if(write(fd, msg, 3) != 3)
-		{
-			vcos_log_error("Failed to write register index %d", i);
-		}
-	}
+	send_regs(fd, sensor, mode->regs, mode->num_regs);
 	close(fd);
+	vcos_log_error("Now streaming...");
 }
 
 void stop_camera_streaming(const struct sensor_def *sensor)
 {
-	int fd, i;
+	int fd;
 	fd = open("/dev/i2c-0", O_RDWR);
 	if (!fd)
 	{
 		vcos_log_error("Couldn't open I2C device");
 		return;
 	}
-	if(ioctl(fd, I2C_SLAVE, sensor->i2c_addr) < 0)
+	if(ioctl(fd, I2C_SLAVE_FORCE, sensor->i2c_addr) < 0)
 	{
 		vcos_log_error("Failed to set I2C address");
 		return;
 	}
-	for (i=0; i<sensor->num_stop_regs; i++)
-	{
-		unsigned char msg[3];
-		*((unsigned short*)&msg) = ((0xFF00&(sensor->stop[i].reg<<8)) + (0x00FF&(sensor->stop[i].reg>>8)));
-		msg[2] = sensor->stop[i].data;
-		if(write(fd, msg, 3) != 3)
-		{
-			vcos_log_error("Failed to write register index %d", i);
-		}
-	}
+	send_regs(fd, sensor, sensor->stop, sensor->num_stop_regs);
 	close(fd);
 }
 
@@ -382,7 +418,10 @@ int main(int argc, char** args) {
 	}
 
 	update_regs(sensor, sensor_mode, hflip, vflip, exposure, gain);
-	encoding = order_and_bit_depth_to_encoding(sensor_mode->order, BIT_DEPTH);
+	if (sensor_mode->encoding == 0)
+		encoding = order_and_bit_depth_to_encoding(sensor_mode->order, BIT_DEPTH);
+	else
+		encoding = sensor_mode->encoding;
 	if (!encoding)
 	{
 		vcos_log_error("Failed to map bitdepth %d and order %d into encoding\n", BIT_DEPTH, sensor_mode->order);
@@ -430,7 +469,7 @@ int main(int argc, char** args) {
 		vcos_log_error("Failed to get cfg");
 		goto component_destroy;
 	}
-	if (BIT_DEPTH == sensor_mode->native_bit_depth)
+	if (sensor_mode->encoding || BIT_DEPTH == sensor_mode->native_bit_depth)
 	{
 		rx_cfg.unpack = MMAL_CAMERA_RX_CONFIG_UNPACK_NONE;
 		rx_cfg.pack = MMAL_CAMERA_RX_CONFIG_PACK_NONE;
@@ -483,6 +522,10 @@ int main(int argc, char** args) {
 		}
 	}
 	vcos_log_error("Set pack to %d, unpack to %d", rx_cfg.unpack, rx_cfg.pack);
+	if (sensor_mode->data_lanes)
+		rx_cfg.data_lanes = sensor_mode->data_lanes;
+	if (sensor_mode->image_id)
+		rx_cfg.image_id = sensor_mode->image_id;
 	status = mmal_port_parameter_set(output, &rx_cfg.hdr);
 	if(status != MMAL_SUCCESS)
 	{
@@ -726,6 +769,7 @@ component_destroy:
 		mmal_component_destroy(isp);
 	if (render)
 		mmal_component_destroy(render);
+
 	return 0;
 }
 

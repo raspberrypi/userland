@@ -830,14 +830,14 @@ struct sensor_regs ov5647_mode7[] =
 };
 
 struct mode_def ov5647_modes[] = {
-   { ov5647_5MPix, NUM_ELEMENTS(ov5647_5MPix), 2592, 1944, BAYER_ORDER_GBRG, 10 },
-   { ov5647_mode1, NUM_ELEMENTS(ov5647_mode1), 1920, 1080, BAYER_ORDER_GBRG, 10 },
-   { ov5647_mode2, NUM_ELEMENTS(ov5647_mode2), 2592, 1944, BAYER_ORDER_GBRG, 10 },
-   { ov5647_mode3, NUM_ELEMENTS(ov5647_mode3), 2592, 1944, BAYER_ORDER_GBRG, 10 },
-   { ov5647_mode4, NUM_ELEMENTS(ov5647_mode4), 1296,  976, BAYER_ORDER_GBRG, 10 },
-   { ov5647_mode5, NUM_ELEMENTS(ov5647_mode5), 1296,  730, BAYER_ORDER_GBRG, 10 },
-   { ov5647_mode6, NUM_ELEMENTS(ov5647_mode6),  640,  480, BAYER_ORDER_GBRG, 10 },
-   { ov5647_mode7, NUM_ELEMENTS(ov5647_mode7),  640,  480, BAYER_ORDER_GBRG, 10 },
+   { ov5647_5MPix, NUM_ELEMENTS(ov5647_5MPix), 2592, 1944, 0, BAYER_ORDER_GBRG, 10, 0x2B, 2 },
+   { ov5647_mode1, NUM_ELEMENTS(ov5647_mode1), 1920, 1080, 0, BAYER_ORDER_GBRG, 10, 0x2B, 2 },
+   { ov5647_mode2, NUM_ELEMENTS(ov5647_mode2), 2592, 1944, 0, BAYER_ORDER_GBRG, 10, 0x2B, 2 },
+   { ov5647_mode3, NUM_ELEMENTS(ov5647_mode3), 2592, 1944, 0, BAYER_ORDER_GBRG, 10, 0x2B, 2 },
+   { ov5647_mode4, NUM_ELEMENTS(ov5647_mode4), 1296,  976, 0, BAYER_ORDER_GBRG, 10, 0x2B, 2 },
+   { ov5647_mode5, NUM_ELEMENTS(ov5647_mode5), 1296,  730, 0, BAYER_ORDER_GBRG, 10, 0x2B, 2 },
+   { ov5647_mode6, NUM_ELEMENTS(ov5647_mode6),  640,  480, 0, BAYER_ORDER_GBRG, 10, 0x2B, 2 },
+   { ov5647_mode7, NUM_ELEMENTS(ov5647_mode7),  640,  480, 0, BAYER_ORDER_GBRG, 10, 0x2B, 2 },
 };
 
 #undef addreg
@@ -855,6 +855,7 @@ struct sensor_def ov5647 = {
    .num_stop_regs =        NUM_ELEMENTS(ov5647_stop),
 
    .i2c_addr =             0x36,
+   .i2c_addressing =       2,
    .i2c_ident_length =     2,
    .i2c_ident_reg =        0x300A,
    .i2c_ident_value =      0x4756,  //0x5647 byte swapped
