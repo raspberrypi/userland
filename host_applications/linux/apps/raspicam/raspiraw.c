@@ -219,7 +219,7 @@ static int i2c_rd(int fd, uint8_t i2c_addr, uint16_t reg, uint8_t *values, uint3
 	msgset.nmsgs = 2;
 
 	err = ioctl(fd, I2C_RDWR, &msgset);
-	vcos_log_error("Read i2c addr %02X, reg %04X (len %d), value %02X, err %d", i2c_addr, msgs[0].buf[0], msgs[0].len, values[0], err);
+	//vcos_log_error("Read i2c addr %02X, reg %04X (len %d), value %02X, err %d", i2c_addr, msgs[0].buf[0], msgs[0].len, values[0], err);
 	if(err != msgset.nmsgs)
 		return -1;
 
@@ -250,7 +250,7 @@ const struct sensor_def * probe_sensor(void)
 			{
 				if (reg == sensor->i2c_ident_value)
 				{
-					vcos_log_error("Found sensor at address %02X", sensor->i2c_addr);
+					vcos_log_error("Found sensor %s at address %02X", sensor->name, sensor->i2c_addr);
 					break;
 				}
 			}
