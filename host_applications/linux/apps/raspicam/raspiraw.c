@@ -26,9 +26,13 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#define VERSION_STRING "0.0.1"
+
+#include <ctype.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <fcntl.h>
+#include <string.h>
 
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
@@ -43,6 +47,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/mmal/util/mmal_util.h"
 #include "interface/mmal/util/mmal_util_params.h"
 #include "interface/mmal/util/mmal_connection.h"
+
+#include "RaspiCLI.h"
 
 #include <sys/ioctl.h>
 
@@ -138,6 +144,50 @@ const struct sensor_def *sensors[] = {
 #else
 	#define BIT_DEPTH 10
 #endif
+
+
+enum {
+	CommandHelp,
+	CommandMode,
+	CommandHFlip,
+	CommandVFlip,
+	CommandExposure,
+	CommandGain,
+	CommandOutput,
+	CommandWriteHeader,
+	CommandTimeout,
+	CommandSaveRate,
+};
+
+static COMMAND_LIST cmdline_commands[] =
+{
+	{ CommandHelp,		"-help",	"?",  "This help information", 0 },
+	{ CommandMode,		"-mode",	"md", "Set sensor mode <mode>", 1 },
+	{ CommandHFlip,		"-hflip",	"hf", "Set horizontal flip", 0},
+	{ CommandVFlip,		"-vflip",	"vf", "Set vertical flip", 0},
+	{ CommandExposure,	"-ss",		"e",  "Set the sensor exposure time (not calibrated units)", 0 },
+	{ CommandGain,		"-gain",	"g",  "Set the sensor gain code (not calibrated units)", 0 },
+	{ CommandOutput,	"-output",	"o",  "Set the output filename", 0 },
+	{ CommandWriteHeader,	"-header",	"hd", "Write the BRCM header to the output file", 0 },
+	{ CommandTimeout,	"-timeout",	"t",  "Time (in ms) before shutting down (if not specified, set to 5s)", 1 },
+	{ CommandSaveRate, 	"-saverate",	"sr", "Save every Nth frame.", 1 },
+
+};
+
+static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
+
+typedef struct {
+	int mode;
+	int hflip;
+	int vflip;
+	int exposure;
+	int gain;
+	char *output;
+	int capture;
+	int write_header;
+	int timeout;
+	int saverate;
+} RASPIRAW_PARAMS_T;
 
 void update_regs(const struct sensor_def *sensor, struct mode_def *mode, int hflip, int vflip, int exposure, int gain);
 
@@ -290,6 +340,29 @@ void stop_camera_streaming(const struct sensor_def *sensor)
 	close(fd);
 }
 
+/**
+ * Allocates and generates a filename based on the
+ * user-supplied pattern and the frame number.
+ * On successful return, finalName and tempName point to malloc()ed strings
+ * which must be freed externally.  (On failure, returns nulls that
+ * don't need free()ing.)
+ *
+ * @param finalName pointer receives an
+ * @param pattern sprintf pattern with %d to be replaced by frame
+ * @param frame for timelapse, the frame number
+ * @return Returns a MMAL_STATUS_T giving result of operation
+*/
+
+MMAL_STATUS_T create_filenames(char** finalName, char * pattern, int frame)
+{
+	*finalName = NULL;
+	if (0 > asprintf(finalName, pattern, frame))
+	{
+		return MMAL_ENOMEM;    // It may be some other error, but it is not worth getting it right
+	}
+	return MMAL_SUCCESS;
+}
+
 int running = 0;
 static void callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
@@ -297,21 +370,26 @@ static void callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 	vcos_log_error("Buffer %p returned, filled %d, timestamp %llu, flags %04X", buffer, buffer->length, buffer->pts, buffer->flags);
 	if(running)
 	{
+		RASPIRAW_PARAMS_T *cfg = (RASPIRAW_PARAMS_T *)port->userdata;
+
 		if(!(buffer->flags&MMAL_BUFFER_HEADER_FLAG_CODECSIDEINFO) &&
-                   (((count++)%15)==0))
+                   (((count++)%cfg->saverate)==0))
 		{
-			// Save every 15th frame
-			// SD card access is to slow to do much more.
+			// Save every Nth frame
+			// SD card access is too slow to do much more.
 			FILE *file;
-			char filename[20];
-			sprintf(filename, "raw%04d.raw", count);
-			file = fopen(filename, "wb");
-			if(file)
+			char *filename = NULL;
+			if (create_filenames(&filename, cfg->output, count) == MMAL_SUCCESS)
 			{
-				if (WRITE_HEADER)
-					fwrite(brcm_header, BRCM_RAW_HEADER_LENGTH, 1, file);
-				fwrite(buffer->data, buffer->length, 1, file);
-				fclose(file);
+				file = fopen(filename, "wb");
+				if(file)
+				{
+					if (cfg->write_header)
+						fwrite(brcm_header, BRCM_RAW_HEADER_LENGTH, 1, file);
+					fwrite(buffer->data, buffer->length, 1, file);
+					fclose(file);
+				}
+				free(filename);
 			}
 		}
 		buffer->length = 0;
@@ -372,12 +450,163 @@ uint32_t order_and_bit_depth_to_encoding(enum bayer_order order, int bit_depth)
 	return 0;
 }
 
-int main(int argc, char** args) {
-	int mode = 0;
-	int hflip = 0;
-	int vflip = 0;
-	int exposure = -1;
-	int gain = -1;
+/**
+ * Parse the incoming command line and put resulting parameters in to the state
+ *
+ * @param argc Number of arguments in command line
+ * @param argv Array of pointers to strings from command line
+ * @param state Pointer to state structure to assign any discovered parameters to
+ * @return non-0 if failed for some reason, 0 otherwise
+ */
+static int parse_cmdline(int argc, const char **argv, RASPIRAW_PARAMS_T *cfg)
+{
+	// Parse the command line arguments.
+	// We are looking for --<something> or -<abbreviation of something>
+
+	int valid = 1;
+	int i;
+
+	for (i = 1; i < argc && valid; i++)
+	{
+		int command_id, num_parameters;
+
+		if (!argv[i])
+			continue;
+
+		if (argv[i][0] != '-')
+		{
+		valid = 0;
+		continue;
+		}
+
+		// Assume parameter is valid until proven otherwise
+		valid = 1;
+
+		command_id = raspicli_get_command_id(cmdline_commands, cmdline_commands_size, &argv[i][1], &num_parameters);
+
+		// If we found a command but are missing a parameter, continue (and we will drop out of the loop)
+		if (command_id != -1 && num_parameters > 0 && (i + 1 >= argc) )
+			continue;
+
+		//  We are now dealing with a command line option
+		switch (command_id)
+		{
+			case CommandHelp:
+				raspicli_display_help(cmdline_commands, cmdline_commands_size);
+				// exit straight away if help requested
+				return -1;
+
+			case CommandMode:
+				if (sscanf(argv[i + 1], "%d", &cfg->mode) != 1)
+					valid = 0;
+				else
+					i++;
+				break;
+
+			case CommandHFlip:
+				cfg->hflip = 1;
+				break;
+
+			case CommandVFlip:
+				cfg->vflip = 1;
+				break;
+
+			case CommandExposure:
+				if (sscanf(argv[i + 1], "%d", &cfg->exposure) != 1)
+					valid = 0;
+				else
+					i++;
+				break;
+
+			case CommandGain:
+				if (sscanf(argv[i + 1], "%d", &cfg->gain) != 1)
+					valid = 0;
+				else
+					i++;
+				break;
+
+			case CommandOutput:  // output filename
+			{
+				int len = strlen(argv[i + 1]);
+				if (len)
+				{
+					//We use sprintf to append the frame number for timelapse mode
+					//Ensure that any %<char> is either %% or %d.
+					const char *percent = argv[i+1];
+					while(valid && *percent && (percent=strchr(percent, '%')) != NULL)
+					{
+					int digits=0;
+					percent++;
+					while(isdigit(*percent))
+					{
+						percent++;
+						digits++;
+					}
+					if(!((*percent == '%' && !digits) || *percent == 'd'))
+					{
+						valid = 0;
+						fprintf(stderr, "Filename contains %% characters, but not %%d or %%%% - sorry, will fail\n");
+					}
+					percent++;
+				}
+				cfg->output = malloc(len + 10); // leave enough space for any timelapse generated changes to filename
+				vcos_assert(cfg->output);
+				if (cfg->output)
+					strncpy(cfg->output, argv[i + 1], len+1);
+					i++;
+					cfg->capture = 1;
+				}
+				else
+					valid = 0;
+				break;
+			}
+
+			case CommandTimeout: // Time to run for in milliseconds
+				if (sscanf(argv[i + 1], "%u", &cfg->timeout) == 1)
+				{
+					i++;
+				}
+				else
+					valid = 0;
+				break;
+
+			case CommandSaveRate:
+				if (sscanf(argv[i + 1], "%u", &cfg->saverate) == 1)
+				{
+					i++;
+				}
+				else
+					valid = 0;
+				break;
+
+			default:
+				valid = 0;
+				break;
+		}
+	}
+
+	if (!valid)
+	{
+		fprintf(stderr, "Invalid command line option (%s)\n", argv[i-1]);
+		return 1;
+	}
+
+	return 0;
+}
+
+int main(int argc, const char** argv) {
+	RASPIRAW_PARAMS_T cfg = {
+		.mode = 0,
+		.hflip = 0,
+		.vflip = 0,
+		.exposure = 0,
+		.gain = -1,
+		.output = NULL,
+		.capture = 0,
+		.write_header = 0,
+		.timeout = 5000,
+		.saverate = 20,
+	};
 	uint32_t encoding;
 	const struct sensor_def *sensor;
 	struct mode_def *sensor_mode = NULL;
@@ -392,32 +621,31 @@ int main(int argc, char** args) {
 		return -1;
 	}
 
-	if(argc > 1) {
-		mode = atoi(args[1]);
+	if (argc == 1)
+	{
+		fprintf(stdout, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
+
+		raspicli_display_help(cmdline_commands, cmdline_commands_size);
+		exit(-1);
 	}
-	if(argc > 2) {
-		hflip = atoi(args[2]);
+
+	// Parse the command line and put options in to our status structure
+	if (parse_cmdline(argc, argv, &cfg))
+	{
+		exit(-1);
 	}
-	if(argc > 3) {
-		vflip = atoi(args[3]);
-	}
-	if(argc > 4) {
-		exposure = atoi(args[4]);
-	}
-	if(argc > 5) {
-		gain = atoi(args[5]);
-	}
-	if(mode >= 0 && mode < sensor->num_modes) {
-		sensor_mode = &sensor->modes[mode];
+
+	if(cfg.mode >= 0 && cfg.mode < sensor->num_modes) {
+		sensor_mode = &sensor->modes[cfg.mode];
 	}
 
 	if(!sensor_mode)
 	{
-		vcos_log_error("Invalid mode %d - aborting", mode);
+		vcos_log_error("Invalid mode %d - aborting", cfg.mode);
 		return -2;
 	}
 
-	update_regs(sensor, sensor_mode, hflip, vflip, exposure, gain);
+	update_regs(sensor, sensor_mode, cfg.hflip, cfg.vflip, cfg.exposure, cfg.gain);
 	if (sensor_mode->encoding == 0)
 		encoding = order_and_bit_depth_to_encoding(sensor_mode->order, BIT_DEPTH);
 	else
@@ -575,9 +803,9 @@ int main(int argc, char** args) {
 		goto component_disable;
 	}
 
-	if (CAPTURE)
+	if (cfg.capture)
 	{
-		if (WRITE_HEADER)
+		if (cfg.write_header)
 		{
 			brcm_header = (struct brcm_raw_header*)malloc(BRCM_RAW_HEADER_LENGTH);
 			if (brcm_header)
@@ -641,6 +869,7 @@ int main(int argc, char** args) {
 			goto component_disable;
 		}
 
+		output->userdata = (struct MMAL_PORT_USERDATA_T *)&cfg;
 		status = mmal_port_enable(output, callback);
 		if(status != MMAL_SUCCESS)
 		{
@@ -717,9 +946,7 @@ int main(int argc, char** args) {
 
 	start_camera_streaming(sensor, sensor_mode);
 
-	while(1) {
-		vcos_sleep(1000);
-	}
+	vcos_sleep(cfg.timeout);
 	running = 0;
 
 	stop_camera_streaming(sensor);

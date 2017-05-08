@@ -26,7 +26,7 @@ add_executable(raspistill ${COMMON_SOURCES} RaspiStill.c  RaspiTex.c RaspiTexUti
 add_executable(raspiyuv   ${COMMON_SOURCES} RaspiStillYUV.c)
 add_executable(raspivid   ${COMMON_SOURCES} RaspiVid.c)
 add_executable(raspividyuv  ${COMMON_SOURCES} RaspiVidYUV.c)
-add_executable(raspiraw   raspiraw.c)
+add_executable(raspiraw   raspiraw.c RaspiCLI.c)
 
 set (MMAL_LIBS mmal_core mmal_util mmal_vc_client)
 
