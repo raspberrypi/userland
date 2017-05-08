@@ -256,6 +256,7 @@ const struct sensor_def * probe_sensor(void)
 			}
 		}
 		sensor_list++;
+		sensor = NULL;
 	}
 	return sensor;
 }
