@@ -327,6 +327,14 @@ typedef void* GLeglImageOES;
 #define GL_RGBX_BRCM                                            0x80EE
 #endif
 
+#ifndef GL_EXT_texture_rg
+#define GL_EXT_texture_rg 1
+#define GL_RED_EXT                                              0x1903
+#define GL_RG_EXT                                               0x8227
+#define GL_R8_EXT                                               0x8229
+#define GL_RG8_EXT                                              0x822B
+#endif /* GL_EXT_texture_rg */
+
 /* GL_EXT_texture_type_2_10_10_10_REV */
 #ifndef GL_EXT_texture_type_2_10_10_10_REV
 #define GL_UNSIGNED_INT_2_10_10_10_REV_EXT                      0x8368
