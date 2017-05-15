@@ -30,8 +30,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdarg.h>
 #include <stdint.h>
 #include <libfdt.h>
+#include <assert.h>
 
 #include "dtoverlay.h"
+
+#define ARRAY_SIZE(a)   (sizeof(a) / sizeof(a[0]))
 
 typedef enum
 {
@@ -50,6 +53,9 @@ static int dtoverlay_extract_override(const char *override_name,
                                       const char **data_ptr, int *len_ptr,
                                       const char **namep, int *namelenp,
                                       int *offp, int *sizep);
+
+static int dtoverlay_set_node_name(DTBLOB_T *dtb, int node_off,
+				   const char *name);
 
 static void dtoverlay_stdio_logging(dtoverlay_logging_type_t type,
                                     const char *fmt, va_list args);
@@ -202,6 +208,273 @@ int dtoverlay_set_node_properties(DTBLOB_T *dtb, const char *node_path,
    return err;
 }
 
+struct dynstring
+{
+   char *buf;
+   int size;
+   int len;
+};
+
+static void dynstring_init(struct dynstring *ds)
+{
+   ds->size = 0;
+   ds->len = 0;
+   ds->buf = NULL;
+}
+
+static int dynstring_init_size(struct dynstring *ds, int initial_size)
+{
+   if (initial_size < 32)
+      initial_size = 32;
+   ds->size = initial_size;
+   ds->len = 0;
+   ds->buf = malloc(initial_size);
+   if (!ds->buf)
+   {
+      dtoverlay_error("  out of memory");
+      return -FDT_ERR_NOSPACE;
+   }
+   return 0;
+}
+
+static int dynstring_set_size(struct dynstring *ds, int size)
+{
+   if (size > ds->size)
+   {
+      size = (size * 5)/4; // Add a 25% headroom
+      ds->buf = realloc(ds->buf, size);
+      if (!ds->buf)
+      {
+         dtoverlay_error("  out of memory");
+         return -FDT_ERR_NOSPACE;
+      }
+      ds->size = size;
+   }
+   return 0;
+}
+
+static int dynstring_dup(struct dynstring *ds, const char *src, int len)
+{
+   int err = 0;
+
+   if (!len)
+      len = strlen(src);
+
+   err = dynstring_set_size(ds, len + 1);
+   if (!err)
+   {
+      memcpy(ds->buf, src, len + 1);
+      ds->len = len;
+   }
+
+   return err;
+}
+
+static int dynstring_patch(struct dynstring *ds, int pos, int width,
+                           const char *src, int len)
+{
+   int newlen = ds->len + (len - width);
+   int err = dynstring_set_size(ds, newlen + 1);
+   if (!err)
+   {
+      if (width != len)
+      {
+         // Move any data following the patch
+         memmove(ds->buf + pos + len, ds->buf + pos + width,
+                 ds->len + 1 - (pos + width));
+         ds->len = newlen;
+      }
+      memcpy(ds->buf + pos, src, len);
+   }
+   return err;
+}
+
+static int dynstring_grow(struct dynstring *ds)
+{
+   return dynstring_set_size(ds, (3*ds->size)/2);
+}
+
+static void dynstring_free(struct dynstring *ds)
+{
+   free(ds->buf);
+   dynstring_init(ds);
+}
+
+static int dtoverlay_set_node_name(DTBLOB_T *dtb, int node_off,
+				   const char *name)
+{
+   struct dynstring path_buf;
+   struct dynstring prop_buf;
+   char *old_path;
+   const char *old_name;
+   const char *fixup_nodes[] =
+   {
+      "/__fixups__",
+      "/__local_fixups__", // For old-style dtbos
+      "/__symbols__"       // Just in case the kernel cares
+   };
+   int old_name_len;
+   int old_path_len; // All of it
+   int dir_len; // Excluding the node name, but with the trailling slash
+   int name_len;
+   int offset;
+   int fixup_idx;
+   int err = 0;
+
+   // Fixups and local-fixups both use node names, so this
+   // function must be patch them up when a node is renamed
+   // unless the fixups have already been applied.
+   // Calculating a node's name is expensive, so only do it if
+   // necessary. Since renaming a node can move things around,
+   // don't use node_off afterwards.
+   err = dynstring_init_size(&path_buf, 100);
+   if (err)
+      return err;
+
+   if (!dtb->fixups_applied)
+   {
+      while (1)
+      {
+         err = fdt_get_path(dtb->fdt, node_off, path_buf.buf, path_buf.size);
+         if (!err)
+            break;
+         if (err != -FDT_ERR_NOSPACE)
+            return err;
+         dynstring_grow(&path_buf);
+      }
+   }
+   old_path = path_buf.buf;
+
+   err = fdt_set_name(dtb->fdt, node_off, name);
+   if (err || dtb->fixups_applied)
+      goto clean_up;
+
+   // Find the node name in old_path
+   old_name = strrchr(old_path, '/');
+   assert(old_name);
+   if (!old_name)
+      return -FDT_ERR_INTERNAL;
+   old_name++;
+   old_name_len = strlen(old_name);
+   dir_len = old_name - old_path;
+   old_path_len = dir_len + old_name_len;
+
+   // Short-circuit the case where the name isn't changing
+   if (strcmp(name, old_name) == 0)
+      goto clean_up;
+
+   name_len = strlen(name);
+
+   // Search the fixups and symbols for the old path (including as
+   // a parent)  and replace with the new name
+
+   dynstring_init(&prop_buf);
+   for (fixup_idx = 0; fixup_idx < ARRAY_SIZE(fixup_nodes); fixup_idx++)
+   {
+      int prop_off;
+
+      offset = fdt_path_offset(dtb->fdt, fixup_nodes[fixup_idx]);
+      if (offset > 0)
+      {
+
+         // Iterate through the properties
+         for (prop_off = fdt_first_property_offset(dtb->fdt, offset);
+              (prop_off >= 0) && (err == 0);
+              prop_off = fdt_next_property_offset(dtb->fdt, prop_off))
+         {
+            const char *prop_name;
+            const char *prop_val;
+            int prop_len;
+            int pos;
+            int changed = 0;
+
+            prop_val = fdt_getprop_by_offset(dtb->fdt, prop_off,
+                                             &prop_name, &prop_len);
+            err = dynstring_dup(&prop_buf, prop_val, prop_len);
+            if (err)
+               break;
+
+            // Scan each property for matching paths
+            pos = 0;
+            while (pos < prop_len)
+            {
+               if ((pos + old_path_len < prop_len) &&
+                   (memcmp(prop_buf.buf + pos, old_path, old_path_len) == 0) &&
+                   ((prop_buf.buf[pos + old_path_len] == ':') ||
+                    (prop_buf.buf[pos + old_path_len] == '/') ||
+                    (prop_buf.buf[pos + old_path_len] == '\0')))
+               {
+                  // Patch the string, replacing old name with new
+                  err = dynstring_patch(&prop_buf, pos + dir_len, old_name_len,
+                                        name, name_len);
+                  if (err)
+                     break;
+
+                  prop_len += name_len - old_name_len;
+                  changed = 1;
+               }
+               pos += strlen(prop_buf.buf + pos) + 1;
+            }
+
+            if (!err && changed)
+            {
+               // Caution - may change offsets, but only by shuffling everything
+               // afterwards, i.e. the offset to this node or property does not
+               // change.
+               err = fdt_setprop(dtb->fdt, offset, prop_name, prop_buf.buf,
+                                 prop_len);
+            }
+         }
+      }
+   }
+
+   dynstring_free(&prop_buf);
+
+   if (err)
+      goto clean_up;
+
+   // Then look for a "/__local_fixups__<old_path>" node, and rename
+   // that as well.
+   offset = fdt_path_offset(dtb->fdt, "/__local_fixups__");
+   if (offset > 0)
+   {
+      const char *p, *end;
+
+      p = old_path;
+      end = old_path + old_path_len;
+      while (p < end)
+      {
+         const char *q;
+
+         while (*p == '/') {
+            p++;
+            if (p == end)
+               break;
+         }
+         q = memchr(p, '/', end - p);
+         if (! q)
+            q = end;
+
+         offset = fdt_subnode_offset_namelen(dtb->fdt, offset, p, q-p);
+         if (offset < 0)
+            break;
+
+         p = q;
+      }
+
+      if (offset > 0)
+         err = fdt_set_name(dtb->fdt, offset, name);
+   }
+
+   // __overrides__ don't need patching because nodes are identified
+   // using phandles, which are unaffected by renaming and resizing nodes.
+
+clean_up:
+   dynstring_free(&path_buf);
+
+   return err;
+}
+
 // Returns 0 on success, otherwise <0 error code
 int dtoverlay_create_prop_fragment(DTBLOB_T *dtb, int idx, int target_phandle,
                                    const char *prop_name, const void *prop_data,
@@ -259,8 +532,8 @@ static int dtoverlay_merge_fragment(DTBLOB_T *base_dtb, int target_off,
 
       /* Skip these system properties (only phandles in the first level) */
       if ((strcmp(prop_name, "name") == 0) ||
-          ((depth == 0) && ((strcmp(prop_name, "linux,phandle") == 0) ||
-			    (strcmp(prop_name, "phandle") == 0))))
+          ((depth == 0) && ((strcmp(prop_name, "phandle") == 0) ||
+			    (strcmp(prop_name, "linux,phandle") == 0))))
           continue;
 
       dtoverlay_debug("  +prop(%s)", prop_name);
@@ -742,6 +1015,8 @@ int dtoverlay_fixup_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
    if (err >= 0)
       err = dtoverlay_resolve_phandles(base_dtb, overlay_dtb);
 
+   overlay_dtb->fixups_applied = 1;
+
    return NON_FATAL(err);
 }
 
@@ -968,7 +1243,7 @@ int dtoverlay_override_one_target(int override_type,
                if (!new_name)
                   return -FDT_ERR_NOSPACE;
                sprintf(new_name, "%.*s@%x", name_len, old_name, (uint32_t)override_int);
-               fdt_set_name(dtb->fdt, node_off, new_name);
+               err = dtoverlay_set_node_name(dtb, node_off, new_name);
                free(new_name);
             }
          }
@@ -1018,7 +1293,7 @@ int dtoverlay_override_one_target(int override_type,
 		  {
 		     frag_off = fdt_subnode_offset(dtb->fdt, frag_off, states[!active]);
 		     if (frag_off >= 0)
-			(void)fdt_set_name(dtb->fdt, frag_off, states[active]);
+			(void)dtoverlay_set_node_name(dtb, frag_off, states[active]);
 		  }
 		  else
 		  {
@@ -1043,6 +1318,7 @@ int dtoverlay_override_one_target(int override_type,
 }
 
 // Returns 0 on success, -ve for fatal errors and +ve for non-fatal errors
+// After calling this, assume all node offsets are no longer valid
 int dtoverlay_foreach_override_target(DTBLOB_T *dtb, const char *override_name,
 				      const char *override_data, int data_len,
 				      override_callback_t callback,

@@ -60,12 +60,13 @@ typedef struct dtoverlay_struct
 typedef struct dtblob_struct
 {
    void *fdt;
-   int fdt_is_malloced;
+   char fdt_is_malloced;
+   char trailer_is_malloced;
+   char fixups_applied;
    int min_phandle;
    int max_phandle;
    void *trailer;
    int trailer_len;
-   int trailer_is_malloced;
 } DTBLOB_T;
 
 
