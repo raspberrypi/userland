@@ -106,7 +106,8 @@ extern "C" {
       VC_IMAGE_PROP_IS_PACKED,
       VC_IMAGE_PROP_YUV_COLOURSPACE,
       /* Linked-multichannel properties*/
-      VC_IMAGE_PROP_LINKED_MULTICHANN
+      VC_IMAGE_PROP_LINKED_MULTICHANN,
+      VC_IMAGE_PROP_VPITCH
    } VC_IMAGE_PROPERTY_T;
 
    /* A property key and value */
