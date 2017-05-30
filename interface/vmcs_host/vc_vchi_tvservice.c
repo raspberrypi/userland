@@ -681,7 +681,9 @@ static void *tvservice_notify_func(void *arg) {
 
    vcos_log_trace("TV service async thread started");
    /* Check starting state, and put service in use if necessary */
-   tvservice_send_command_reply( VC_TV_GET_DISPLAY_STATE, NULL, 0, &tvstate, sizeof(TV_DISPLAY_STATE_T));
+   success = tvservice_send_command_reply( VC_TV_GET_DISPLAY_STATE, NULL, 0, &tvstate, sizeof(TV_DISPLAY_STATE_T));
+   if (success != 0)
+      return 0;
    if (tvstate.state & VC_HDMI_ATTACHED)
    {
       /* Connected */
