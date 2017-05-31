@@ -1328,6 +1328,11 @@ int dtoverlay_foreach_override_target(DTBLOB_T *dtb, const char *override_name,
    int target_phandle = 0;
    char *data;
 
+   /* Short-circuit the degenerate case of an empty parameter, avoiding an
+      apparent memory allocation failure. */
+   if (!data_len)
+      return 0;
+
    /* Copy the override data in case it moves */
    data = malloc(data_len);
    if (!data)
