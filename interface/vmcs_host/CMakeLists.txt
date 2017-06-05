@@ -9,7 +9,7 @@ add_definitions(-fno-strict-aliasing)
 
 include_directories(${VMCS_TARGET}/vcfiled)
 
-add_library(vchostif
+add_library(vchostif SHARED
             ${VMCS_TARGET}/vcfilesys.c ${VMCS_TARGET}/vcmisc.c
             vc_vchi_gencmd.c vc_vchi_filesys.c vc_vchi_gpuserv.c
             vc_vchi_tvservice.c vc_vchi_cecservice.c
