@@ -2453,7 +2453,10 @@ static int wait_for_next_change(RASPIVID_STATE *state)
       if (state->verbose && result != 0)
          fprintf(stderr, "Bad signal received - error %d\n", errno);
 
-      return keep_running;
+      if (result == 0)
+         return 0;
+      else
+         return keep_running;
    }
 
    } // switch
