@@ -739,6 +739,8 @@ static struct {
    {MMAL_ENCODING_BAYER_SRGGB16,  OMX_COLOR_FormatRawBayer16bit},
    {MMAL_ENCODING_BAYER_SBGGR10DPCM8,OMX_COLOR_FormatRawBayer8bitcompressed},
    {MMAL_ENCODING_OPAQUE,         OMX_COLOR_FormatBRCMOpaque},
+   {MMAL_ENCODING_I420_16,        OMX_COLOR_FormatYUV420_16PackedPlanar},
+   {MMAL_ENCODING_YUVUV64_16,     OMX_COLOR_FormatYUVUV64_16},
    {MMAL_ENCODING_UNKNOWN,        OMX_COLOR_FormatUnused}
 };
 
