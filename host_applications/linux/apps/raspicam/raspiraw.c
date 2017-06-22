@@ -424,15 +424,15 @@ uint32_t order_and_bit_depth_to_encoding(enum bayer_order order, int bit_depth)
 	};
 	const uint32_t depth12[] = {
 		MMAL_ENCODING_BAYER_SBGGR12P,
-		0,
-		0,
-		0
+		MMAL_ENCODING_BAYER_SGBRG12P,
+		MMAL_ENCODING_BAYER_SGRBG12P,
+		MMAL_ENCODING_BAYER_SRGGB12P,
 	};
 	const uint32_t depth16[] = {
 		MMAL_ENCODING_BAYER_SBGGR16,
-		0,
-		0,
-		0
+		MMAL_ENCODING_BAYER_SGBRG16,
+		MMAL_ENCODING_BAYER_SGRBG16,
+		MMAL_ENCODING_BAYER_SRGGB16,
 	};
 	if (order < 0 || order > 3)
 	{
