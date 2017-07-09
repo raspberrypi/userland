@@ -2711,11 +2711,6 @@ int main(int argc, const char **argv)
             {
                state.callback_data.imv_file_handle = stdout;
             }
-            else if (state.imv_filename[0] == '!')
-            {
-	       // TODO: if this occurs, we should suppress writing error and status messages to stderr.
-               state.callback_data.imv_file_handle = stderr;
-            }
             else
             {
                state.callback_data.imv_file_handle = open_filename(&state, state.imv_filename);
