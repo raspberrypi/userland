@@ -29,6 +29,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef RASPICAMCONTROL_H_
 #define RASPICAMCONTROL_H_
 
+#include "RaspiCLI.h" // get type XREF_T
+
 /* Various parameters
  *
  * Exposure Mode
@@ -45,6 +47,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
             MMAL_PARAM_EXPOSUREMODE_FIXEDFPS,
             MMAL_PARAM_EXPOSUREMODE_ANTISHAKE,
             MMAL_PARAM_EXPOSUREMODE_FIREWORKS,
+ *
+ * Flicker Avoid Mode
+ *          MMAL_PARAM_FLICKERAVOID_OFF,
+            MMAL_PARAM_FLICKERAVOID_AUTO,
+            MMAL_PARAM_FLICKERAVOID_50HZ,
+            MMAL_PARAM_FLICKERAVOID_60HZ,
  *
  * AWB Mode
  *          MMAL_PARAM_AWBMODE_OFF,
@@ -142,6 +150,7 @@ typedef struct raspicam_camera_parameters_s
    MMAL_PARAM_IMAGEFX_T imageEffect;
    MMAL_PARAMETER_IMAGEFX_PARAMETERS_T imageEffectsParameters;
    MMAL_PARAM_COLOURFX_T colourEffects;
+   MMAL_PARAM_FLICKERAVOID_T flickerAvoidMode;
    int rotation;              /// 0-359
    int hflip;                 /// 0 or 1
    int vflip;                 /// 0 or 1
@@ -162,6 +171,26 @@ typedef struct raspicam_camera_parameters_s
 typedef enum {
     ZOOM_IN, ZOOM_OUT, ZOOM_RESET
 } ZOOM_COMMAND_T;
+
+
+
+/// Structure to cross reference flicker avoid strings against the MMAL parameter equivalent
+///
+/// TODO: brought here due to duplication between two .c files (RapiCamControl and RaspiVid).
+/// Considered moving it to a separate header, but since I don't know architectural plans
+/// for command line parsing, did not. Ideas: create ArgumentMMALmaps.h and move all
+/// XREF_T structures there? Or bring them here? Either way, here it's not duplicated.
+
+static XREF_T  flicker_avoid_map[] =
+{
+   {"off",           MMAL_PARAM_FLICKERAVOID_OFF},
+   {"auto",          MMAL_PARAM_FLICKERAVOID_AUTO},
+   {"50hz",          MMAL_PARAM_FLICKERAVOID_50HZ},
+   {"60hz",          MMAL_PARAM_FLICKERAVOID_60HZ}
+};
+
+static const int flicker_avoid_map_size = sizeof(flicker_avoid_map) / sizeof(flicker_avoid_map[0]);
+
 
 
 void raspicamcontrol_check_configuration(int min_gpu_mem);
@@ -188,6 +217,7 @@ int raspicamcontrol_set_metering_mode(MMAL_COMPONENT_T *camera, MMAL_PARAM_EXPOS
 int raspicamcontrol_set_video_stabilisation(MMAL_COMPONENT_T *camera, int vstabilisation);
 int raspicamcontrol_set_exposure_compensation(MMAL_COMPONENT_T *camera, int exp_comp);
 int raspicamcontrol_set_exposure_mode(MMAL_COMPONENT_T *camera, MMAL_PARAM_EXPOSUREMODE_T mode);
+int raspicamcontrol_set_flicker_avoid_mode(MMAL_COMPONENT_T *camera, MMAL_PARAM_FLICKERAVOID_T mode);
 int raspicamcontrol_set_awb_mode(MMAL_COMPONENT_T *camera, MMAL_PARAM_AWBMODE_T awb_mode);
 int raspicamcontrol_set_awb_gains(MMAL_COMPONENT_T *camera, float r_gain, float b_gain);
 int raspicamcontrol_set_imageFX(MMAL_COMPONENT_T *camera, MMAL_PARAM_IMAGEFX_T imageFX);
@@ -214,9 +244,12 @@ int raspicamcontrol_get_video_stabilisation(MMAL_COMPONENT_T *camera);
 int raspicamcontrol_get_exposure_compensation(MMAL_COMPONENT_T *camera);
 MMAL_PARAM_THUMBNAIL_CONFIG_T raspicamcontrol_get_thumbnail_parameters(MMAL_COMPONENT_T *camera);
 MMAL_PARAM_EXPOSUREMODE_T raspicamcontrol_get_exposure_mode(MMAL_COMPONENT_T *camera);
+MMAL_PARAM_FLICKERAVOID_T raspicamcontrol_get_flicker_avoid_mode(MMAL_COMPONENT_T *camera);
 MMAL_PARAM_AWBMODE_T raspicamcontrol_get_awb_mode(MMAL_COMPONENT_T *camera);
 MMAL_PARAM_IMAGEFX_T raspicamcontrol_get_imageFX(MMAL_COMPONENT_T *camera);
 MMAL_PARAM_COLOURFX_T raspicamcontrol_get_colourFX(MMAL_COMPONENT_T *camera);
+
+
 
 
 #endif /* RASPICAMCONTROL_H_ */

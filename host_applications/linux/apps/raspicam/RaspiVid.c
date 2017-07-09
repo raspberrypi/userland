@@ -79,6 +79,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/mmal/util/mmal_util_params.h"
 #include "interface/mmal/util/mmal_default_components.h"
 #include "interface/mmal/util/mmal_connection.h"
+#include "interface/mmal/mmal_parameters_camera.h"
 
 #include "RaspiCamControl.h"
 #include "RaspiPreview.h"
@@ -256,7 +257,6 @@ static XREF_T  level_map[] =
 
 static int level_map_size = sizeof(level_map) / sizeof(level_map[0]);
 
-
 static XREF_T  initial_map[] =
 {
    {"record",     0},
@@ -323,6 +323,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandRaw          32
 #define CommandRawFormat    33
 #define CommandNetListen    34
+#define CommandFlickerAvoid 35
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -338,6 +339,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandTimeout,       "-timeout",    "t",  "Time (in ms) to capture for. If not specified, set to 5s. Zero to disable", 1 },
    { CommandDemoMode,      "-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 1},
    { CommandFramerate,     "-framerate",  "fps","Specify the frames per second to record", 1},
+   { CommandFlickerAvoid,  "-flicker",    "fl", "Select flicker avoid mode (off, auto, 50hz, 60hz). Default 'auto'", 0},
    { CommandPreviewEnc,    "-penc",       "e",  "Display preview image *after* encoding (shows compression artifacts)", 0},
    { CommandIntraPeriod,   "-intra",      "g",  "Specify the intra refresh period (key frame rate/GoP size). Zero to produce an initial I-frame and then just P-frames.", 1},
    { CommandProfile,       "-profile",    "pf", "Specify H264 profile to use for encoding", 1},
@@ -633,7 +635,18 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
             valid = 0;
          break;
       }
+      
+      case CommandFlickerAvoid: // flicker avoid mode
+      {
+         state->camera_parameters.flickerAvoidMode = raspicli_map_xref(argv[i + 1], flicker_avoid_map, flicker_avoid_map_size);
 
+         if( state->camera_parameters.flickerAvoidMode == -1)
+            state->camera_parameters.flickerAvoidMode = MMAL_PARAM_FLICKERAVOID_AUTO;
+
+         i++;
+         break;
+      }
+      
       case CommandPreviewEnc:
          state->immutableInput = 0;
          break;
@@ -1767,6 +1780,7 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
       goto error;
    }
 
+   // Note: this sets lots of parameters that were not individually addressed before.
    raspicamcontrol_set_all_parameters(camera, &state->camera_parameters);
 
    state->camera_component = camera;
@@ -2696,6 +2710,11 @@ int main(int argc, const char **argv)
             if (state.imv_filename[0] == '-')
             {
                state.callback_data.imv_file_handle = stdout;
+            }
+            else if (state.imv_filename[0] == '!')
+            {
+	       // TODO: if this occurs, we should suppress writing error and status messages to stderr.
+               state.callback_data.imv_file_handle = stderr;
             }
             else
             {
