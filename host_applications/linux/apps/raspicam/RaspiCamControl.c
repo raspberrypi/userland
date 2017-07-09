@@ -1228,7 +1228,6 @@ int raspicamcontrol_set_exposure_mode(MMAL_COMPONENT_T *camera, MMAL_PARAM_EXPOS
  *   - MMAL_PARAM_FLICKERAVOID_AUTO,
  *   - MMAL_PARAM_FLICKERAVOID_50HZ,
  *   - MMAL_PARAM_FLICKERAVOID_60HZ,
- *   - MMAL_PARAM_FLICKERAVOID_MAX,
  *
  * @return 0 if successful, non-zero if any parameters out of range
  */
