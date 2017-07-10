@@ -29,8 +29,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef RASPICAMCONTROL_H_
 #define RASPICAMCONTROL_H_
 
-#include "RaspiCLI.h" // get type XREF_T
-
 /* Various parameters
  *
  * Exposure Mode
