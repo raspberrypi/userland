@@ -173,26 +173,6 @@ typedef enum {
 } ZOOM_COMMAND_T;
 
 
-
-/// Structure to cross reference flicker avoid strings against the MMAL parameter equivalent
-///
-/// TODO: brought here due to duplication between two .c files (RapiCamControl and RaspiVid).
-/// Considered moving it to a separate header, but since I don't know architectural plans
-/// for command line parsing, did not. Ideas: create ArgumentMMALmaps.h and move all
-/// XREF_T structures there? Or bring them here? Either way, here it's not duplicated.
-
-static XREF_T  flicker_avoid_map[] =
-{
-   {"off",           MMAL_PARAM_FLICKERAVOID_OFF},
-   {"auto",          MMAL_PARAM_FLICKERAVOID_AUTO},
-   {"50hz",          MMAL_PARAM_FLICKERAVOID_50HZ},
-   {"60hz",          MMAL_PARAM_FLICKERAVOID_60HZ}
-};
-
-static const int flicker_avoid_map_size = sizeof(flicker_avoid_map) / sizeof(flicker_avoid_map[0]);
-
-
-
 void raspicamcontrol_check_configuration(int min_gpu_mem);
 
 int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char *arg1, const char *arg2);

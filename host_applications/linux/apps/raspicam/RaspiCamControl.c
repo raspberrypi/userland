@@ -61,6 +61,18 @@ static XREF_T  exposure_map[] =
 
 static const int exposure_map_size = sizeof(exposure_map) / sizeof(exposure_map[0]);
 
+/// Structure to cross reference flicker avoid strings against the MMAL parameter equivalent
+
+static XREF_T  flicker_avoid_map[] =
+{
+   {"off",           MMAL_PARAM_FLICKERAVOID_OFF},
+   {"auto",          MMAL_PARAM_FLICKERAVOID_AUTO},
+   {"50hz",          MMAL_PARAM_FLICKERAVOID_50HZ},
+   {"60hz",          MMAL_PARAM_FLICKERAVOID_60HZ}
+};
+
+static const int flicker_avoid_map_size = sizeof(flicker_avoid_map) / sizeof(flicker_avoid_map[0]);
+
 /// Structure to cross reference awb strings against the MMAL parameter equivalent
 static XREF_T awb_map[] =
 {
@@ -172,7 +184,7 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandVideoStab,   "-vstab",     "vs", "Turn on video stabilisation", 0},
    {CommandEVComp,      "-ev",        "ev", "Set EV compensation - steps of 1/6 stop",  1},
    {CommandExposure,    "-exposure",  "ex", "Set exposure mode (see Notes)", 1},
-   {CommandFlicker,     "-flicker",   "fl", "Set flicker avoid mode (see Notes)", 1},
+   {CommandFlicker,     "-flicker",   "fli","Set flicker avoid mode (see Notes)", 1},
    {CommandAWB,         "-awb",       "awb","Set AWB mode (see Notes)", 1},
    {CommandImageFX,     "-imxfx",     "ifx","Set image effect (see Notes)", 1},
    {CommandColourFX,    "-colfx",     "cfx","Set colour effect (U:V)",  1},
@@ -456,7 +468,7 @@ static MMAL_PARAM_FLICKERAVOID_T flicker_avoid_mode_from_string(const char *str)
       return (MMAL_PARAM_FLICKERAVOID_T)i;
 
    vcos_log_error("Unknown flicker avoid mode: %s", str);
-   return MMAL_PARAM_FLICKERAVOID_AUTO;
+   return MMAL_PARAM_FLICKERAVOID_OFF;
 }
 
 /**
