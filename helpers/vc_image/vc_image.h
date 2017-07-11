@@ -165,7 +165,9 @@ extern "C" {
    case VC_IMAGE_YUV422:      \
    case VC_IMAGE_YUV_UV:      \
    case VC_IMAGE_YUV_UV32:    \
-   case VC_IMAGE_YUV422PLANAR
+   case VC_IMAGE_YUV422PLANAR:\
+   case VC_IMAGE_YUV420_16:   \
+   case VC_IMAGE_YUV_UV_16
 
 #define case_VC_IMAGE_ANY_RGB case VC_IMAGE_RGB565:      \
    case VC_IMAGE_RGB2X9:      \
