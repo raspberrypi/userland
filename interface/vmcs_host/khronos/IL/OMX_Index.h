@@ -531,6 +531,7 @@ typedef enum OMX_INDEXTYPE {
     OMX_IndexParamBrcmIspBlockOverride,                       /**< reference: OMX_PARAM_U32TYPE */
     OMX_IndexParamBrcmSupportsUnalignedSliceheight,           /**< reference: OMX_CONFIG_PORTBOOLEANTYPE */
     OMX_IndexParamBrcmLensShadingOverride,                    /**< reference: OMX_PARAM_LENSSHADINGOVERRIDETYPE */
+    OMX_IndexParamBrcmBlackLevel,                             /**< reference: OMX_PARAM_U32TYPE */
     OMX_IndexMax = 0x7FFFFFFF
 } OMX_INDEXTYPE;
 
