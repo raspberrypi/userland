@@ -286,7 +286,7 @@ void send_regs(int fd, const struct sensor_def *sensor, const struct sensor_regs
 			}
 			else
 			{
-				unsigned char msg[3] = {sensor->stop[i].reg>>8, sensor->stop[i].reg, sensor->stop[i].data};
+				unsigned char msg[3] = {regs[i].reg>>8, regs[i].reg, regs[i].data};
 				if(write(fd, msg, 3) != 3)
 				{
 					vcos_log_error("Failed to write register index %d", i);
