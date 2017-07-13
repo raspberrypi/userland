@@ -561,6 +561,10 @@ static int parse_cmdline(int argc, const char **argv, RASPIRAW_PARAMS_T *cfg)
 				break;
 			}
 
+			case CommandWriteHeader:
+				cfg->write_header = 1;
+				break;
+
 			case CommandTimeout: // Time to run for in milliseconds
 				if (sscanf(argv[i + 1], "%u", &cfg->timeout) == 1)
 				{
