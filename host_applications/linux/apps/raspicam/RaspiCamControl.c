@@ -61,6 +61,18 @@ static XREF_T  exposure_map[] =
 
 static const int exposure_map_size = sizeof(exposure_map) / sizeof(exposure_map[0]);
 
+/// Structure to cross reference flicker avoid strings against the MMAL parameter equivalent
+
+static XREF_T  flicker_avoid_map[] =
+{
+   {"off",           MMAL_PARAM_FLICKERAVOID_OFF},
+   {"auto",          MMAL_PARAM_FLICKERAVOID_AUTO},
+   {"50hz",          MMAL_PARAM_FLICKERAVOID_50HZ},
+   {"60hz",          MMAL_PARAM_FLICKERAVOID_60HZ}
+};
+
+static const int flicker_avoid_map_size = sizeof(flicker_avoid_map) / sizeof(flicker_avoid_map[0]);
+
 /// Structure to cross reference awb strings against the MMAL parameter equivalent
 static XREF_T awb_map[] =
 {
@@ -160,6 +172,7 @@ static const int stereo_mode_map_size = sizeof(stereo_mode_map)/sizeof(stereo_mo
 #define CommandStereoDecimate 22
 #define CommandStereoSwap  23
 #define CommandAnnotateExtras 24
+#define CommandFlicker     25
 
 static COMMAND_LIST  cmdline_commands[] =
 {
@@ -171,6 +184,7 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandVideoStab,   "-vstab",     "vs", "Turn on video stabilisation", 0},
    {CommandEVComp,      "-ev",        "ev", "Set EV compensation - steps of 1/6 stop",  1},
    {CommandExposure,    "-exposure",  "ex", "Set exposure mode (see Notes)", 1},
+   {CommandFlicker,     "-flicker",   "fli","Set flicker avoid mode (see Notes)", 1},
    {CommandAWB,         "-awb",       "awb","Set AWB mode (see Notes)", 1},
    {CommandImageFX,     "-imxfx",     "ifx","Set image effect (see Notes)", 1},
    {CommandColourFX,    "-colfx",     "cfx","Set colour effect (U:V)",  1},
@@ -442,6 +456,22 @@ static MMAL_PARAM_EXPOSUREMODE_T exposure_mode_from_string(const char *str)
 }
 
 /**
+ * Convert string to the MMAL parameter for flicker avoid mode
+ * @param str Incoming string to match
+ * @return MMAL parameter matching the string, or the AUTO option if no match found
+ */
+static MMAL_PARAM_FLICKERAVOID_T flicker_avoid_mode_from_string(const char *str)
+{
+   int i = raspicli_map_xref(str, flicker_avoid_map, flicker_avoid_map_size);
+
+   if( i != -1)
+      return (MMAL_PARAM_FLICKERAVOID_T)i;
+
+   vcos_log_error("Unknown flicker avoid mode: %s", str);
+   return MMAL_PARAM_FLICKERAVOID_OFF;
+}
+
+/**
  * Convert string to the MMAL parameter for AWB mode
  * @param str Incoming string to match
  * @return MMAL parameter matching the string, or the AUTO option if no match found
@@ -579,6 +609,11 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
 
    case CommandExposure : // exposure mode - needs string
       params->exposureMode = exposure_mode_from_string(arg2);
+      used = 2;
+      break;
+      
+   case CommandFlicker : // flicker avoid mode - needs string
+      params->flickerAvoidMode = flicker_avoid_mode_from_string(arg2);
       used = 2;
       break;
 
@@ -783,6 +818,13 @@ void raspicamcontrol_display_help()
    {
       fprintf(stdout, ",%s", exposure_map[i].mode);
    }
+   
+   fprintf(stdout, "\n\nFlicker avoid mode options :\n%s", flicker_avoid_map[0].mode );
+
+   for (i=1;i<flicker_avoid_map_size;i++)
+   {
+      fprintf(stdout, ",%s", flicker_avoid_map[i].mode);
+   }
 
    fprintf(stdout, "\n\nAWB mode options :\n%s", awb_map[0].mode );
 
@@ -824,6 +866,7 @@ void raspicamcontrol_display_help()
 void raspicamcontrol_dump_parameters(const RASPICAM_CAMERA_PARAMETERS *params)
 {
    const char *exp_mode = raspicli_unmap_xref(params->exposureMode, exposure_map, exposure_map_size);
+   const char *fl_mode = raspicli_unmap_xref(params->flickerAvoidMode, flicker_avoid_map, flicker_avoid_map_size);
    const char *awb_mode = raspicli_unmap_xref(params->awbMode, awb_map, awb_map_size);
    const char *image_effect = raspicli_unmap_xref(params->imageEffect, imagefx_map, imagefx_map_size);
    const char *metering_mode = raspicli_unmap_xref(params->exposureMeterMode, metering_mode_map, metering_mode_map_size);
@@ -831,6 +874,7 @@ void raspicamcontrol_dump_parameters(const RASPICAM_CAMERA_PARAMETERS *params)
    fprintf(stderr, "Sharpness %d, Contrast %d, Brightness %d\n", params->sharpness, params->contrast, params->brightness);
    fprintf(stderr, "Saturation %d, ISO %d, Video Stabilisation %s, Exposure compensation %d\n", params->saturation, params->ISO, params->videoStabilisation ? "Yes": "No", params->exposureCompensation);
    fprintf(stderr, "Exposure Mode '%s', AWB Mode '%s', Image Effect '%s'\n", exp_mode, awb_mode, image_effect);
+   fprintf(stderr, "Flicker Avoid Mode '%s'\n", fl_mode);
    fprintf(stderr, "Metering Mode '%s', Colour Effect Enabled %s with U = %d, V = %d\n", metering_mode, params->colourEffects.enable ? "Yes":"No", params->colourEffects.u, params->colourEffects.v);
    fprintf(stderr, "Rotation %d, hflip %s, vflip %s\n", params->rotation, params->hflip ? "Yes":"No",params->vflip ? "Yes":"No");
    fprintf(stderr, "ROI x %lf, y %f, w %f h %f\n", params->roi.x, params->roi.y, params->roi.w, params->roi.h);
@@ -889,6 +933,7 @@ void raspicamcontrol_set_defaults(RASPICAM_CAMERA_PARAMETERS *params)
    params->videoStabilisation = 0;
    params->exposureCompensation = 0;
    params->exposureMode = MMAL_PARAM_EXPOSUREMODE_AUTO;
+   params->flickerAvoidMode = MMAL_PARAM_FLICKERAVOID_OFF;
    params->exposureMeterMode = MMAL_PARAM_EXPOSUREMETERINGMODE_AVERAGE;
    params->awbMode = MMAL_PARAM_AWBMODE_AUTO;
    params->imageEffect = MMAL_PARAM_IMAGEFX_NONE;
@@ -937,6 +982,7 @@ int raspicamcontrol_get_all_parameters(MMAL_COMPONENT_T *camera, RASPICAM_CAMERA
    params->videoStabilisation = raspicamcontrol_get_video_stabilisation(camera);
    params->exposureCompensation = raspicamcontrol_get_exposure_compensation(camera);
    params->exposureMode = raspicamcontrol_get_exposure_mode(camera);
+   params->flickerAvoidMode = raspicamcontrol_get_flicker_avoid_mode(camera);
    params->awbMode = raspicamcontrol_get_awb_mode(camera);
    params->imageEffect = raspicamcontrol_get_image_effect(camera);
    params->colourEffects = raspicamcontrol_get_colour_effect(camera);
@@ -963,6 +1009,7 @@ int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_
    result += raspicamcontrol_set_video_stabilisation(camera, params->videoStabilisation);
    result += raspicamcontrol_set_exposure_compensation(camera, params->exposureCompensation);
    result += raspicamcontrol_set_exposure_mode(camera, params->exposureMode);
+   result += raspicamcontrol_set_flicker_avoid_mode(camera, params->flickerAvoidMode);
    result += raspicamcontrol_set_metering_mode(camera, params->exposureMeterMode);
    result += raspicamcontrol_set_awb_mode(camera, params->awbMode);
    result += raspicamcontrol_set_awb_gains(camera, params->awb_gains_r, params->awb_gains_b);
@@ -1182,6 +1229,28 @@ int raspicamcontrol_set_exposure_mode(MMAL_COMPONENT_T *camera, MMAL_PARAM_EXPOS
       return 1;
 
    return mmal_status_to_int(mmal_port_parameter_set(camera->control, &exp_mode.hdr));
+}
+
+
+/**
+ * Set flicker avoid mode for images
+ * @param camera Pointer to camera component
+ * @param mode Exposure mode to set from
+ *   - MMAL_PARAM_FLICKERAVOID_OFF,
+ *   - MMAL_PARAM_FLICKERAVOID_AUTO,
+ *   - MMAL_PARAM_FLICKERAVOID_50HZ,
+ *   - MMAL_PARAM_FLICKERAVOID_60HZ,
+ *
+ * @return 0 if successful, non-zero if any parameters out of range
+ */
+int raspicamcontrol_set_flicker_avoid_mode(MMAL_COMPONENT_T *camera, MMAL_PARAM_FLICKERAVOID_T mode)
+{
+   MMAL_PARAMETER_FLICKERAVOID_T fl_mode = {{MMAL_PARAMETER_FLICKER_AVOID,sizeof(fl_mode)}, mode};
+
+   if (!camera)
+      return 1;
+
+   return mmal_status_to_int(mmal_port_parameter_set(camera->control, &fl_mode.hdr));
 }
 
 

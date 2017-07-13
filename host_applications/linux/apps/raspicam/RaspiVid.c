@@ -79,6 +79,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/mmal/util/mmal_util_params.h"
 #include "interface/mmal/util/mmal_default_components.h"
 #include "interface/mmal/util/mmal_connection.h"
+#include "interface/mmal/mmal_parameters_camera.h"
 
 #include "RaspiCamControl.h"
 #include "RaspiPreview.h"
@@ -255,7 +256,6 @@ static XREF_T  level_map[] =
 };
 
 static int level_map_size = sizeof(level_map) / sizeof(level_map[0]);
-
 
 static XREF_T  initial_map[] =
 {
@@ -633,7 +633,7 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
             valid = 0;
          break;
       }
-
+      
       case CommandPreviewEnc:
          state->immutableInput = 0;
          break;
@@ -1767,6 +1767,7 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
       goto error;
    }
 
+   // Note: this sets lots of parameters that were not individually addressed before.
    raspicamcontrol_set_all_parameters(camera, &state->camera_parameters);
 
    state->camera_component = camera;

@@ -46,6 +46,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
             MMAL_PARAM_EXPOSUREMODE_ANTISHAKE,
             MMAL_PARAM_EXPOSUREMODE_FIREWORKS,
  *
+ * Flicker Avoid Mode
+ *          MMAL_PARAM_FLICKERAVOID_OFF,
+            MMAL_PARAM_FLICKERAVOID_AUTO,
+            MMAL_PARAM_FLICKERAVOID_50HZ,
+            MMAL_PARAM_FLICKERAVOID_60HZ,
+ *
  * AWB Mode
  *          MMAL_PARAM_AWBMODE_OFF,
             MMAL_PARAM_AWBMODE_AUTO,
@@ -142,6 +148,7 @@ typedef struct raspicam_camera_parameters_s
    MMAL_PARAM_IMAGEFX_T imageEffect;
    MMAL_PARAMETER_IMAGEFX_PARAMETERS_T imageEffectsParameters;
    MMAL_PARAM_COLOURFX_T colourEffects;
+   MMAL_PARAM_FLICKERAVOID_T flickerAvoidMode;
    int rotation;              /// 0-359
    int hflip;                 /// 0 or 1
    int vflip;                 /// 0 or 1
@@ -188,6 +195,7 @@ int raspicamcontrol_set_metering_mode(MMAL_COMPONENT_T *camera, MMAL_PARAM_EXPOS
 int raspicamcontrol_set_video_stabilisation(MMAL_COMPONENT_T *camera, int vstabilisation);
 int raspicamcontrol_set_exposure_compensation(MMAL_COMPONENT_T *camera, int exp_comp);
 int raspicamcontrol_set_exposure_mode(MMAL_COMPONENT_T *camera, MMAL_PARAM_EXPOSUREMODE_T mode);
+int raspicamcontrol_set_flicker_avoid_mode(MMAL_COMPONENT_T *camera, MMAL_PARAM_FLICKERAVOID_T mode);
 int raspicamcontrol_set_awb_mode(MMAL_COMPONENT_T *camera, MMAL_PARAM_AWBMODE_T awb_mode);
 int raspicamcontrol_set_awb_gains(MMAL_COMPONENT_T *camera, float r_gain, float b_gain);
 int raspicamcontrol_set_imageFX(MMAL_COMPONENT_T *camera, MMAL_PARAM_IMAGEFX_T imageFX);
@@ -214,9 +222,12 @@ int raspicamcontrol_get_video_stabilisation(MMAL_COMPONENT_T *camera);
 int raspicamcontrol_get_exposure_compensation(MMAL_COMPONENT_T *camera);
 MMAL_PARAM_THUMBNAIL_CONFIG_T raspicamcontrol_get_thumbnail_parameters(MMAL_COMPONENT_T *camera);
 MMAL_PARAM_EXPOSUREMODE_T raspicamcontrol_get_exposure_mode(MMAL_COMPONENT_T *camera);
+MMAL_PARAM_FLICKERAVOID_T raspicamcontrol_get_flicker_avoid_mode(MMAL_COMPONENT_T *camera);
 MMAL_PARAM_AWBMODE_T raspicamcontrol_get_awb_mode(MMAL_COMPONENT_T *camera);
 MMAL_PARAM_IMAGEFX_T raspicamcontrol_get_imageFX(MMAL_COMPONENT_T *camera);
 MMAL_PARAM_COLOURFX_T raspicamcontrol_get_colourFX(MMAL_COMPONENT_T *camera);
+
+
 
 
 #endif /* RASPICAMCONTROL_H_ */
