@@ -603,7 +603,7 @@ int main(int argc, const char** argv) {
 		.mode = 0,
 		.hflip = 0,
 		.vflip = 0,
-		.exposure = 0,
+		.exposure = -1,
 		.gain = -1,
 		.output = NULL,
 		.capture = 0,
