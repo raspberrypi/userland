@@ -59,13 +59,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //On CM: 0=CAM0, 1=CAM1
 #define CAMERA_NUM -1
 
-//If CAPTURE is 1, images are saved to file.
-//If 0, the ISP and render are hooked up instead
-#define CAPTURE	0
-//If CAPTURE is 1, and WRITE_HEADER is 1, then
-//the raw header describing the frame.
-#define WRITE_HEADER 1
-
 struct brcm_raw_header *brcm_header = NULL;
 
 enum bayer_order {
