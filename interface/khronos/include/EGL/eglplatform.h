@@ -202,4 +202,11 @@ EGLAPI void EGLAPIENTRY BEGL_GetDefaultDriverInterfaces(BEGL_DriverInterfaces *i
 #include "interface/khronos/common/khrn_client_mangle.h"
 #endif
 
+/* C++ / C typecast macros for special EGL handle values */
+#if defined(__cplusplus)
+#define EGL_CAST(type, value) (static_cast<type>(value))
+#else
+#define EGL_CAST(type, value) ((type) (value))
+#endif
+
 #endif /* __eglplatform_h */
