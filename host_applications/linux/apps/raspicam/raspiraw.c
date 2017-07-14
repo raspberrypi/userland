@@ -131,18 +131,6 @@ const struct sensor_def *sensors[] = {
 	NULL
 };
 
-//#define RAW16
-//#define RAW8
-
-#ifdef RAW16
-	#define BIT_DEPTH 16
-#elif defined RAW8
-	#define BIT_DEPTH 8
-#else
-	#define BIT_DEPTH 10
-#endif
-
-
 enum {
 	CommandHelp,
 	CommandMode,
@@ -154,6 +142,7 @@ enum {
 	CommandWriteHeader,
 	CommandTimeout,
 	CommandSaveRate,
+	CommandBitDepth,
 };
 
 static COMMAND_LIST cmdline_commands[] =
@@ -167,8 +156,8 @@ static COMMAND_LIST cmdline_commands[] =
 	{ CommandOutput,	"-output",	"o",  "Set the output filename", 0 },
 	{ CommandWriteHeader,	"-header",	"hd", "Write the BRCM header to the output file", 0 },
 	{ CommandTimeout,	"-timeout",	"t",  "Time (in ms) before shutting down (if not specified, set to 5s)", 1 },
-	{ CommandSaveRate, 	"-saverate",	"sr", "Save every Nth frame.", 1 },
-
+	{ CommandSaveRate, 	"-saverate",	"sr", "Save every Nth frame", 1 },
+	{ CommandBitDepth, 	"-bitdepth",	"b",  "Set output raw bit depth (8, 10, 12 or 16, if not specified, set to sensor native).", 1 },
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -184,6 +173,7 @@ typedef struct {
 	int write_header;
 	int timeout;
 	int saverate;
+	int bit_depth;
 } RASPIRAW_PARAMS_T;
 
 void update_regs(const struct sensor_def *sensor, struct mode_def *mode, int hflip, int vflip, int exposure, int gain);
@@ -576,6 +566,15 @@ static int parse_cmdline(int argc, const char **argv, RASPIRAW_PARAMS_T *cfg)
 					valid = 0;
 				break;
 
+			case CommandBitDepth:
+				if (sscanf(argv[i + 1], "%u", &cfg->bit_depth) == 1)
+				{
+					i++;
+				}
+				else
+					valid = 0;
+				break;
+
 			default:
 				valid = 0;
 				break;
@@ -603,6 +602,7 @@ int main(int argc, const char** argv) {
 		.write_header = 0,
 		.timeout = 5000,
 		.saverate = 20,
+		.bit_depth = -1,
 	};
 	uint32_t encoding;
 	const struct sensor_def *sensor;
@@ -632,7 +632,8 @@ int main(int argc, const char** argv) {
 		exit(-1);
 	}
 
-	if(cfg.mode >= 0 && cfg.mode < sensor->num_modes) {
+	if(cfg.mode >= 0 && cfg.mode < sensor->num_modes)
+	{
 		sensor_mode = &sensor->modes[cfg.mode];
 	}
 
@@ -642,14 +643,19 @@ int main(int argc, const char** argv) {
 		return -2;
 	}
 
+	if(cfg.bit_depth == -1)
+	{
+		cfg.bit_depth = sensor_mode->native_bit_depth;
+	}
+
 	update_regs(sensor, sensor_mode, cfg.hflip, cfg.vflip, cfg.exposure, cfg.gain);
 	if (sensor_mode->encoding == 0)
-		encoding = order_and_bit_depth_to_encoding(sensor_mode->order, BIT_DEPTH);
+		encoding = order_and_bit_depth_to_encoding(sensor_mode->order, cfg.bit_depth);
 	else
 		encoding = sensor_mode->encoding;
 	if (!encoding)
 	{
-		vcos_log_error("Failed to map bitdepth %d and order %d into encoding\n", BIT_DEPTH, sensor_mode->order);
+		vcos_log_error("Failed to map bitdepth %d and order %d into encoding\n", cfg.bit_depth, sensor_mode->order);
 		return -3;
 	}
 	vcos_log_error("Encoding %08X", encoding);
@@ -694,7 +700,7 @@ int main(int argc, const char** argv) {
 		vcos_log_error("Failed to get cfg");
 		goto component_destroy;
 	}
-	if (sensor_mode->encoding || BIT_DEPTH == sensor_mode->native_bit_depth)
+	if (sensor_mode->encoding || cfg.bit_depth == sensor_mode->native_bit_depth)
 	{
 		rx_cfg.unpack = MMAL_CAMERA_RX_CONFIG_UNPACK_NONE;
 		rx_cfg.pack = MMAL_CAMERA_RX_CONFIG_PACK_NONE;
@@ -723,7 +729,7 @@ int main(int argc, const char** argv) {
 				rx_cfg.unpack = MMAL_CAMERA_RX_CONFIG_UNPACK_NONE;
 				break;
 		}
-		switch(BIT_DEPTH)
+		switch(cfg.bit_depth)
 		{
 			case 8:
 				rx_cfg.pack = MMAL_CAMERA_RX_CONFIG_PACK_8;
@@ -741,7 +747,7 @@ int main(int argc, const char** argv) {
 				rx_cfg.pack = MMAL_CAMERA_RX_CONFIG_PACK_16;
 				break;
 			default:
-				vcos_log_error("Unknown output bit depth %d", BIT_DEPTH);
+				vcos_log_error("Unknown output bit depth %d", cfg.bit_depth);
 				rx_cfg.pack = MMAL_CAMERA_RX_CONFIG_UNPACK_NONE;
 				break;
 		}
@@ -830,7 +836,7 @@ int main(int argc, const char** argv) {
 						brcm_header->mode.bayer_order = VC_IMAGE_BAYER_RGGB;
 						break;
 				}
-				switch(BIT_DEPTH)
+				switch(cfg.bit_depth)
 				{
 					case 8:
 						brcm_header->mode.bayer_format = VC_IMAGE_BAYER_RAW8;
