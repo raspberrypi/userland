@@ -51,7 +51,7 @@ struct sensor_regs imx219_8MPix[] =
       {0x012A, 0x18},      // EXCK_FREQ [15:8]
       {0x012B, 0x00},      // EXCK_FREQ [7:0]
       {0x0157, 0x00},         // Analog Gain
-      {0x0158, 0x00},         // Digital Gain [15:8]
+      {0x0158, 0x01},         // Digital Gain [15:8]
       {0x0159, 0x00},          // Digital Gain [7:0]
       {0x015A, 0x01},      // Shutter/Integration Time [15:8]
       {0x015B, 0x00},      // Shutter/Integration Time [7:0]
