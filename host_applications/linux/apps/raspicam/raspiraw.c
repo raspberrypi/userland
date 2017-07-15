@@ -54,11 +54,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "raw_header.h"
 
-//Camera to use
-//-1 for default
-//On CM: 0=CAM0, 1=CAM1
-#define CAMERA_NUM -1
-
 struct brcm_raw_header *brcm_header = NULL;
 
 enum bayer_order {
@@ -143,6 +138,7 @@ enum {
 	CommandTimeout,
 	CommandSaveRate,
 	CommandBitDepth,
+	CommandCameraNum,
 };
 
 static COMMAND_LIST cmdline_commands[] =
@@ -157,7 +153,8 @@ static COMMAND_LIST cmdline_commands[] =
 	{ CommandWriteHeader,	"-header",	"hd", "Write the BRCM header to the output file", 0 },
 	{ CommandTimeout,	"-timeout",	"t",  "Time (in ms) before shutting down (if not specified, set to 5s)", 1 },
 	{ CommandSaveRate, 	"-saverate",	"sr", "Save every Nth frame", 1 },
-	{ CommandBitDepth, 	"-bitdepth",	"b",  "Set output raw bit depth (8, 10, 12 or 16, if not specified, set to sensor native).", 1 },
+	{ CommandBitDepth, 	"-bitdepth",	"b",  "Set output raw bit depth (8, 10, 12 or 16, if not specified, set to sensor native)", 1 },
+	{ CommandCameraNum, 	"-cameranum",	"c",  "Set camera number to use (0=CAM0, 1=CAM1).", 1 },
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -174,6 +171,7 @@ typedef struct {
 	int timeout;
 	int saverate;
 	int bit_depth;
+	int camera_num;
 } RASPIRAW_PARAMS_T;
 
 void update_regs(const struct sensor_def *sensor, struct mode_def *mode, int hflip, int vflip, int exposure, int gain);
@@ -575,6 +573,21 @@ static int parse_cmdline(int argc, const char **argv, RASPIRAW_PARAMS_T *cfg)
 					valid = 0;
 				break;
 
+			case CommandCameraNum:
+				if (sscanf(argv[i + 1], "%u", &cfg->camera_num) == 1)
+				{
+					i++;
+					if (cfg->camera_num !=0 && cfg->camera_num != 1)
+					{
+						fprintf(stderr, "Invalid camera number specified (%d)."
+							" It should be 0 or 1.\n", cfg->camera_num);
+						valid = 0;
+					}
+				}
+				else
+					valid = 0;
+				break;
+
 			default:
 				valid = 0;
 				break;
@@ -603,6 +616,7 @@ int main(int argc, const char** argv) {
 		.timeout = 5000,
 		.saverate = 20,
 		.bit_depth = -1,
+		.camera_num = -1,
 	};
 	uint32_t encoding;
 	const struct sensor_def *sensor;
@@ -764,9 +778,9 @@ int main(int argc, const char** argv) {
 		goto component_destroy;
 	}
 
-	if (CAMERA_NUM != -1) {
-		vcos_log_error("Set camera_num to %d", CAMERA_NUM);
-		status = mmal_port_parameter_set_int32(output, MMAL_PARAMETER_CAMERA_NUM, CAMERA_NUM);
+	if (cfg.camera_num != -1) {
+		vcos_log_error("Set camera_num to %d", cfg.camera_num);
+		status = mmal_port_parameter_set_int32(output, MMAL_PARAMETER_CAMERA_NUM, cfg.camera_num);
 		if(status != MMAL_SUCCESS)
 		{
 			vcos_log_error("Failed to set camera_num");
