@@ -749,10 +749,10 @@ int main(int argc, const char** argv) {
 				rx_cfg.pack = MMAL_CAMERA_RX_CONFIG_PACK_8;
 				break;
 			case 10:
-				rx_cfg.pack = MMAL_CAMERA_RX_CONFIG_PACK_10;
+				rx_cfg.pack = MMAL_CAMERA_RX_CONFIG_PACK_RAW10;
 				break;
 			case 12:
-				rx_cfg.pack = MMAL_CAMERA_RX_CONFIG_PACK_12;
+				rx_cfg.pack = MMAL_CAMERA_RX_CONFIG_PACK_RAW12;
 				break;
 			case 14:
 				rx_cfg.pack = MMAL_CAMERA_RX_CONFIG_PACK_14;
