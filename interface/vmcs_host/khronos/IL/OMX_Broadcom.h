@@ -2651,5 +2651,14 @@ typedef struct OMX_PARAM_CUSTOMCCMTYPE {
    OMX_S32 nColorOffset[3];    /**<  */
 } OMX_PARAM_CUSTOMCCMTYPE;
 
+typedef struct OMX_CONFIG_CAMERAGAINTYPE {
+   OMX_U32 nSize;
+   OMX_VERSIONTYPE nVersion;
+   OMX_U32 nPortIndex;
+
+   OMX_U32 xGain;             /**< Gain to be applied, stored as Q16 format */
+   OMX_BOOL bAutoGain;        /**< Whether gain is set automatically */
+} OMX_CONFIG_CAMERAGAINTYPE;
+
 #endif
 /* File EOF */
