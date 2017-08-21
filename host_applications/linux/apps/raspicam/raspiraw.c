@@ -82,6 +82,7 @@ struct mode_def
 	uint8_t image_id;
 	uint8_t data_lanes;
 	unsigned int min_vts;
+	int line_time_ns;
 };
 
 struct sensor_def
@@ -139,6 +140,7 @@ enum {
 	CommandSaveRate,
 	CommandBitDepth,
 	CommandCameraNum,
+	CommandExposureus,
 };
 
 static COMMAND_LIST cmdline_commands[] =
@@ -155,6 +157,7 @@ static COMMAND_LIST cmdline_commands[] =
 	{ CommandSaveRate, 	"-saverate",	"sr", "Save every Nth frame", 1 },
 	{ CommandBitDepth, 	"-bitdepth",	"b",  "Set output raw bit depth (8, 10, 12 or 16, if not specified, set to sensor native)", 1 },
 	{ CommandCameraNum, 	"-cameranum",	"c",  "Set camera number to use (0=CAM0, 1=CAM1).", 1 },
+	{ CommandExposureus, 	"-expus",	"eus",  "Set the sensor exposure time in micro seconds.", -1 },
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -172,6 +175,7 @@ typedef struct {
 	int saverate;
 	int bit_depth;
 	int camera_num;
+	int exposure_us;
 } RASPIRAW_PARAMS_T;
 
 void update_regs(const struct sensor_def *sensor, struct mode_def *mode, int hflip, int vflip, int exposure, int gain);
@@ -588,6 +592,13 @@ static int parse_cmdline(int argc, const char **argv, RASPIRAW_PARAMS_T *cfg)
 					valid = 0;
 				break;
 
+			case CommandExposureus:
+				if (sscanf(argv[i + 1], "%d", &cfg->exposure_us) != 1)
+					valid = 0;
+				else
+					i++;
+				break;
+
 			default:
 				valid = 0;
 				break;
@@ -617,6 +628,7 @@ int main(int argc, const char** argv) {
 		.saverate = 20,
 		.bit_depth = -1,
 		.camera_num = -1,
+		.exposure_us = -1,
 	};
 	uint32_t encoding;
 	const struct sensor_def *sensor;
@@ -660,6 +672,12 @@ int main(int argc, const char** argv) {
 	if(cfg.bit_depth == -1)
 	{
 		cfg.bit_depth = sensor_mode->native_bit_depth;
+	}
+
+	if(cfg.exposure_us != -1)
+	{
+		cfg.exposure = ((int64_t)cfg.exposure_us * 1000) / sensor_mode->line_time_ns;
+		vcos_log_error("Setting exposure to %d from time %dus", cfg.exposure, cfg.exposure_us);
 	}
 
 	update_regs(sensor, sensor_mode, cfg.hflip, cfg.vflip, cfg.exposure, cfg.gain);

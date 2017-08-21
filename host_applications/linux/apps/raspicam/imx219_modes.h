@@ -103,7 +103,7 @@ struct sensor_regs imx219_8MPix[] =
 };
 
 struct mode_def imx219_modes[] = {
-   { imx219_8MPix, NUM_ELEMENTS(imx219_8MPix), 3280, 2464, 0, BAYER_ORDER_BGGR, 10, 0x2B, 2, 2504 },
+   { imx219_8MPix, NUM_ELEMENTS(imx219_8MPix), 3280, 2464, 0, BAYER_ORDER_BGGR, 10, 0x2B, 2, 2504, 18904 },
 };
 
 //From https://android.googlesource.com/kernel/bcm/+/android-bcm-tetra-3.10-lollipop-wear-release/drivers/media/video/imx219.c
