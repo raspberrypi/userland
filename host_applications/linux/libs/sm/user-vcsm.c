@@ -1629,3 +1629,72 @@ int vcsm_clean_invalid2( struct vcsm_user_clean_invalid2_s *s )
 out:
    return rc;
 }
+
+/* Imports a dmabuf, and binds it to a VCSM handle and MEM_HANDLE_T
+**
+** Returns:        0 on error
+**                 a non-zero opaque handle on success.
+**
+** On success, the user must invoke vcsm_lock with the returned opaque
+** handle to gain access to the memory associated with the opaque handle.
+** When finished using the memory, the user calls vcsm_unlock_xx (see those
+** function definition for more details on the one that can be used).
+** Use vcsm_release to detach from the dmabuf (VideoCore may still hold
+** a reference to the buffer until it has finished with the buffer).
+**
+*/
+unsigned int vcsm_import_dmabuf( int dmabuf, char *name )
+{
+   struct vmcs_sm_ioctl_import_dmabuf import;
+   int rc;
+
+   if ( vcsm_handle == VCSM_INVALID_HANDLE )
+   {
+      vcos_log_error( "[%s]: [%d]: invalid device or invalid handle!",
+                      __func__,
+                      getpid() );
+
+      rc = -1;
+      goto error;
+   }
+
+   memset( &import, 0, sizeof(import) );
+
+   /* Map the buffer on videocore via the VCSM (Videocore Shared Memory) interface. */
+   import.dmabuf_fd = dmabuf;
+   import.cached = VMCS_SM_CACHE_NONE; //Support no caching for now - makes it easier for cache management
+   if ( name != NULL )
+   {
+      memcpy ( import.name, name, 32 );
+   }
+   rc = ioctl( vcsm_handle,
+               VMCS_SM_IOCTL_MEM_IMPORT_DMABUF,
+               &import );
+
+   if ( rc < 0 || import.handle == 0 )
+   {
+      vcos_log_error( "[%s]: [%d] [%s]: ioctl mem-import-dmabuf FAILED [%d] (hdl: %x)",
+                      __func__,
+                      getpid(),
+                      import.name,
+                      rc,
+                      import.handle );
+      goto error;
+   }
+
+   vcos_log_trace( "[%s]: [%d] [%s]: ioctl mem-import-dmabuf %d (hdl: %x)",
+                   __func__,
+                   getpid(),
+                   import.name,
+                   rc,
+                   import.handle );
+
+   return import.handle;
+
+error:
+   if ( import.handle )
+   {
+      vcsm_free( import.handle );
+   }
+   return 0;
+}

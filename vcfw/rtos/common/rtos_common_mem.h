@@ -343,6 +343,19 @@ extern MEM_HANDLE_T mem_alloc_ex(
 
 #ifdef MEM_WRAP_HACK
 extern MEM_HANDLE_T mem_wrap(void *p, uint32_t size, uint32_t align, MEM_FLAG_T flags, const char *desc);
+
+typedef void (*MEM_WRAP_TERM_T)(void */*priv*/, MEM_HANDLE_T /*term_handle*/, void */*p*/, int /*size*/);
+
+/*
+   int mem_wrap_set_on_term(MEM_HANDLE_T handle, MEM_WRAP_TERM_T term_cb, void *cb_priv);
+
+   Adds an additional release callback for wrapped MEM_HANDLE_T.
+   This allows the underlying allocator to release the wrapped memory.
+   The MEM_HANDLE_T must NOT be accessed with mem_lock/mem_acquire etc
+   from the callback context as the handle is already partially released.
+*/
+extern int mem_wrap_set_on_term(MEM_HANDLE_T handle, MEM_WRAP_TERM_T term_cb, void *cb_priv);
+
 #endif
 
 /*
