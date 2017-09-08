@@ -87,6 +87,7 @@ static struct {
    {MMAL_ENCODING_BGR16, 2, 1, 1},
    {MMAL_ENCODING_BGR24, 3, 1, 1},
    {MMAL_ENCODING_I420_16, 2, 1, 1},
+   {MMAL_ENCODING_I420_10, 2, 1, 1},
 
    {MMAL_ENCODING_I420_SLICE,  1, 1, 1},
    {MMAL_ENCODING_I422_SLICE,  1, 1, 1},
@@ -131,6 +132,7 @@ static struct {
 
    /* {MMAL_ENCODING_YUVUV128, 1, 1}, That's a special case which must not be included */
    /* {MMAL_ENCODING_YUVUV64_16, 1, 1}, That's a special case which must not be included */
+   /* {MMAL_ENCODING_YUVUV64_10, 1, 1}, That's a special case which must not be included */
    {MMAL_ENCODING_UNKNOWN, 0, 0}
 };
 
@@ -424,7 +426,7 @@ char *mmal_4cc_to_string(char *buf, size_t len, uint32_t fourcc)
    return buf;
 }
 
-#define MAX_ENCODINGS_NUM 20
+#define MAX_ENCODINGS_NUM 25
 typedef struct {
    MMAL_PARAMETER_HEADER_T header;
    MMAL_FOURCC_T encodings[MAX_ENCODINGS_NUM];
@@ -434,6 +436,7 @@ typedef struct {
 int mmal_util_rgb_order_fixed(MMAL_PORT_T *port)
 {
    int new_fw = 0;
+   MMAL_STATUS_T ret;
    //Firmware support of RGB24 vs BGR24 colour ordering from camera
    //and video splitter components has been corrected as of June 2016.
    //New firmwares always report MMAL_ENCODING_RGB24 before BGR24, and
@@ -442,11 +445,16 @@ int mmal_util_rgb_order_fixed(MMAL_PORT_T *port)
    //the still port on querying MMAL_PARAMETER_SUPPORTED_ENCODINGS.
 
    MMAL_SUPPORTED_ENCODINGS_T sup_encodings = {{MMAL_PARAMETER_SUPPORTED_ENCODINGS, sizeof(sup_encodings)}, {0}};
-   if (mmal_port_parameter_get(port, &sup_encodings.header) == MMAL_SUCCESS)
+   ret = mmal_port_parameter_get(port, &sup_encodings.header);
+   if (ret == MMAL_SUCCESS || ret == MMAL_ENOSPC)
    {
+      //Allow ENOSPC error and hope that the desired formats are in the first
+      //MAX_ENCODINGS_NUM entries.
       int i;
       int num_encodings = (sup_encodings.header.size - sizeof(sup_encodings.header)) /
           sizeof(sup_encodings.encodings[0]);
+      if(num_encodings > MAX_ENCODINGS_NUM)
+         num_encodings = MAX_ENCODINGS_NUM;
       for (i=0; i<num_encodings; i++)
       {
          if (sup_encodings.encodings[i] == MMAL_ENCODING_BGR24)

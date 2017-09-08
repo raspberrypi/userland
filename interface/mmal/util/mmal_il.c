@@ -741,6 +741,8 @@ static struct {
    {MMAL_ENCODING_OPAQUE,         OMX_COLOR_FormatBRCMOpaque},
    {MMAL_ENCODING_I420_16,        OMX_COLOR_FormatYUV420_16PackedPlanar},
    {MMAL_ENCODING_YUVUV64_16,     OMX_COLOR_FormatYUVUV64_16},
+   {MMAL_ENCODING_I420_10,        OMX_COLOR_FormatYUV420_10PackedPlanar},
+   {MMAL_ENCODING_YUVUV64_10,     OMX_COLOR_FormatYUVUV64_10},
    {MMAL_ENCODING_UNKNOWN,        OMX_COLOR_FormatUnused}
 };
 
