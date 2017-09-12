@@ -94,7 +94,6 @@ RETURNS
 int32_t vc_gpuserv_init( void )
 {
    VCHIQ_SERVICE_PARAMS_T vchiq_params;
-   VCOS_STATUS_T status = VCOS_ENXIO;
    VCHIQ_STATUS_T vchiq_status;
 
    vcos_once(&gpuserv_client_once, init_once);
@@ -195,10 +194,6 @@ static VCHIQ_STATUS_T gpuserv_callback( VCHIQ_REASON_T reason,
                                         VCHIQ_SERVICE_HANDLE_T service,
                                         void *bulk_userdata )
 {
-   GPUSERV_SERVICE_T *instance = (GPUSERV_SERVICE_T *)bulk_userdata;
-
-   (void)header;
-
    // reason is one of VCHIQ_MESSAGE_AVAILABLE, VCHIQ_BULK_TRANSMIT_DONE, VCHIQ_BULK_RECEIVE_DONE
    switch (reason)
    {
