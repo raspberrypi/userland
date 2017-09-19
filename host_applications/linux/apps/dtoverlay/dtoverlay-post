@@ -3,8 +3,8 @@ if [ "$DISPLAY" == "" ]; then
 	export DISPLAY=":0.0"
 fi
 CMD="which lxpanelctl >/dev/null 2>&1 && lxpanelctl alsastart >/dev/null"
-if [ $EUID -eq 0 ]; then
-        exec su pi -c "$CMD"
+if [ $(id -u) -eq 0 ]; then
+        exec su $(id -un) -c "$CMD"
 else
         exec $CMD
 fi
