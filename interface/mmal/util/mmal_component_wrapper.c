@@ -151,7 +151,7 @@ MMAL_STATUS_T mmal_wrapper_create(MMAL_WRAPPER_T **ctx, const char *name)
    if (status != MMAL_SUCCESS)
       return status;
 
-   extra_size = (component->input_num + component->output_num) * 2;
+   extra_size = (component->input_num + component->output_num * 2) * sizeof(*private);
    private = vcos_calloc(1, sizeof(*private) + extra_size, "mmal wrapper");
    if (!private)
    {
