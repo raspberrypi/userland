@@ -29,6 +29,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mmal.h"
 #include "util/mmal_default_components.h"
 #include "util/mmal_util_params.h"
+#include "util/mmal_util.h"
 #include "interface/vcos/vcos.h"
 #include <stdio.h>
 
@@ -56,6 +57,18 @@ static struct CONTEXT_T {
    MMAL_QUEUE_T *queue;
    MMAL_STATUS_T status;
 } context;
+
+static void log_video_format(MMAL_ES_FORMAT_T *format)
+{
+   if (format->type != MMAL_ES_TYPE_VIDEO)
+      return;
+
+   fprintf(stderr, "fourcc: %4.4s, width: %i, height: %i, (%i,%i,%i,%i)\n",
+            (char *)&format->encoding,
+            format->es->video.width, format->es->video.height,
+            format->es->video.crop.x, format->es->video.crop.y,
+            format->es->video.crop.width, format->es->video.crop.height);
+}
 
 /** Callback from the control port.
  * Component is sending us an event. */
@@ -204,10 +217,12 @@ int main(int argc, char **argv)
    decoder->input[0]->buffer_size = decoder->input[0]->buffer_size_min;
    decoder->output[0]->buffer_num = decoder->output[0]->buffer_num_min;
    decoder->output[0]->buffer_size = decoder->output[0]->buffer_size_min;
-   pool_in = mmal_pool_create(decoder->input[0]->buffer_num,
-                              decoder->input[0]->buffer_size);
-   pool_out = mmal_pool_create(decoder->output[0]->buffer_num,
-                               decoder->output[0]->buffer_size);
+   pool_in = mmal_port_pool_create(decoder->output[0],
+                                   decoder->input[0]->buffer_num,
+                                   decoder->input[0]->buffer_size);
+   pool_out = mmal_port_pool_create(decoder->output[0],
+                                    decoder->output[0]->buffer_num,
+                                    decoder->output[0]->buffer_size);
 
    /* Create a queue to store our decoded video frames. The callback we will get when
     * a frame has been decoded will put the frame into this queue. */
@@ -242,7 +257,10 @@ int main(int argc, char **argv)
 
       /* Check for errors */
       if (context.status != MMAL_SUCCESS)
+      {
+         fprintf(stderr, "Aborting due to error\n");
          break;
+      }
 
       /* Send data to decode to the input port of the video decoder */
       if (!eos_sent && (buffer = mmal_queue_get(pool_in->queue)) != NULL)
@@ -267,7 +285,57 @@ int main(int argc, char **argv)
          eos_received = buffer->flags & MMAL_BUFFER_HEADER_FLAG_EOS;
 
          if (buffer->cmd)
-            fprintf(stderr, "received event %4.4s", (char *)&buffer->cmd);
+         {
+            fprintf(stderr, "received event %4.4s\n", (char *)&buffer->cmd);
+            if (buffer->cmd == MMAL_EVENT_FORMAT_CHANGED)
+            {
+               MMAL_EVENT_FORMAT_CHANGED_T *event = mmal_event_format_changed_get(buffer);
+               if (event)
+               {
+                  fprintf(stderr, "----------Port format changed----------\n");
+                  log_video_format(decoder->output[0]->format);
+                  fprintf(stderr, "-----------------to---------------------\n");
+                  log_video_format(event->format);
+                  fprintf(stderr, " buffers num (opt %i, min %i), size (opt %i, min: %i)\n",
+                           event->buffer_num_recommended, event->buffer_num_min,
+                           event->buffer_size_recommended, event->buffer_size_min);
+                  fprintf(stderr, "----------------------------------------\n");
+               }
+
+               //Assume we can't reuse the buffers, so have to disable, destroy
+               //pool, create new pool, enable port, feed in buffers.
+               status = mmal_port_disable(decoder->output[0]);
+               CHECK_STATUS(status, "failed to disable port");
+
+               //Clear the queue of all buffers
+               while(mmal_queue_length(pool_out->queue) != pool_out->headers_num)
+               {
+                  MMAL_BUFFER_HEADER_T *buf;
+                  fprintf(stderr, "Wait for buffers to be returned. Have %d of %d buffers\n",
+                        mmal_queue_length(pool_out->queue), pool_out->headers_num);
+                  vcos_semaphore_wait(&context.semaphore);
+                  fprintf(stderr, "Got semaphore\n");
+                  buf = mmal_queue_get(context.queue);
+                  mmal_buffer_header_release(buf);
+               }
+               fprintf(stderr, "Got all buffers\n");
+
+               mmal_port_pool_destroy(decoder->output[0], pool_out);
+               status = mmal_format_full_copy(decoder->output[0]->format, event->format);
+               CHECK_STATUS(status, "failed to copy port format");
+               status = mmal_port_format_commit(decoder->output[0]);
+               CHECK_STATUS(status, "failed to commit port format");
+
+               pool_out = mmal_port_pool_create(decoder->output[0],
+                                    decoder->output[0]->buffer_num,
+                                    decoder->output[0]->buffer_size);
+
+               status = mmal_port_enable(decoder->output[0], output_callback);
+               CHECK_STATUS(status, "failed to enable port");
+               //Allow the following loop to send all the buffers back to the decoder
+            }
+
+         }
          else
             fprintf(stderr, "decoded frame (flags %x)\n", buffer->flags);
          mmal_buffer_header_release(buffer);
@@ -279,10 +347,10 @@ int main(int argc, char **argv)
          status = mmal_port_send_buffer(decoder->output[0], buffer);
          CHECK_STATUS(status, "failed to send buffer");
       }
-}
+   }
 
    /* Stop decoding */
-   fprintf(stderr, "stop decoding\n");
+   fprintf(stderr, "stop decoding - count %d, eos_received %d\n", count, eos_received);
 
    /* Stop everything. Not strictly necessary since mmal_component_destroy()
     * will do that anyway */
@@ -292,12 +360,12 @@ int main(int argc, char **argv)
 
  error:
    /* Cleanup everything */
+   if (pool_in)
+      mmal_port_pool_destroy(decoder->input[0], pool_in);
+   if (pool_out)
+      mmal_port_pool_destroy(decoder->output[0], pool_out);
    if (decoder)
       mmal_component_destroy(decoder);
-   if (pool_in)
-      mmal_pool_destroy(pool_in);
-   if (pool_out)
-      mmal_pool_destroy(pool_out);
    if (context.queue)
       mmal_queue_destroy(context.queue);
 
