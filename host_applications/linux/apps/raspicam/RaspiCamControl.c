@@ -173,6 +173,8 @@ static const int stereo_mode_map_size = sizeof(stereo_mode_map)/sizeof(stereo_mo
 #define CommandStereoSwap  23
 #define CommandAnnotateExtras 24
 #define CommandFlicker     25
+#define CommandAnalogGain  26
+#define CommandDigitalGain 27
 
 static COMMAND_LIST  cmdline_commands[] =
 {
@@ -202,6 +204,8 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandStereoDecimate,"-decimate","dec", "Half width/height of stereo image"},
    {CommandStereoSwap,  "-3dswap",    "3dswap", "Swap camera order for stereoscopic"},
    {CommandAnnotateExtras,"-annotateex","ae",  "Set extra annotation parameters (text size, text colour(hex YUV), bg colour(hex YUV))", 2},
+   {CommandAnalogGain,  "-analoggain", "ag", "Set the analog gain (floating point)", 1},
+   {CommandDigitalGain, "-digitalgain", "dg", "Set the digtial gain (floating point)", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -796,6 +800,42 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
       break;
    }
 
+   case CommandAnalogGain:
+   {
+      double gain;
+      int args;
+
+      args = sscanf(arg2, "%lf", &gain);
+
+      if (args != 1 || gain > 16.0)
+      {
+         return 0;
+      }
+
+      params->analog_gain = gain;
+
+      used = 2;
+      break;
+   }
+   case CommandDigitalGain:
+   {
+      double gain;
+      int args;
+
+      args = sscanf(arg2, "%lf", &gain);
+
+      if (args != 1 || gain > 64.0)
+      {
+         return 0;
+      }
+
+      params->digital_gain = gain;
+
+      used = 2;
+      break;
+   }
+
+
    }
 
    return used;
@@ -1026,6 +1066,7 @@ int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_
                        params->annotate_text_size,
                        params->annotate_text_colour,
                        params->annotate_bg_colour);
+   result += raspicamcontrol_set_gains(camera, params->analog_gain, params->digital_gain);
 
    return result;
 }
@@ -1659,6 +1700,24 @@ int raspicamcontrol_set_stereo_mode(MMAL_PORT_T *port, MMAL_PARAMETER_STEREOSCOP
       stereo.swap_eyes = stereo_mode->swap_eyes;
    }
    return mmal_status_to_int(mmal_port_parameter_set(port, &stereo.hdr));
+}
+
+int raspicamcontrol_set_gains(MMAL_COMPONENT_T *camera, float analog, float digital)
+{
+   MMAL_RATIONAL_T rational = {0,65536};
+   MMAL_STATUS_T status;
+
+   if (!camera)
+      return 1;
+
+   rational.num = (unsigned int)(analog * 65536);
+   status = mmal_port_parameter_set_rational(camera->control, MMAL_PARAMETER_ANALOG_GAIN, rational);
+   if (status != MMAL_SUCCESS)
+      return mmal_status_to_int(status);
+
+   rational.num = (unsigned int)(digital * 65536);
+   status = mmal_port_parameter_set_rational(camera->control, MMAL_PARAMETER_DIGITAL_GAIN, rational);
+   return mmal_status_to_int(status);
 }
 
 /**
