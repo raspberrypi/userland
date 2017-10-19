@@ -153,6 +153,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #define MMAL_ENCODING_YUVUV64_10      MMAL_FOURCC('S','A','1','0')
 
+#define MMAL_ENCODING_ARGON10         MMAL_FOURCC('A','R','G','1')
+
 /** VideoCore opaque image format, image handles are returned to
  * the host but not the actual image data.
  */

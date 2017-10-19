@@ -735,6 +735,7 @@ static struct {
    {MMAL_ENCODING_NV12,           OMX_COLOR_FormatYUV420SemiPlanar},
    {MMAL_ENCODING_NV21,           OMX_COLOR_FormatYVU420PackedSemiPlanar},
    {MMAL_ENCODING_YUVUV128,       OMX_COLOR_FormatYUVUV128},
+   {MMAL_ENCODING_ARGON10,        OMX_COLOR_FormatArgon10},
    {MMAL_ENCODING_YUYV,           OMX_COLOR_FormatYCbYCr},
    {MMAL_ENCODING_YVYU,           OMX_COLOR_FormatYCrYCb},
    {MMAL_ENCODING_UYVY,           OMX_COLOR_FormatCbYCrY},
