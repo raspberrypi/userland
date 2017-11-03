@@ -205,7 +205,7 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandStereoSwap,  "-3dswap",    "3dswap", "Swap camera order for stereoscopic"},
    {CommandAnnotateExtras,"-annotateex","ae",  "Set extra annotation parameters (text size, text colour(hex YUV), bg colour(hex YUV))", 2},
    {CommandAnalogGain,  "-analoggain", "ag", "Set the analog gain (floating point)", 1},
-   {CommandDigitalGain, "-digitalgain", "dg", "Set the digtial gain (floating point)", 1},
+   {CommandDigitalGain, "-digitalgain", "dg", "Set the digital gain (floating point)", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
