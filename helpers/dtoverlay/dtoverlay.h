@@ -28,6 +28,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef DTOVERLAY_H
 #define DTOVERLAY_H
 
+#include <stdarg.h>
+
 #define BE4(x) ((x)>>24)&0xff, ((x)>>16)&0xff, ((x)>>8)&0xff, ((x)>>0)&0xff
 #define GETBE4(p, off) ((((unsigned char *)p)[off + 0]<<24) + (((unsigned char *)p)[off + 1]<<16) + \
                   (((unsigned char *)p)[off + 2]<<8) + (((unsigned char *)p)[off + 3]<<0))
