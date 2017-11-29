@@ -54,6 +54,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "raw_header.h"
 
+#define DEFAULT_I2C_DEVICE 0
+
+#define I2C_DEVICE_NAME_LEN 13	// "/dev/i2c-XXX"+NULL
+static char i2c_device_name[I2C_DEVICE_NAME_LEN];
+
 struct brcm_raw_header *brcm_header = NULL;
 
 enum bayer_order {
@@ -141,6 +146,7 @@ enum {
 	CommandBitDepth,
 	CommandCameraNum,
 	CommandExposureus,
+	CommandI2cBus,
 };
 
 static COMMAND_LIST cmdline_commands[] =
@@ -158,6 +164,7 @@ static COMMAND_LIST cmdline_commands[] =
 	{ CommandBitDepth, 	"-bitdepth",	"b",  "Set output raw bit depth (8, 10, 12 or 16, if not specified, set to sensor native)", 1 },
 	{ CommandCameraNum, 	"-cameranum",	"c",  "Set camera number to use (0=CAM0, 1=CAM1).", 1 },
 	{ CommandExposureus, 	"-expus",	"eus",  "Set the sensor exposure time in micro seconds.", -1 },
+	{ CommandI2cBus, 	"-i2c",	        "y",  "Set the I2C bus to use.", -1 },
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -176,6 +183,7 @@ typedef struct {
 	int bit_depth;
 	int camera_num;
 	int exposure_us;
+	int i2c_bus;
 } RASPIRAW_PARAMS_T;
 
 void update_regs(const struct sensor_def *sensor, struct mode_def *mode, int hflip, int vflip, int exposure, int gain);
@@ -221,7 +229,7 @@ const struct sensor_def * probe_sensor(void)
 	const struct sensor_def **sensor_list = &sensors[0];
 	const struct sensor_def *sensor = NULL;
 
-	fd = open("/dev/i2c-0", O_RDWR);
+	fd = open(i2c_device_name, O_RDWR);
 	if (!fd)
 	{
 		vcos_log_error("Couldn't open I2C device");
@@ -291,7 +299,7 @@ void send_regs(int fd, const struct sensor_def *sensor, const struct sensor_regs
 void start_camera_streaming(const struct sensor_def *sensor, struct mode_def *mode)
 {
 	int fd;
-	fd = open("/dev/i2c-0", O_RDWR);
+	fd = open(i2c_device_name, O_RDWR);
 	if (!fd)
 	{
 		vcos_log_error("Couldn't open I2C device");
@@ -310,7 +318,7 @@ void start_camera_streaming(const struct sensor_def *sensor, struct mode_def *mo
 void stop_camera_streaming(const struct sensor_def *sensor)
 {
 	int fd;
-	fd = open("/dev/i2c-0", O_RDWR);
+	fd = open(i2c_device_name, O_RDWR);
 	if (!fd)
 	{
 		vcos_log_error("Couldn't open I2C device");
@@ -599,6 +607,13 @@ static int parse_cmdline(int argc, const char **argv, RASPIRAW_PARAMS_T *cfg)
 					i++;
 				break;
 
+			case CommandI2cBus:
+				if (sscanf(argv[i + 1], "%d", &cfg->i2c_bus) != 1)
+					valid = 0;
+				else
+					i++;
+				break;
+
 			default:
 				valid = 0;
 				break;
@@ -629,6 +644,7 @@ int main(int argc, const char** argv) {
 		.bit_depth = -1,
 		.camera_num = -1,
 		.exposure_us = -1,
+		.i2c_bus = DEFAULT_I2C_DEVICE,
 	};
 	uint32_t encoding;
 	const struct sensor_def *sensor;
@@ -636,13 +652,6 @@ int main(int argc, const char** argv) {
 
 	bcm_host_init();
 	vcos_log_register("RaspiRaw", VCOS_LOG_CATEGORY);
-
-	sensor = probe_sensor();
-	if (!sensor)
-	{
-		vcos_log_error("No sensor found. Aborting");
-		return -1;
-	}
 
 	if (argc == 1)
 	{
@@ -656,6 +665,16 @@ int main(int argc, const char** argv) {
 	if (parse_cmdline(argc, argv, &cfg))
 	{
 		exit(-1);
+	}
+
+	snprintf(i2c_device_name, sizeof(i2c_device_name), "/dev/i2c-%d", cfg.i2c_bus);
+	printf("Using i2C device %s\n", i2c_device_name);
+
+	sensor = probe_sensor();
+	if (!sensor)
+	{
+		vcos_log_error("No sensor found. Aborting");
+		return -1;
 	}
 
 	if(cfg.mode >= 0 && cfg.mode < sensor->num_modes)
