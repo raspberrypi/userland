@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2012, Broadcom Europe Ltd
+Copyright (c) 2017, Raspberry Pi Trading
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -24,20 +24,43 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-#include "mmal_logging.h"
-#include "core/mmal_core_private.h"
 
-VCOS_LOG_CAT_T mmal_log_category;
-static VCOS_LOG_LEVEL_T mmal_log_level = VCOS_LOG_TRACE;
+#ifndef RAWHEADER_H_
+#define RAWHEADER_H_
 
-void mmal_logging_init(void)
-{
-   vcos_log_set_level(VCOS_LOG_CATEGORY, mmal_log_level);
-   vcos_log_register("mmal", VCOS_LOG_CATEGORY);
-}
+#include "vc_image_types.h"
 
-void mmal_logging_deinit(void)
-{
-   mmal_log_level = mmal_log_category.level;
-   vcos_log_unregister(VCOS_LOG_CATEGORY);
-}
+#define BRCM_ID_SIG 0x4D435242 /* 'BRCM' */
+#define HEADER_VERSION 111
+
+#define BRCM_RAW_HEADER_LENGTH 32768 // 1024
+
+struct brcm_camera_mode {
+ uint8_t name[32];
+ uint16_t width;
+ uint16_t height;
+ uint16_t padding_right;
+ uint16_t padding_down;
+ uint32_t dummy[6];
+ uint16_t transform;
+ uint16_t format;
+ uint8_t bayer_order;
+ uint8_t bayer_format;
+};
+
+
+struct brcm_raw_header {
+   uint32_t id;               // Must be set to "BRCM"
+   uint32_t version;          // Header version id
+   uint32_t offset;           // Offset to the image data
+   uint32_t preamble_pad;     // pad to address 16
+
+   // offset 16 0x10
+   uint8_t block1[160];       // 160 bytes long.
+
+   // offset 176 0xB0
+   struct brcm_camera_mode mode;
+   uint8_t  cam_mode_pad[16 - (sizeof(struct brcm_camera_mode) & 15)];
+};
+
+#endif

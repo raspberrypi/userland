@@ -6,6 +6,7 @@ SET(COMPILE_DEFINITIONS -Werror)
 include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/libs/bcm_host/include)
 include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/apps/raspicam/)
 include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/libs/sm)
+include_directories(${PROJECT_SOURCE_DIR}/interface/vctypes)
 
 set (GL_SCENE_SOURCES
    gl_scenes/models.c
@@ -25,6 +26,7 @@ add_executable(raspistill ${COMMON_SOURCES} RaspiStill.c  RaspiTex.c RaspiTexUti
 add_executable(raspiyuv   ${COMMON_SOURCES} RaspiStillYUV.c)
 add_executable(raspivid   ${COMMON_SOURCES} RaspiVid.c)
 add_executable(raspividyuv  ${COMMON_SOURCES} RaspiVidYUV.c)
+add_executable(raspiraw   raspiraw.c RaspiCLI.c)
 
 set (MMAL_LIBS mmal_core mmal_util mmal_vc_client)
 
@@ -32,5 +34,6 @@ target_link_libraries(raspistill ${MMAL_LIBS} vcos bcm_host brcmGLESv2 brcmEGL m
 target_link_libraries(raspiyuv   ${MMAL_LIBS} vcos bcm_host)
 target_link_libraries(raspivid   ${MMAL_LIBS} vcos bcm_host)
 target_link_libraries(raspividyuv   ${MMAL_LIBS} vcos bcm_host)
+target_link_libraries(raspiraw   ${MMAL_LIBS} vcos bcm_host)
 
-install(TARGETS raspistill raspiyuv raspivid raspividyuv RUNTIME DESTINATION bin)
+install(TARGETS raspistill raspiyuv raspivid raspividyuv raspiraw RUNTIME DESTINATION bin)
