@@ -857,6 +857,9 @@ int main(int argc, const char** argv) {
 		goto component_disable;
 	}
 
+	output->buffer_size = output->buffer_size_recommended;
+	output->buffer_num = output->buffer_num_recommended;
+
 	if (cfg.capture)
 	{
 		if (cfg.write_header)
