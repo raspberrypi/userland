@@ -938,21 +938,26 @@ static void overlay_help(const char *overlay, const char **params)
 			/* This is a parameter name */
 			int param_len = strcspn(line, " ");
 			const char **p = params;
+			const char **q = p;
 			in_param = 0;
 			while (*p)
 			{
 			    if ((param_len == strlen(*p)) &&
 				(memcmp(line, *p, param_len) == 0))
-			    {
 				in_param = 1;
-				break;
-			    }
+			    else
+				*(q++) = *p;
 			    p++;
 			}
+			*(q++) = 0;
 		    }
 		    if (in_param)
 			printf("%s\n", line);
 		}
+		/* This only shows the first unknown parameter, but
+		 * that is enough. */
+		if (*params)
+		    fatal_error("Unknown parameter '%s'", *params);
 	    }
 	    else
 	    {
