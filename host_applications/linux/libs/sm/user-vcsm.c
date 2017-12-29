@@ -693,6 +693,59 @@ unsigned int vcsm_vc_hdl_from_hdl( unsigned int handle )
 }
 
 
+/* Retrieves a videocore (bus) address from a opaque handle
+** pointer.
+**
+** Returns:        0 on error
+**                 a non-zero videocore address on success.
+*/
+unsigned int vcsm_vc_addr_from_hdl( unsigned int handle )
+{
+   int rc;
+   struct vmcs_sm_ioctl_map map;
+
+   if ( (vcsm_handle == VCSM_INVALID_HANDLE) || (handle == 0) )
+   {
+      vcos_log_error( "[%s]: [%d]: invalid device or handle!",
+                      __func__,
+                      getpid() );
+
+      return 0;
+   }
+
+   memset( &map, 0, sizeof(map) );
+
+   map.pid    = getpid();
+   map.handle = handle;
+
+   rc = ioctl( vcsm_handle,
+               VMCS_SM_IOCTL_MAP_VC_ADDR_FR_HDL,
+               &map );
+
+   if ( rc < 0 )
+   {
+      vcos_log_error( "[%s]: [%d]: ioctl mapped-usr-hdl FAILED [%d] (pid: %d, hdl: %x)",
+                      __func__,
+                      getpid(),
+                      rc,
+                      map.pid,
+                      map.handle );
+
+      return 0;
+   }
+   else
+   {
+      vcos_log_trace( "[%s]: [%d]: ioctl mapped-usr-hdl %d (hdl: %x)",
+                      __func__,
+                      getpid(),
+                      rc,
+                      map.handle );
+
+      return map.addr;
+   }
+}
+
+
 /* Retrieves a mapped user address from an opaque user
 ** handle.
 **
