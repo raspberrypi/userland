@@ -1181,15 +1181,23 @@ int raspicamcontrol_set_brightness(MMAL_COMPONENT_T *camera, int brightness)
 /**
  * Adjust the ISO used for images
  * @param camera Pointer to camera component
- * @param ISO Value to set TODO :
+ * @param ISO Value to set, 100 to 800
  * @return 0 if successful, non-zero if any parameters out of range
  */
 int raspicamcontrol_set_ISO(MMAL_COMPONENT_T *camera, int ISO)
 {
    if (!camera)
       return 1;
-
-   return mmal_status_to_int(mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_ISO, ISO));
+   
+   if (iso >= 100 && iso <= 800)
+   {
+      return mmal_status_to_int(mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_ISO, ISO));
+   }
+   else
+   {
+      vcos_log_error("Invalid ISO value");
+      return 1;
+   }
 }
 
 /**
