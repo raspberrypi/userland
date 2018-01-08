@@ -182,7 +182,7 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandContrast,    "-contrast",  "co", "Set image contrast (-100 to 100)",  1},
    {CommandBrightness,  "-brightness","br", "Set image brightness (0 to 100)",  1},
    {CommandSaturation,  "-saturation","sa", "Set image saturation (-100 to 100)", 1},
-   {CommandISO,         "-ISO",       "ISO","Set capture ISO",  1},
+   {CommandISO,         "-ISO",       "ISO","Set capture ISO (100 to 800)",  1},
    {CommandVideoStab,   "-vstab",     "vs", "Turn on video stabilisation", 0},
    {CommandEVComp,      "-ev",        "ev", "Set EV compensation - steps of 1/6 stop",  1},
    {CommandExposure,    "-exposure",  "ex", "Set exposure mode (see Notes)", 1},
@@ -1189,7 +1189,7 @@ int raspicamcontrol_set_ISO(MMAL_COMPONENT_T *camera, int ISO)
    if (!camera)
       return 1;
    
-   if (iso >= 100 && iso <= 800)
+   if (ISO >= 100 && ISO <= 800)
    {
       return mmal_status_to_int(mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_ISO, ISO));
    }
