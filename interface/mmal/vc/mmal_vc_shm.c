@@ -201,8 +201,8 @@ uint8_t *mmal_vc_shm_alloc(uint32_t size)
    mem = (uint8_t *)vcsm_lock( vcsm_handle );
    if (!mem || !vc_handle)
    {
-      LOG_ERROR("could not allocate %i bytes of shared memory (handle %x)",
-                (int)size, vcsm_handle);
+      LOG_ERROR("could not allocate %i bytes of shared memory (handle %x) - mem %p, vc_hdl %08X",
+                (int)size, vcsm_handle, mem, vc_handle);
       if (mem)
          vcsm_unlock_hdl(vcsm_handle);
       if (vcsm_handle)
