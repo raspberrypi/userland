@@ -147,7 +147,7 @@ bool client_process_state_init(CLIENT_PROCESS_STATE_T *process)
 {
    if (!process->inited) {
 #ifdef BUILD_WAYLAND
-      process->wl_global = NULL;
+      process->wlStateMap = NULL;
 #endif
 
       if (!khrn_pointer_map_init(&process->contexts, 64))

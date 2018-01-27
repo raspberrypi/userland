@@ -170,6 +170,15 @@ static INLINE CLIENT_THREAD_STATE_T *CLIENT_GET_CHECK_THREAD_STATE(void)
    return (CLIENT_THREAD_STATE_T *)platform_tls_get_check(client_tls);
 }
 
+#ifdef BUILD_WAYLAND
+typedef struct WAYLAND_STATE
+{
+   struct WAYLAND_STATE *next;
+   struct wl_display *display;
+   struct wl_global *wl_global;
+} WAYLAND_STATE_T;
+#endif
+
 /*
    per-process state
 
@@ -318,7 +327,7 @@ struct CLIENT_PROCESS_STATE {
    struct wl_event_queue *wl_queue;
 
    /* Compositor-side Wayland state */
-   struct wl_global *wl_global;
+   WAYLAND_STATE_T *wlStateMap;
 #endif
 };
 

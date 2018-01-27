@@ -208,17 +208,38 @@ eglBindWaylandDisplayWL(EGLDisplay dpy, struct wl_display *display)
 {
    CLIENT_THREAD_STATE_T *thread;
    CLIENT_PROCESS_STATE_T *process;
+   WAYLAND_STATE_T *stateIter;
+   WAYLAND_STATE_T *stateNew;
+   struct wl_global *wl_global;
 
    if (!CLIENT_LOCK_AND_GET_STATES(dpy, &thread, &process))
       return EGL_FALSE;
 
-   if (process->wl_global != NULL)
+   stateIter= process->wlStateMap;
+   while( stateIter )
+   {
+      if ( stateIter->display == display )
+         goto error;
+      stateIter= stateIter->next;
+   }
+
+   wl_global = wl_global_create(display, &wl_dispmanx_interface, 1,
+                                NULL, bind_dispmanx);
+   if (wl_global == NULL)
       goto error;
 
-   process->wl_global = wl_global_create(display, &wl_dispmanx_interface, 1,
-                                         NULL, bind_dispmanx);
-   if (process->wl_global == NULL)
+   stateNew= (WAYLAND_STATE_T*)calloc( 1, sizeof(WAYLAND_STATE_T));
+   if (stateNew == NULL )
+   {
+      wl_global_destroy(wl_global);
       goto error;
+   }
+
+   stateNew->next= process->wlStateMap;
+   stateNew->display= display;
+   stateNew->wl_global= wl_global;
+   process->wlStateMap= stateNew;
+   CLIENT_UNLOCK();
 
    return EGL_TRUE;
 
@@ -232,12 +253,29 @@ eglUnbindWaylandDisplayWL(EGLDisplay dpy, struct wl_display *display)
 {
    CLIENT_THREAD_STATE_T *thread;
    CLIENT_PROCESS_STATE_T *process;
+   WAYLAND_STATE_T *stateIter;
+   WAYLAND_STATE_T *statePrev;
 
    if (!CLIENT_LOCK_AND_GET_STATES(dpy, &thread, &process))
       return EGL_FALSE;
 
-   wl_global_destroy(process->wl_global);
-   process->wl_global = NULL;
+   statePrev= NULL;
+   stateIter= process->wlStateMap;
+   while( stateIter )
+   {
+      if ( stateIter->display == display )
+      {
+         wl_global_destroy(stateIter->wl_global);
+         if ( statePrev )
+            statePrev->next= stateIter->next;
+         else
+            process->wlStateMap= stateIter->next;
+         free( stateIter );
+         break;
+      }
+      statePrev= stateIter;
+      stateIter= stateIter->next;
+   }
 
    CLIENT_UNLOCK();
 
