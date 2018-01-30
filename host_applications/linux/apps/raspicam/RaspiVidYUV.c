@@ -606,12 +606,6 @@ static int parse_cmdline(int argc, const char **argv, RASPIVIDYUV_STATE *state)
       return 1;
    }
 
-   // Always disable verbose if output going to stdout
-   if (state->filename && state->filename[0] == '-')
-   {
-      state->verbose = 0;
-   }
-
    return 0;
 }
 
@@ -1469,9 +1463,6 @@ int main(int argc, const char **argv)
             if (state.filename[0] == '-')
             {
                state.callback_data.file_handle = stdout;
-
-               // Ensure we don't upset the output stream with diagnostics/info
-               state.verbose = 0;
             }
             else
             {
