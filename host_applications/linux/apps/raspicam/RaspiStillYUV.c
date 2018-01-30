@@ -1323,9 +1323,6 @@ int main(int argc, const char **argv)
                if (state.filename[0] == '-')
                {
                   output_file = stdout;
-
-                  // Ensure we don't upset the output stream with diagnostics/info
-                  state.verbose = 0;
                }
                else
                {
