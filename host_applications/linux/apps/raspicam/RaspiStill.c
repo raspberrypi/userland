@@ -1958,7 +1958,9 @@ int main(int argc, const char **argv)
                if (state.filename)
                {
                   if (state.filename[0] == '-')
+		  {
                      output_file = stdout;
+		  }
                   else
                   {
                      vcos_assert(use_filename == NULL && final_filename == NULL);
