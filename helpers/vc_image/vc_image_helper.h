@@ -81,6 +81,7 @@ extern const unsigned int vc_image_rgb_component_order[VC_IMAGE_MAX + 1];
    case VC_IMAGE_YUV422:      \
    case VC_IMAGE_YUV_UV:      \
    case VC_IMAGE_YUV_UV32:    \
+   case VC_IMAGE_YUV420_S:    \
    case VC_IMAGE_YUV422PLANAR: \
    case VC_IMAGE_YUV444PLANAR: \
    case VC_IMAGE_YUV420_16:   \
