@@ -126,6 +126,9 @@ typedef struct
    RASPIVIDYUV_STATE *pstate;           /// pointer to our state in case required in callback
    int abort;                           /// Set to 1 in callback if an error occurs to attempt to abort the capture
    FILE *pts_file_handle;               /// File timestamps
+   int frame;
+   int64_t starttime;
+   int64_t lasttime;
 } PORT_USERDATA;
 
 /** Structure containing all state information for the current run
@@ -846,11 +849,6 @@ static FILE *open_filename(RASPIVIDYUV_STATE *pState, char *filename)
 static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
    MMAL_BUFFER_HEADER_T *new_buffer;
-   static int64_t base_time =  -1;
-
-   // All our times based on the receipt of the first callback
-   if (base_time == -1)
-      base_time = vcos_getmicrosecs64()/1000;
 
    // We pass our file handle and other stuff in via the userdata field.
 
@@ -876,6 +874,25 @@ static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buff
          {
             vcos_log_error("Failed to write buffer data (%d from %d)- aborting", bytes_written, bytes_to_write);
             pData->abort = 1;
+         }
+         if (pData->pts_file_handle)
+         {
+            // Every buffer should be a complete frame, so no need to worry about
+            // fragments or duplicated timestamps. We're also in RESET_STC mode, so
+            // the time on frame 0 should always be 0 anyway, but simply copy the
+            // code from raspivid.
+            // MMAL_TIME_UNKNOWN should never happen, but it'll corrupt the timestamps
+            // file if saved.
+            if(buffer->pts != MMAL_TIME_UNKNOWN)
+            {
+               int64_t pts;
+               if(pData->pstate->frame==0)
+                  pData->pstate->starttime=buffer->pts;
+               pData->lasttime=buffer->pts;
+               pts = buffer->pts - pData->starttime;
+               fprintf(pData->pts_file_handle,"%lld.%03lld\n", pts/1000, pts%1000);
+               pData->frame++;
+            }
          }
       }
    }
