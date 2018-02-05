@@ -52,7 +52,7 @@ MMAL_ES_FORMAT_T *mmal_format_alloc(void)
 {
    MMAL_ES_FORMAT_PRIVATE_T *private;
 
-   private = vcos_malloc(sizeof(*private), "mmal format");
+   private = vcos_calloc(1, sizeof(*private), "mmal format");
    if(!private) return 0;
    memset(private, 0, sizeof(*private));
 
@@ -169,7 +169,7 @@ MMAL_STATUS_T mmal_format_extradata_alloc(MMAL_ES_FORMAT_T *format, unsigned int
    if(private->extradata_size < size)
    {
       if(private->extradata) vcos_free(private->extradata);
-      private->extradata = vcos_malloc(size, "mmal format extradata");
+      private->extradata = vcos_calloc(1, size, "mmal format extradata");
       if(!private->extradata)
          return MMAL_ENOMEM;
       private->extradata_size = size;
