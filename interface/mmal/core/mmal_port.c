@@ -250,7 +250,7 @@ MMAL_PORT_T **mmal_ports_alloc(MMAL_COMPONENT_T *component, unsigned int ports_n
    MMAL_PORT_T **ports;
    unsigned int i;
 
-   ports = vcos_malloc(sizeof(MMAL_PORT_T *) * ports_num, "mmal ports");
+   ports = vcos_calloc(1, sizeof(MMAL_PORT_T *) * ports_num, "mmal ports");
    if (!ports)
       return 0;
 
