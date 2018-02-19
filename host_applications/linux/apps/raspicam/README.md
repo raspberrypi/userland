@@ -2,7 +2,7 @@
 
 This document describes the use of the three Raspberry Pi camera applications as of February 19th 2018.
 
-There are three applications provided, **raspistill**, **raspivid**, **raspiyuv** and **raspividyuv**. raspistill and raspistillyuv are very similar and are intended for capturing images, raspivid is for capturing video.
+There are four applications provided, **raspistill**, **raspivid**, **raspiyuv** and **raspividyuv**. raspistill and raspistillyuv are very similar and are intended for capturing images, raspivid is for capturing video.
 
 All the applications are command line driven, written to take advantage of the mmal API which runs over OpenMAX. The mmal API provides an easier to use system than that presented by OpenMAX. Note that mmal is a Broadcom specific API used only on Videocore 4 systems.
 
