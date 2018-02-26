@@ -483,7 +483,7 @@ int dtoverlay_create_prop_fragment(DTBLOB_T *dtb, int idx, int target_phandle,
 	char fragment_name[20];
 	int frag_off, ovl_off;
 	int ret;
-	snprintf(fragment_name, sizeof(fragment_name), "fragment@%u", idx);
+	snprintf(fragment_name, sizeof(fragment_name), "fragment-%u", idx);
 	frag_off = fdt_add_subnode(dtb->fdt, 0, fragment_name);
 	if (frag_off < 0)
 		return frag_off;
@@ -936,7 +936,8 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
 
       node_name = fdt_get_name(overlay_dtb->fdt, frag_off, NULL);
 
-      if (strncmp(node_name, "fragment@", 9) != 0)
+      if (strncmp(node_name, "fragment@", 9) != 0 &&
+          strncmp(node_name, "fragment-", 9) != 0)
          continue;
       frag_name = node_name + 9;
 
@@ -1289,6 +1290,11 @@ int dtoverlay_override_one_target(int override_type,
 			  ((type == '!') && (override_int == 0));
 		  snprintf(node_name, sizeof(node_name), "/fragment@%u", frag_num);
 		  frag_off = fdt_path_offset(dtb->fdt, node_name);
+		  if (frag_off < 0)
+		  {
+		      snprintf(node_name, sizeof(node_name), "/fragment-%u", frag_num);
+		      frag_off = fdt_path_offset(dtb->fdt, node_name);
+		  }
 		  if (frag_off >= 0)
 		  {
 		     frag_off = fdt_subnode_offset(dtb->fdt, frag_off, states[!active]);
