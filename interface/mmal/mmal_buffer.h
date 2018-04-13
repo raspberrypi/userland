@@ -142,16 +142,22 @@ typedef struct MMAL_BUFFER_HEADER_T
 /** \name Video buffer header flags
  * \anchor videobufferheaderflags
  * The following flags describe properties of a video buffer header */
-#define MMAL_BUFFER_HEADER_FLAG_FORMAT_SPECIFIC_START (1<<16)
+#define MMAL_BUFFER_HEADER_FLAG_FORMAT_SPECIFIC_START_BIT 16
+#define MMAL_BUFFER_HEADER_FLAG_FORMAT_SPECIFIC_START (1<<MMAL_BUFFER_HEADER_FLAG_FORMAT_SPECIFIC_START_BIT)
 /* @{ */
-/** Signals an interlaced video frame */
+/** 16: Signals an interlaced video frame */
 #define MMAL_BUFFER_HEADER_VIDEO_FLAG_INTERLACED       (MMAL_BUFFER_HEADER_FLAG_FORMAT_SPECIFIC_START<<0)
-/** Signals that the top field of the current interlaced frame should be displayed first */
+/** 17: Signals that the top field of the current interlaced frame should be displayed first */
 #define MMAL_BUFFER_HEADER_VIDEO_FLAG_TOP_FIELD_FIRST  (MMAL_BUFFER_HEADER_FLAG_FORMAT_SPECIFIC_START<<1)
-/** Signals that the buffer should be displayed on external display if attached. */
+/** 19: Signals that the buffer should be displayed on external display if attached. */
 #define MMAL_BUFFER_HEADER_VIDEO_FLAG_DISPLAY_EXTERNAL (MMAL_BUFFER_HEADER_FLAG_FORMAT_SPECIFIC_START<<3)
-/** Signals that contents of the buffer requires copy protection. */
+/** 20: Signals that contents of the buffer requires copy protection. */
 #define MMAL_BUFFER_HEADER_VIDEO_FLAG_PROTECTED        (MMAL_BUFFER_HEADER_FLAG_FORMAT_SPECIFIC_START<<4)
+/** 27-24: If non-zero it signals the video frame is encoded in column mode,
+ * with a column width equal to 2^<masked value>.
+ * Zero is raster order. */
+#define MMAL_BUFFER_HEADER_VIDEO_FLAG_COLUMN_LOG2_SHIFT (MMAL_BUFFER_HEADER_FLAG_FORMAT_SPECIFIC_START_BIT+8)
+#define MMAL_BUFFER_HEADER_VIDEO_FLAG_COLUMN_LOG2_MASK (0xF<<MMAL_BUFFER_HEADER_VIDEO_FLAG_COLUMN_LOG2_SHIFT)
 /* @} */
 
 /** Acquire a buffer header.
