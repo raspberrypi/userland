@@ -724,7 +724,8 @@ MMAL_STATUS_T mmal_port_send_buffer(MMAL_PORT_T *port,
              buffer ? (int)buffer->length : 0);
 #endif
 
-   if (!buffer->data && !(port->capabilities & MMAL_PORT_CAPABILITY_PASSTHROUGH))
+   if (buffer->alloc_size && !buffer->data &&
+       !(port->capabilities & MMAL_PORT_CAPABILITY_PASSTHROUGH))
    {
       LOG_ERROR("%s(%p) received invalid buffer header", port->name, port);
       return MMAL_EINVAL;
