@@ -2153,6 +2153,7 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
          else
          {
             vcos_log_error("Too many macroblocks/s requested");
+            status = MMAL_EINVAL;
             goto error;
          }
       }
