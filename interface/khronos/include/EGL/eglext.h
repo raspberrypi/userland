@@ -190,6 +190,10 @@ typedef EGLBoolean (EGLAPIENTRYP PFNEGLSIGNALSYNCKHRPROC) (EGLDisplay dpy, EGLSy
 typedef EGLBoolean (EGLAPIENTRYP PFNEGLGETSYNCATTRIBKHRPROC) (EGLDisplay dpy, EGLSyncKHR sync, EGLint attribute, EGLint *value);
 #endif
 
+#ifndef EGL_KHR_uint64_typedef
+#define EGL_KHR_uint64_typedef 1
+typedef khronos_uint64_t EGLuint64KHR;
+#endif /* EGL_KHR_uint64_typedef */
 
 #ifndef EGL_WL_bind_wayland_display
 #define EGL_WL_bind_wayland_display 1
