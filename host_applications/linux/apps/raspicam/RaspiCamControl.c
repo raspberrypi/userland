@@ -182,7 +182,7 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandContrast,    "-contrast",  "co", "Set image contrast (-100 to 100)",  1},
    {CommandBrightness,  "-brightness","br", "Set image brightness (0 to 100)",  1},
    {CommandSaturation,  "-saturation","sa", "Set image saturation (-100 to 100)", 1},
-   {CommandISO,         "-ISO",       "ISO","Set capture ISO",  1},
+   {CommandISO,         "-ISO",       "ISO","Set capture ISO (100 to 800)",  1},
    {CommandVideoStab,   "-vstab",     "vs", "Turn on video stabilisation", 0},
    {CommandEVComp,      "-ev",        "ev", "Set EV compensation - steps of 1/6 stop",  1},
    {CommandExposure,    "-exposure",  "ex", "Set exposure mode (see Notes)", 1},
@@ -1181,15 +1181,23 @@ int raspicamcontrol_set_brightness(MMAL_COMPONENT_T *camera, int brightness)
 /**
  * Adjust the ISO used for images
  * @param camera Pointer to camera component
- * @param ISO Value to set TODO :
+ * @param ISO Value to set, 100 to 800
  * @return 0 if successful, non-zero if any parameters out of range
  */
 int raspicamcontrol_set_ISO(MMAL_COMPONENT_T *camera, int ISO)
 {
    if (!camera)
       return 1;
-
-   return mmal_status_to_int(mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_ISO, ISO));
+   
+   if (ISO >= 100 && ISO <= 800)
+   {
+      return mmal_status_to_int(mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_ISO, ISO));
+   }
+   else
+   {
+      vcos_log_error("Invalid ISO value");
+      return 1;
+   }
 }
 
 /**
