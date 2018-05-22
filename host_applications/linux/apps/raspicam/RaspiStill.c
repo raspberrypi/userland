@@ -246,7 +246,9 @@ static struct
    {"jpg", MMAL_ENCODING_JPEG},
    {"bmp", MMAL_ENCODING_BMP},
    {"gif", MMAL_ENCODING_GIF},
-   {"png", MMAL_ENCODING_PNG}
+   {"png", MMAL_ENCODING_PNG},
+   {"ppm", MMAL_ENCODING_PPM},
+   {"tga", MMAL_ENCODING_TGA}
 };
 
 static int encoding_xref_size = sizeof(encoding_xref) / sizeof(encoding_xref[0]);
