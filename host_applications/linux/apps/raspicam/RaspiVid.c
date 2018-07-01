@@ -224,6 +224,7 @@ struct RASPIVID_STATE_S
 
    bool netListen;
    MMAL_BOOL_T addSPSTiming;
+   int slices;
 };
 
 
@@ -306,7 +307,8 @@ enum
    CommandRaw,
    CommandRawFormat,
    CommandNetListen,
-   CommandSPSTimings
+   CommandSPSTimings,
+   CommandSlices
 };
 
 static COMMAND_LIST cmdline_commands[] =
@@ -339,6 +341,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandRawFormat,     "-raw-format", "rf", "Specify output format for raw video. Default is yuv", 1},
    { CommandNetListen,     "-listen",     "l", "Listen on a TCP socket", 0},
    { CommandSPSTimings,    "-spstimings",    "stm", "Add in h.264 sps timings", 0},
+   { CommandSlices   ,     "-slices",     "sl", "Horizontal slices per frame. Default 1 (off)", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -409,6 +412,8 @@ static void default_status(RASPIVID_STATE *state)
    state->save_pts = 0;
    state->netListen = false;
    state->addSPSTiming = MMAL_FALSE;
+   state->slices = 1;
+
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -474,6 +479,7 @@ static void dump_status(RASPIVID_STATE *state)
    fprintf(stderr, "H264 Quantisation level %d, Inline headers %s\n", state->quantisationParameter, state->bInlineHeaders ? "Yes" : "No");
    fprintf(stderr, "H264 Fill SPS Timings %s\n", state->addSPSTiming ? "Yes" : "No");
    fprintf(stderr, "H264 Intra refresh type %s, period %d\n", raspicli_unmap_xref(state->intra_refresh_type, intra_refresh_map, intra_refresh_map_size), state->intraperiod);
+   fprintf(stderr, "H264 Slices %d\n", state->slices);
 
    // Not going to display segment data unless asked for it.
    if (state->segmentSize)
@@ -900,6 +906,14 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
       {
          state->netListen = true;
 
+         break;
+      }
+      case CommandSlices:
+      {
+         if ((sscanf(argv[i + 1], "%d", &state->slices) == 1) && (state->slices > 0))
+            i++;
+         else
+            valid = 0;
          break;
       }
 
@@ -2020,8 +2034,29 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
       }
    }
 
+   if (state->encoding == MMAL_ENCODING_H264 && state->slices > 1 && state->common_settings.width <= 1280)
+   {
+      int frame_mb_rows = VCOS_ALIGN_UP(state->common_settings.height, 16) >> 4;
+
+      if (state->slices > frame_mb_rows) //warn user if too many slices selected
+      {
+         fprintf(stderr,"H264 Slice count (%d) exceeds number of macroblock rows (%d). Setting slices to %d.\n", state->slices, frame_mb_rows, frame_mb_rows);
+         // Continue rather than abort..
+      }
+      int slice_row_mb = frame_mb_rows/state->slices;
+      if (frame_mb_rows - state->slices*slice_row_mb)
+         slice_row_mb++; //must round up to avoid extra slice if not evenly divided
+
+      status = mmal_port_parameter_set_uint32(encoder_output, MMAL_PARAMETER_MB_ROWS_PER_SLICE, slice_row_mb);
+      if (status != MMAL_SUCCESS)
+      {
+         vcos_log_error("Unable to set number of slices");
+         goto error;
+      }
+   }
+
    if (state->encoding == MMAL_ENCODING_H264 &&
-         state->quantisationParameter)
+       state->quantisationParameter)
    {
       MMAL_PARAMETER_UINT32_T param = {{ MMAL_PARAMETER_VIDEO_ENCODE_INITIAL_QUANT, sizeof(param)}, state->quantisationParameter};
       status = mmal_port_parameter_set(encoder_output, &param.hdr);
@@ -2046,7 +2081,6 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
          vcos_log_error("Unable to set max QP");
          goto error;
       }
-
    }
 
    if (state->encoding == MMAL_ENCODING_H264)
