@@ -382,7 +382,7 @@ GL_API void GL_APIENTRY glBufferData (GLenum target, GLsizeiptr size, const GLvo
       {
          if( ((target == GL_ARRAY_BUFFER && state->bound_buffer.array != 0) ||
               (target == GL_ELEMENT_ARRAY_BUFFER && state->bound_buffer.element_array != 0)) &&
-             (usage ==  GL_STATIC_DRAW || usage == GL_DYNAMIC_DRAW) &&
+             (usage ==  GL_STATIC_DRAW || usage == GL_DYNAMIC_DRAW || (IS_OPENGLES_20(thread) && usage == GL_STREAM_DRAW)) &&
              size >=0
            )
          {
