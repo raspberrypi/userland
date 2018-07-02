@@ -2107,6 +2107,7 @@ GL_API void GL_APIENTRY glGetBufferParameteriv (GLenum target, GLenum pname, GLi
          {
             GLXX_CLIENT_STATE_T *state = GLXX_GET_CLIENT_STATE(thread);
             GLXX_BUFFER_INFO_T buffer;
+            glxx_buffer_info_get(state, target, &buffer);
             buffer.cached_size = params[0];
             glxx_buffer_info_set(state, target, &buffer);
          }
