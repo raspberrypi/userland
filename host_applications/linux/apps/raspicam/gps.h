@@ -51,14 +51,6 @@
 extern "C" {
 #endif
 
-/* Macro for declaring function arguments unused. */
-#if defined(__GNUC__)
-#  define UNUSED __attribute__((unused)) /* Flag variable as unused */
-#else /* not __GNUC__ */
-#  define UNUSED
-#endif
-
-
 #include <sys/types.h>
 #include <sys/time.h>
 #include <stdbool.h>
@@ -67,9 +59,7 @@ extern "C" {
 #include <time.h>
 #include <signal.h>
 #include <stdio.h>
-#ifndef S_SPLINT_S
 #include <pthread.h>	/* pacifies OpenBSD's compiler */
-#endif
 
 /*
  * 4.1 - Base version for initial JSON protocol (Dec 2009, release 2.90)
@@ -77,24 +67,23 @@ extern "C" {
  * 5.0 - MAXCHANNELS bumped from 20 to 32 for GLONASS (Mar 2011, release 2.96)
  *       gps_open() becomes reentrant, what gps_open_r() used to be.
  *       gps_poll() removed in favor of gps_read().  The raw hook is gone.
+ *       (Aug 2011, release 3.0)
  * 5.1 - GPS_PATH_MAX uses system PATH_MAX; split24 flag added. New
  *       model and serial members in part B of AIS type 24, conforming
  *       with ITU-R 1371-4. New timedrift structure (Nov 2013, release 3.10).
+ * 6.0 - AIS type 6 and 8 get 'structured' flag; GPS_PATH_MAX
+ *       shortened because devices has moved out of the tail union. Sentence
+ *       tag fields dropped from emitted JSON. The shape of the skyview
+ *       structure has changed to make working with the satellites-used
+ *       bits less confusing. (January 2015, release 3.12).
+ * 6.1 - Add navdata_t for more (nmea2000) info.
  */
-#define GPSD_API_MAJOR_VERSION	5	/* bump on incompatible changes */
+#define GPSD_API_MAJOR_VERSION	6	/* bump on incompatible changes */
 #define GPSD_API_MINOR_VERSION	1	/* bump on compatible changes */
 
-#define MAXTAGLEN	8	/* maximum length of sentence tag name */
 #define MAXCHANNELS	72	/* must be > 12 GPS + 12 GLONASS + 2 WAAS */
-#define GPS_PRNMAX	32	/* above this number are SBAS satellites */
 #define MAXUSERDEVS	4	/* max devices per user */
-
-/* PATH_MAX needs to be enough for long names like /dev/serial/by-id/... */
-#ifdef PATH_MAX
-#define GPS_PATH_MAX   PATH_MAX
-#else
-#define GPS_PATH_MAX   1024
-#endif
+#define GPS_PATH_MAX	128	/* for names like /dev/serial/by-id/... */
 
 /*
  * The structure describing an uncertainty volume in kinematic space.
@@ -103,24 +92,17 @@ extern "C" {
  *
  * All double values use NAN to indicate data not available.
  *
- * Usually all the information in this structure was considered valid
- * by the GPS at the time of update.  This will be so if you are using
- * a GPS chipset that speaks SiRF binary, Garmin binary, or Zodiac binary.
- * This covers over 80% of GPS products in early 2005.
- *
- * If you are using a chipset that speaks NMEA, this structure is updated
- * in bits by GPRMC (lat/lon, track, speed), GPGGA (alt, climb), GPGLL
- * (lat/lon), and GPGSA (eph, epv).  Most NMEA GPSes take a single fix
- * at the beginning of a 1-second cycle and report the same timestamp in
- * GPRMC, GPGGA, and GPGLL; for these, all info is guaranteed correctly
- * synced to the time member, but you'll get different stages of the same
- * update depending on where in the cycle you poll.  A very few GPSes,
- * like the Garmin 48, take a new fix before more than one of of
- * GPRMC/GPGGA/GPGLL during a single cycle; thus, they may have different
- * timestamps and some data in this structure can be up to 1 cycle (usually
- * 1 second) older than the fix time.
+ * All the information in this structure was considered valid
+ * by the GPS at the time of update.
  *
  * Error estimates are at 95% confidence.
+ */
+/* WARNING!  potential loss of precision in timestamp_t
+ * a double is 53 significant bits.
+ * UNIX time to nanoSec precision is 62 significant bits
+ * UNIX time to nanoSec precision after 2038 is 63 bits
+ * timestamp_t is only microSec precision
+ * timestamp_t and PPS do not play well together
  */
 typedef double timestamp_t;	/* Unix time in seconds with fractional part */
 
@@ -148,17 +130,21 @@ struct gps_fix_t {
 
 /*
  * Satellite ID classes.
- * IS-GPS-200 Revision E, paragraph 6.3.6
+ * According to IS-GPS-200 Revision H paragraph 6.3.6, and earlier revisions
+ * at least back to E, the upper bound of U.S. GPS PRNs is actually 64. However,
+ * NMEA0183 only allocates 1-32 for U.S. GPS IDs; it uses 33-64 for IDs ub the
+ * SBAS range.
  */
-#define GPS_PRN(n)	(((n) >= 1) && ((n) <= 63))	/* U.S. GPS satellite */
-#define GBAS_PRN(n)	((n) >= 64 && ((n) <= 119))	/* Ground Based Augmentation System and other augmentation systems */
-#define SBAS_PRN(n)	((n) >= 120 && ((n) <= 158))	/* Satellite Based Augmentation System */
-#define GNSS_PRN(n)	((n) >= 159 && ((n) <= 210))	/* other Global Navigation Satellite System */
+#define GPS_PRN(n)	(((n) >= 1) && ((n) <= 32))	/* U.S. GPS satellite */
+#define GBAS_PRN(n)	((n) >= 64 && ((n) <= 119))	/* Other GNSS (GLONASS) and Ground Based Augmentation System (eg WAAS)*/
+#define SBAS_PRN(n)	((n) >= 120 && ((n) <= 158))	/* Satellite Based Augmentation System (eg GAGAN)*/
+#define GNSS_PRN(n)	((n) >= 159 && ((n) <= 210))	/* other GNSS (eg BeiDou) */
 
 /*
  * GLONASS birds reuse GPS PRNs.
- * it is a GPSD convention to map them to IDs 65..96.
+ * It is an NMEA0183 convention to map them to pseudo-PRNs 65..96.
  * (some other programs push them to 33 and above).
+ * The US GPS constellation plans to use the 33-63 range.
  */
 #define GLONASS_PRN_OFFSET	64
 
@@ -195,14 +181,12 @@ struct gst_t {
 /* RTCM104 doesn't specify this, so give it the largest reasonable value */
 #define MAXHEALTH	(RTCM2_WORDS_MAX-2)
 
-#ifndef S_SPLINT_S
 /*
  * A nominally 30-bit word (24 bits of data, 6 bits of parity)
  * used both in the GPS downlink protocol described in IS-GPS-200
  * and in the format for DGPS corrections used in RTCM-104v2.
  */
-typedef /*@unsignedintegraltype@*/ uint32_t isgps30bits_t;
-#endif /* S_SPLINT_S */
+typedef uint32_t isgps30bits_t;
 
 /*
  * Values for "system" fields.  Note, the encoding logic is senstive to the
@@ -887,11 +871,7 @@ struct subframe_t {
     };
 };
 
-#ifndef S_SPLINT_S
 typedef uint64_t gps_mask_t;
-#else
-typedef /*@unsignedintegraltype@*/ unsigned long long gps_mask_t;
-#endif /* S_SPLINT_S */
 
 /*
  * Is an MMSI number that of an auxiliary associated with a mother ship?
@@ -1016,6 +996,7 @@ struct ais_t
 	    //unsigned int spare;	spare bit(s) */
 	    unsigned int dac;           /* Application ID */
 	    unsigned int fid;           /* Functional ID */
+	    bool structured;		/* True match for DAC/FID? */
 #define AIS_TYPE6_BINARY_MAX	920	/* 920 bits */
 	    size_t bitcount;		/* bit count of the data */
 	    union {
@@ -1287,6 +1268,7 @@ struct ais_t
 	    unsigned int fid;       	/* Functional ID */
 #define AIS_TYPE8_BINARY_MAX	952	/* 952 bits */
 	    size_t bitcount;		/* bit count of the data */
+	    bool structured;		/* True match for DAC/FID? */
 	    union {
 		char bitdata[(AIS_TYPE8_BINARY_MAX + 7) / 8];
 		/* Inland static ship and voyage-related data */
@@ -1296,6 +1278,7 @@ struct ais_t
 		    unsigned int beam;  	/* Beam of ship */
 		    unsigned int shiptype;	/* Ship/combination type */
 		    unsigned int hazard;	/* Hazardous cargo */
+#define DAC200FID10_HAZARD_MAX	5
 		    unsigned int draught;	/* Draught */
 		    unsigned int loaded;	/* Loaded/Unloaded */
 		    bool speed_q;	/* Speed inf. quality */
@@ -1844,6 +1827,14 @@ struct ais_t
     };
 };
 
+struct satellite_t {
+    double ss;		/* signal-to-noise ratio (dB) */
+    bool used;		/* PRNs of satellites used in solution */
+    short PRN;		/* PRNs of satellite */
+    short elevation;	/* elevation of satellite */
+    short azimuth;	/* azimuth */
+};
+
 struct attitude_t {
     double heading;
     double pitch;
@@ -1867,6 +1858,25 @@ struct attitude_t {
     char pitch_st;
     char roll_st;
     char yaw_st;
+};
+
+struct navdata_t {
+    unsigned int version;
+    double compass_heading;
+    double compass_deviation;
+    double compass_variation;
+    double air_temp;
+    double air_pressure;
+    double water_temp;
+    double depth;
+    double depth_offset;
+    double wind_speed;
+    double wind_dir;
+    double crosstrack_error;
+    unsigned int compass_status;
+    unsigned int log_cumulative;
+    unsigned int log_trip;
+    unsigned int crosstrack_status;
 };
 
 struct dop_t {
@@ -1929,14 +1939,14 @@ struct policy_t {
     char remote[GPS_PATH_MAX];		/* ...if this was passthrough */
 };
 
-struct timedrift_t {
+#ifndef TIMEDELTA_DEFINED
+#define TIMEDELTA_DEFINED
+
+struct timedelta_t {
     struct timespec	real;
     struct timespec	clock;
 };
-
-/* difference between timespecs in nanoseconds */
-/* int is too small, avoid floats  */
-#define timespec_diff_ns(x, y)	(long)(((x).tv_sec-(y).tv_sec)*1000000000+(x).tv_nsec-(y).tv_nsec)
+#endif /* TIMEDELTA_DEFINED */
 
 /*
  * Someday we may support Windows, under which socket_t is a separate type.
@@ -1946,7 +1956,7 @@ struct timedrift_t {
  */
 typedef int socket_t;
 #define BAD_SOCKET(s)	((s) == -1)
-#define INVALIDATE_SOCKET(s)	s = -1
+#define INVALIDATE_SOCKET(s)	do { s = -1; } while (0)
 
 /* mode flags for setting streaming policy */
 #define WATCH_ENABLE	0x000001u	/* enable streaming */
@@ -1961,7 +1971,6 @@ typedef int socket_t;
 #define WATCH_SPLIT24	0x001000u	/* split AIS Type 24s */
 #define WATCH_PPS	0x002000u	/* enable PPS JSON */
 #define WATCH_NEWSTYLE	0x010000u	/* force JSON streaming */
-#define WATCH_OLDSTYLE	0x020000u	/* force old-style streaming */
 
 /*
  * Main structure that includes all previous substructures
@@ -2000,9 +2009,10 @@ struct gps_data_t {
 #define POLICY_SET	(1llu<<29)
 #define LOGMESSAGE_SET	(1llu<<30)
 #define ERROR_SET	(1llu<<31)
-#define TIMEDRIFT_SET	(1llu<<32)
-#define EOF_SET		(1llu<<33)
-#define SET_HIGH_BIT	34
+#define TOFF_SET	(1llu<<32)	/* not yet used */
+#define PPS_SET 	(1llu<<33)
+#define NAVDATA_SET     (1llu<<34)
+#define SET_HIGH_BIT	35
     timestamp_t online;		/* NZ if GPS is on line, 0 if not.
 				 *
 				 * Note: gpsd clears this time when sentences
@@ -2026,12 +2036,10 @@ struct gps_data_t {
     /* GPS status -- always valid */
     int    status;		/* Do we have a fix? */
 #define STATUS_NO_FIX	0	/* no */
-#define STATUS_FIX	1	/* yes, without DGPS */
-#define STATUS_DGPS_FIX	2	/* yes, with DGPS */
+#define STATUS_FIX	1	/* yes */
 
     /* precision of fix -- valid if satellites_used > 0 */
     int satellites_used;	/* Number of satellites used in solution */
-    int used[MAXCHANNELS];	/* PRNs of satellites used in solution */
     struct dop_t dop;
 
     /* redundant with the estimate elements in the fix structure */
@@ -2040,20 +2048,20 @@ struct gps_data_t {
     /* satellite status -- valid when satellites_visible > 0 */
     timestamp_t skyview_time;	/* skyview timestamp */
     int satellites_visible;	/* # of satellites in view */
-    int PRN[MAXCHANNELS];	/* PRNs of satellite */
-    int elevation[MAXCHANNELS];	/* elevation of satellite */
-    int azimuth[MAXCHANNELS];	/* azimuth */
-    double ss[MAXCHANNELS];	/* signal-to-noise ratio (dB) */
+    struct satellite_t skyview[MAXCHANNELS];
 
     struct devconfig_t dev;	/* device that shipped last update */
 
     struct policy_t policy;	/* our listening policy */
 
-    /* should be moved to privdata someday */
-    char tag[MAXTAGLEN+1];	/* tag of last sentence processed */
+    struct {
+	timestamp_t time;
+	int ndevices;
+	struct devconfig_t list[MAXUSERDEVS];
+    } devices;
 
     /* pack things never reported together to reduce structure size */
-#define UNION_SET	(RTCM2_SET|RTCM3_SET|SUBFRAME_SET|AIS_SET|ATTITUDE_SET|GST_SET|VERSION_SET|DEVICELIST_SET|LOGMESSAGE_SET|ERROR_SET|TIMEDRIFT_SET)
+#define UNION_SET	(RTCM2_SET|RTCM3_SET|SUBFRAME_SET|AIS_SET|ATTITUDE_SET|GST_SET|VERSION_SET|LOGMESSAGE_SET|ERROR_SET|TOFF_SET|PPS_SET)
     union {
 	/* unusual forms of sensor data that might come up the pipe */
 	struct rtcm2_t	rtcm2;
@@ -2061,60 +2069,58 @@ struct gps_data_t {
 	struct subframe_t subframe;
 	struct ais_t ais;
 	struct attitude_t attitude;
+        struct navdata_t navdata;
 	struct rawdata_t raw;
 	struct gst_t gst;
 	/* "artificial" structures for various protocol responses */
 	struct version_t version;
-	struct {
-	    timestamp_t time;
-	    int ndevices;
-	    struct devconfig_t list[MAXUSERDEVS];
-	} devices;
 	char error[256];
-	struct timedrift_t timedrift;
+	struct timedelta_t toff;
+	struct timedelta_t pps;
     };
+    /* FIXME! next lib rev need to add a place to put PPS precision */
 
     /* Private data - client code must not set this */
     void *privdata;
 };
 
-extern int gps_open(/*@null@*/const char *, /*@null@*/const char *,
-		      /*@out@*/struct gps_data_t *);
+extern int gps_open(const char *, const char *,
+		      struct gps_data_t *);
 extern int gps_close(struct gps_data_t *);
 extern int gps_send(struct gps_data_t *, const char *, ... );
-extern int gps_read(/*@out@*/struct gps_data_t *);
+extern int gps_read(struct gps_data_t *);
 extern int gps_unpack(char *, struct gps_data_t *);
 extern bool gps_waiting(const struct gps_data_t *, int);
-extern int gps_stream(struct gps_data_t *, unsigned int, /*@null@*/void *);
+extern int gps_stream(struct gps_data_t *, unsigned int, void *);
 extern int gps_mainloop(struct gps_data_t *, int,
 			void (*)(struct gps_data_t *));
-extern const char /*@null observer@*/ *gps_data(const struct gps_data_t *);
-extern const char /*@observer@*/ *gps_errstr(const int);
+extern const char *gps_data(const struct gps_data_t *);
+extern const char *gps_errstr(const int);
 
+int json_toff_read(const char *buf, struct gps_data_t *,
+		  const char **);
 int json_pps_read(const char *buf, struct gps_data_t *,
-		  /*@null@*/ const char **);
+		  const char **);
 
-/* dependencies on struct gpsdata_t end hrere */
+/* dependencies on struct gpsdata_t end here */
 
 extern void libgps_trace(int errlevel, const char *, ...);
 
-extern void gps_clear_fix(/*@ out @*/struct gps_fix_t *);
-extern void gps_clear_dop( /*@out@*/ struct dop_t *);
-extern void gps_merge_fix(/*@ out @*/struct gps_fix_t *,
-			  gps_mask_t,
-			  /*@ in @*/struct gps_fix_t *);
+extern void gps_clear_fix(struct gps_fix_t *);
+extern void gps_clear_dop( struct dop_t *);
+extern void gps_merge_fix(struct gps_fix_t *, gps_mask_t, struct gps_fix_t *);
 extern void gps_enable_debug(int, FILE *);
-extern /*@observer@*/const char *gps_maskdump(gps_mask_t);
+extern const char *gps_maskdump(gps_mask_t);
 
 extern double safe_atof(const char *);
 extern time_t mkgmtime(register struct tm *);
 extern timestamp_t timestamp(void);
 extern timestamp_t iso8601_to_unix(char *);
-extern /*@observer@*/char *unix_to_iso8601(timestamp_t t, /*@ out @*/char[], size_t len);
+extern char *unix_to_iso8601(timestamp_t t, char[], size_t len);
 extern double earth_distance(double, double, double, double);
 extern double earth_distance_and_bearings(double, double, double, double,
-					  /*@null@*//*@out@*/double *,
-					  /*@null@*//*@out@*/double *);
+					  double *,
+					  double *);
 extern double wgs84_separation(double, double);
 
 /* some multipliers for interpreting GPS output */
@@ -2156,22 +2162,6 @@ extern double wgs84_separation(double, double);
 /* special host values for non-socket exports */
 #define GPSD_SHARED_MEMORY	"shared memory"
 #define GPSD_DBUS_EXPORT	"DBUS export"
-
-/*
- * Platform-specific declarations
- */
-
-#ifdef _WIN32
-#define strtok_r(s,d,p) strtok_s(s,d,p)
-#endif
-
-/* Some libcs don't have strlcat/strlcpy. Local copies are provided */
-#ifndef HAVE_STRLCAT
-size_t strlcat(/*@out@*/char *dst, /*@in@*/const char *src, size_t size);
-#endif
-#ifndef HAVE_STRLCPY
-size_t strlcpy(/*@out@*/char *dst, /*@in@*/const char *src, size_t size);
-#endif
 
 #ifdef __cplusplus
 }  /* End of the 'extern "C"' block */
