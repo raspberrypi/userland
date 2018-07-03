@@ -30,6 +30,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "gps.h"
 
+#define LIBGPS_SO_VERSION     "libgps.so.22"
+
 /** Structure containing all libgps information
  */
 typedef struct

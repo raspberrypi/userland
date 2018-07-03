@@ -33,7 +33,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "libgps_loader.h"
 
-const char *LIBGPS_FILE = "libgps.so.21";
+const char *LIBGPS_FILE = LIBGPS_SO_VERSION;
 
 static int libgps_load_sym(void **func, void *handle, char *symbol)
 {

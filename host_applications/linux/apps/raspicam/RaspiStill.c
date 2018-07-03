@@ -252,7 +252,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandTimeStamp, "-timestamp", "ts", "Replace output pattern (%d) with unix timestamp (seconds since 1970)", 0},
    { CommandFrameStart,"-framestart","fs",  "Starting frame number in output pattern(%d)", 1},
    { CommandRestartInterval, "-restart","rs","JPEG Restart interval (default of 0 for none)", 1},
-   { CommandGpsdExif,  "-gpsdexif", "gps", "Apply real-time GPS information from gpsd as EXIF tags (requires libgps)", 0},
+   { CommandGpsdExif,  "-gpsdexif", "gps", "Apply real-time GPS information from gpsd as EXIF tags (requires "LIBGPS_SO_VERSION")", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
