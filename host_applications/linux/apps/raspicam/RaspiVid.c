@@ -2120,7 +2120,8 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
    if (state->encoding == MMAL_ENCODING_H264 &&
        state->slices > 1)
    {
-      int slice_row_mb = (state->height/16)/state->slices + (state->height/16)%state->slices?1:0; //round up
+      int frame_mb_rows = (state->height/16) + (state->height%16)?1:0;
+      int slice_row_mb = frame_mb_rows/state->slices + frame_mb_rows%state->slices?1:0; //round up
       MMAL_PARAMETER_UINT32_T param = {{ MMAL_PARAMETER_MB_ROWS_PER_SLICE, sizeof(param)}, slice_row_mb};
       status = mmal_port_parameter_set(encoder_output, &param.hdr);
       if (status != MMAL_SUCCESS)
