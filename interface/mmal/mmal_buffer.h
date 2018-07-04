@@ -141,7 +141,10 @@ typedef struct MMAL_BUFFER_HEADER_T
 
 /** \name Video buffer header flags
  * \anchor videobufferheaderflags
- * The following flags describe properties of a video buffer header */
+ * The following flags describe properties of a video buffer header.
+ * As there is no collision with the MMAL_BUFFER_HEADER_FLAGS_ defines, these
+ * flags will also be present in the MMAL_BUFFER_HEADER_T flags field.
+ */
 #define MMAL_BUFFER_HEADER_FLAG_FORMAT_SPECIFIC_START_BIT 16
 #define MMAL_BUFFER_HEADER_FLAG_FORMAT_SPECIFIC_START (1<<MMAL_BUFFER_HEADER_FLAG_FORMAT_SPECIFIC_START_BIT)
 /* @{ */

@@ -142,6 +142,30 @@ uint32_t mmalil_buffer_flags_to_mmal(OMX_U32 flags)
    return mmal_flags;
 }
 
+OMX_U32 mmalil_video_buffer_flags_to_omx(uint32_t flags)
+{
+   OMX_U32 omx_flags = 0;
+
+   if (flags & MMAL_BUFFER_HEADER_VIDEO_FLAG_INTERLACED)
+      omx_flags |= OMX_BUFFERFLAG_INTERLACED;
+   if (flags & MMAL_BUFFER_HEADER_VIDEO_FLAG_TOP_FIELD_FIRST)
+     omx_flags |= OMX_BUFFERFLAG_TOP_FIELD_FIRST;
+
+  return omx_flags;
+}
+
+uint32_t mmalil_video_buffer_flags_to_mmal(OMX_U32 flags)
+{
+   uint32_t mmal_flags = 0;
+
+   if (flags & OMX_BUFFERFLAG_INTERLACED)
+      mmal_flags |= MMAL_BUFFER_HEADER_VIDEO_FLAG_INTERLACED;
+   if (flags & OMX_BUFFERFLAG_TOP_FIELD_FIRST)
+      mmal_flags |= MMAL_BUFFER_HEADER_VIDEO_FLAG_TOP_FIELD_FIRST;
+
+   return mmal_flags;
+}
+
 /*****************************************************************************/
 void mmalil_buffer_header_to_omx(OMX_BUFFERHEADERTYPE *omx, MMAL_BUFFER_HEADER_T *mmal)
 {
