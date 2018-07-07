@@ -445,6 +445,7 @@ static void default_status(RASPIVID_STATE *state)
    state->netListen = false;
    state->slices = 1;
 
+
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
 
@@ -507,6 +508,7 @@ static void dump_status(RASPIVID_STATE *state)
    fprintf(stderr, "H264 Level %s\n", raspicli_unmap_xref(state->level, level_map, level_map_size));
    fprintf(stderr, "H264 Quantisation level %d, Inline headers %s\n", state->quantisationParameter, state->bInlineHeaders ? "Yes" : "No");
    fprintf(stderr, "H264 Intra refresh type %s, period %d\n", raspicli_unmap_xref(state->intra_refresh_type, intra_refresh_map, intra_refresh_map_size), state->intraperiod);
+   fprintf(stderr, "H264 Slices %d\n", state->slices);
 
    // Not going to display segment data unless asked for it.
    if (state->segmentSize)
@@ -930,7 +932,7 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
       }
       case CommandSlices:
       {
-         if (sscanf(argv[i + 1], "%u", &state->slices) == 1)
+         if ((sscanf(argv[i + 1], "%d", &state->slices) == 1) && (state->slices > 0))
             i++;
          else
             valid = 0;
@@ -2117,16 +2119,24 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
       }
    }
 
-   if (state->encoding == MMAL_ENCODING_H264 &&
-       state->slices > 1)
+   if (state->encoding == MMAL_ENCODING_H264)
    {
-      int frame_mb_rows = (state->height/16) + (state->height%16)?1:0;
-      int slice_row_mb = frame_mb_rows/state->slices + frame_mb_rows%state->slices?1:0; //round up
+      int frame_mb_rows = state->height/16;
+      if (state->height - 16*frame_mb_rows)
+        frame_mb_rows++; //must round up if not mod16
+      if (state->slices > frame_mb_rows) //warn user if too many slices selected
+      {
+        fprintf(stderr,"H264 Slice count (%d) exceeds number of macroblock rows (%d). Setting slices to %d.\n", state->slices, frame_mb_rows, frame_mb_rows);
+        // Continue rather than abort..
+      }
+      int slice_row_mb = frame_mb_rows/state->slices;
+      if (frame_mb_rows - state->slices*slice_row_mb)
+        slice_row_mb++; //must round up to avoid extra slice if not evenly divided
       MMAL_PARAMETER_UINT32_T param = {{ MMAL_PARAMETER_MB_ROWS_PER_SLICE, sizeof(param)}, slice_row_mb};
       status = mmal_port_parameter_set(encoder_output, &param.hdr);
       if (status != MMAL_SUCCESS)
       {
-         vcos_log_error("Unable to set MMAL_PARAMETER_MB_ROWS_PER_SLICE");
+         vcos_log_error("Unable to set number of slices");
          goto error;
       }
    }
