@@ -41,14 +41,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /* @} */
 
 /** Generic metadata type. All metadata structures need to begin with these fields. */
-typedef struct MMAL_METATDATA_T
+typedef struct MMAL_METADATA_T
 {
    uint32_t id;    /**< Metadata id. This is a FourCC */
    uint32_t size;  /**< Size in bytes of the following metadata (not including id and size) */
 } MMAL_METADATA_T;
 
 /** Hello World metadata. */
-typedef struct MMAL_METATDATA_HELLO_WORLD_T
+typedef struct MMAL_METADATA_HELLO_WORLD_T
 {
    uint32_t id;    /**< Metadata id. This is a FourCC */
    uint32_t size;  /**< Size in bytes of the following metadata (not including id and size) */
