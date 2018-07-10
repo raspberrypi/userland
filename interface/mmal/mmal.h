@@ -365,7 +365,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mmal_port.h"
 #include "mmal_component.h"
 #include "mmal_parameters.h"
-#include "mmal_metadata.h"
 #include "mmal_queue.h"
 #include "mmal_pool.h"
 #include "mmal_events.h"

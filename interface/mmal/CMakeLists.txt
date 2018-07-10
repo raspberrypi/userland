@@ -27,7 +27,6 @@ install(FILES
    mmal_events.h
    mmal_format.h
    mmal_logging.h
-   mmal_metadata.h
    mmal_parameters.h
    mmal_parameters_audio.h
    mmal_parameters_camera.h
