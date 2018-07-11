@@ -63,8 +63,8 @@ typedef union
 /** Definition of the buffer header structure.
  * A buffer header does not directly carry the data to be passed to a component but instead
  * it references the actual data using a pointer (and an associated length).
- * It also contains an internal area which can be used to store command or metadata to be
- * associated with the external data.
+ * It also contains an internal area which can be used to store command to be associated
+ * with the external data.
  */
 typedef struct MMAL_BUFFER_HEADER_T
 {
