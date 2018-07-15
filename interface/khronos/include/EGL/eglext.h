@@ -93,6 +93,14 @@ typedef EGLImageKHR (EGLAPIENTRYP PFNEGLCREATEIMAGEKHRPROC) (EGLDisplay dpy, EGL
 typedef EGLBoolean (EGLAPIENTRYP PFNEGLDESTROYIMAGEKHRPROC) (EGLDisplay dpy, EGLImageKHR image);
 #endif
 
+#ifndef EGL_IMG_context_priority
+#define EGL_IMG_context_priority 1
+#define EGL_CONTEXT_PRIORITY_LEVEL_IMG		0x3102
+#define EGL_CONTEXT_PRIORITY_HIGH_IMG		0x3101
+#define EGL_CONTEXT_PRIORITY_MEDIUM_IMG		0x3102
+#define EGL_CONTEXT_PRIORITY_LOW_IMG		0x3103
+#endif /* EGL_IMG_context_priority */
+
 #ifndef EGL_KHR_vg_parent_image
 #define EGL_KHR_vg_parent_image 1
 #define EGL_VG_PARENT_IMAGE_KHR			0x30BA	/* eglCreateImageKHR target */
