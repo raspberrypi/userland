@@ -2726,5 +2726,14 @@ typedef struct OMX_PARAM_MINALIGNTYPE {
    OMX_U32 nMinHorizontalAlign;  /**< Minimum horizontal alignment required in bytes */
    OMX_U32 nMinVerticalAlign;    /**< Minimum vertical alignment required in bytes */
 } OMX_PARAM_MINALIGNTYPE;
+
+/* OMX_IndexParamRemoveImagePadding: Query component padding requirements */
+/*
+Queries whether the component can remove all padding from images, or can
+accept images with no padding.
+Used by the MMAL framework predominantly.
+Superceded by OMX_IndexParamMinimumAlignment.
+*/
+
 #endif
 /* File EOF */
