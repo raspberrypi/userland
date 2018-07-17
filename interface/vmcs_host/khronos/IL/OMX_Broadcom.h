@@ -63,13 +63,21 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define OMX_BUFFERFLAG_CODECSIDEINFO 0x00002000
 
 // for use in buffer headers - indicated the timestamp is a DTS rather than PTS
-#define OMX_BUFFERFLAG_TIME_IS_DTS 0x000004000
+#define OMX_BUFFERFLAG_TIME_IS_DTS 0x00004000
 
 // for use in buffer headers - signals that a video picture is interlaced
-#define OMX_BUFFERFLAG_INTERLACED 0x000010000
+#define OMX_BUFFERFLAG_INTERLACED 0x00010000
 
 // Signals that the top field of the current interlaced frame should be displayed first
-#define OMX_BUFFERFLAG_TOP_FIELD_FIRST 0x000020000
+#define OMX_BUFFERFLAG_TOP_FIELD_FIRST 0x00020000
+
+// User flags that can be set by the application and will be passed by most
+// components as an alternative to buffer marks.
+#define OMX_BUFFERFLAG_USR0      0x10000000
+#define OMX_BUFFERFLAG_USR1      0x20000000
+#define OMX_BUFFERFLAG_USR2      0x40000000
+#define OMX_BUFFERFLAG_USR3      0x80000000
+#define OMX_BUFFERFLAG_USR_FLAGS 0xF0000000
 
 /**
  * Macros to convert to <code>OMX_TICKS</code> from a signed 64 bit value and

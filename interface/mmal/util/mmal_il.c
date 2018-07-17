@@ -90,13 +90,13 @@ OMX_U32 mmalil_buffer_flags_to_omx(uint32_t flags)
      omx_flags |= OMX_BUFFERFLAG_ENDOFNAL;
 
    if (flags & MMAL_BUFFER_HEADER_FLAG_USER0)
-      omx_flags |= 1<<28;
+      omx_flags |= OMX_BUFFERFLAG_USR0;
    if (flags & MMAL_BUFFER_HEADER_FLAG_USER1)
-      omx_flags |= 1<<29;
+      omx_flags |= OMX_BUFFERFLAG_USR1;
    if (flags & MMAL_BUFFER_HEADER_FLAG_USER2)
-      omx_flags |= 1<<30;
+      omx_flags |= OMX_BUFFERFLAG_USR2;
    if (flags & MMAL_BUFFER_HEADER_FLAG_USER3)
-      omx_flags |= 1<<31;
+      omx_flags |= OMX_BUFFERFLAG_USR3;
 
    return omx_flags;
 }
@@ -130,13 +130,13 @@ uint32_t mmalil_buffer_flags_to_mmal(OMX_U32 flags)
    if (flags & OMX_BUFFERFLAG_ENDOFNAL)
       mmal_flags |= MMAL_BUFFER_HEADER_FLAG_NAL_END;
 
-   if (flags & 1<<28)
+   if (flags & OMX_BUFFERFLAG_USR0)
       mmal_flags |= MMAL_BUFFER_HEADER_FLAG_USER0;
-   if (flags & 1<<29)
+   if (flags & OMX_BUFFERFLAG_USR1)
       mmal_flags |= MMAL_BUFFER_HEADER_FLAG_USER1;
-   if (flags & 1<<30)
+   if (flags & OMX_BUFFERFLAG_USR2)
       mmal_flags |= MMAL_BUFFER_HEADER_FLAG_USER2;
-   if (flags & 1<<31)
+   if (flags & OMX_BUFFERFLAG_USR3)
       mmal_flags |= MMAL_BUFFER_HEADER_FLAG_USER3;
 
    return mmal_flags;
