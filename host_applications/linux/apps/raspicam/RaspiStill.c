@@ -106,6 +106,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define FRAME_NEXT_SIGNAL        5
 #define FRAME_NEXT_IMMEDIATELY   6
 
+/// Amount of time before first image taken to allow settling of
+/// exposure etc. in milliseconds.
+#define CAMERA_SETTLE_TIME       1000
 
 int mmal_status_to_int(MMAL_STATUS_T status);
 static void signal_handler(int signal_number);
@@ -1601,7 +1604,7 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
 
       if (next_frame_ms == -1)
       {
-         vcos_sleep(state->timelapse);
+         vcos_sleep(CAMERA_SETTLE_TIME);
 
          // Update our current time after the sleep
          current_time =  vcos_getmicrosecs64()/1000;
@@ -1667,7 +1670,7 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
       // This could probably be tuned down.
       // First frame has a much longer delay to ensure we get exposure to a steady state
       if (*frame == 0)
-         vcos_sleep(1000);
+         vcos_sleep(CAMERA_SETTLE_TIME);
       else
          vcos_sleep(30);
 
