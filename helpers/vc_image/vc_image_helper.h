@@ -108,7 +108,9 @@ extern const unsigned int vc_image_rgb_component_order[VC_IMAGE_MAX + 1];
    case VC_IMAGE_BGR888:      \
    case VC_IMAGE_BGR888_NP:   \
    case VC_IMAGE_ARGB8888:    \
-   case VC_IMAGE_XRGB8888
+   case VC_IMAGE_XRGB8888:    \
+   case VC_IMAGE_RGBX8888:    \
+   case VC_IMAGE_BGRX8888
 
 #define case_VC_IMAGE_ANY_RGB_NOT_TF \
    case VC_IMAGE_RGB565:      \
