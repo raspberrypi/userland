@@ -1524,18 +1524,6 @@ int main(int argc, const char **argv)
 
          camera_video_port->userdata = (struct MMAL_PORT_USERDATA_T *)&state.callback_data;
 
-         if (state.verbose)
-            fprintf(stderr, "Enabling camera video port\n");
-
-         // Enable the camera video port and tell it its callback function
-         status = mmal_port_enable(camera_video_port, camera_buffer_callback);
-
-         if (status != MMAL_SUCCESS)
-         {
-            vcos_log_error("Failed to setup camera output");
-            goto error;
-         }
-
          if (state.demoMode)
          {
             // Run for the user specific time..
@@ -1558,6 +1546,18 @@ int main(int argc, const char **argv)
             if (state.callback_data.file_handle)
             {
                int running = 1;
+
+               if (state.verbose)
+                  fprintf(stderr, "Enabling camera video port\n");
+
+               // Enable the camera video port and tell it its callback function
+               status = mmal_port_enable(camera_video_port, camera_buffer_callback);
+
+               if (status != MMAL_SUCCESS)
+               {
+                  vcos_log_error("Failed to setup camera output");
+                  goto error;
+               }
 
                // Send all the buffers to the camera video port
                {
