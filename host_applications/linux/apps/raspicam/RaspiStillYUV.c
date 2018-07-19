@@ -123,6 +123,7 @@ typedef struct
    int cameraNum;                      /// Camera number
    int burstCaptureMode;               /// Enable burst mode
    int onlyLuma;                       /// Only output the luma / Y plane of the YUV data
+   int sensor_mode;                    /// Sensor mode. 0=auto. Check docs/forum for modes selected by other values.
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -162,6 +163,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandSettings     13
 #define CommandBurstMode    14
 #define CommandOnlyLuma     15
+#define CommandSensorMode   16
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -181,6 +183,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandSettings, "-settings",  "set","Retrieve camera settings and write to stdout", 0},
    { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},
    { CommandOnlyLuma,  "-luma",     "y",  "Only output the luma / Y of the YUV data'", 0},
+   { CommandSensorMode,    "-mode",       "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -458,6 +461,15 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
          state->onlyLuma = 1;
          break;
 
+      case CommandSensorMode:
+         if (sscanf(argv[i + 1], "%u", &state->sensor_mode) == 1)
+         {
+            i++;
+         }
+         else
+            valid = 0;
+         break;
+
       default:
       {
          // Try parsing for any image specific parameters
@@ -674,6 +686,14 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
    {
       status = MMAL_ENOSYS;
       vcos_log_error("Camera doesn't have output ports");
+      goto error;
+   }
+
+   status = mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_CAMERA_CUSTOM_SENSOR_CONFIG, state->sensor_mode);
+
+   if (status != MMAL_SUCCESS)
+   {
+      vcos_log_error("Could not set sensor mode : error %d", status);
       goto error;
    }
 
