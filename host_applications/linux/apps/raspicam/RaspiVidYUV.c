@@ -1625,7 +1625,7 @@ error:
          fprintf(stderr, "Closing down\n");
 
       // Disable all our ports that are not handled by connections
-      check_disable_port(camera_still_port);
+      check_disable_port(camera_video_port);
 
       if (state.preview_parameters.wantPreview && state.preview_connection)
          mmal_connection_destroy(state.preview_connection);
