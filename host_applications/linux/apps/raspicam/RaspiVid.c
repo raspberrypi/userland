@@ -66,6 +66,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <time.h>
 
 #define VERSION_STRING "v1.3.12"
 
@@ -1075,7 +1076,22 @@ static FILE *open_filename(RASPIVID_STATE *pState, char *filename)
    if (pState->segmentSize || pState->splitWait)
    {
       // Create a new filename string
-      asprintf(&tempname, filename, pState->segmentNumber);
+
+      // If %d or %u, assume a segment numnber, otherwise use the formatter as
+      // input to strnftime
+      if (strstr(filename,"%u") != NULL || strstr(filename,"%d") != NULL)
+      {
+          asprintf(&tempname, filename, pState->segmentNumber);
+      }
+      else
+      {
+         char temp_ts_str[100];
+         time_t t = time(NULL);
+         struct tm *tm = localtime(&t);
+         strftime(temp_ts_str, 100, filename, tm);
+         asprintf(&tempname, "%s", temp_ts_str);
+      }
+
       filename = tempname;
    }
 
