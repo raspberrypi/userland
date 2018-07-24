@@ -2432,6 +2432,13 @@ This provides statistics from the renderer to allow more accurate synchronisatio
 between the scheduler and display VSYNC.
 */
 
+typedef enum OMX_BRCMANNOTATEJUSTIFYTYPE {
+   OMX_ANNOTATE_CENTRE = 0,
+   OMX_ANNOTATE_LEFT = 1,
+   OMX_ANNOTATE_RIGHT = 2,
+   OMX_ANNOTATE_MAX = 0x7FFFFFFF,
+} OMX_BRCMANNOTATEJUSTIFYTYPE;
+
 #define OMX_BRCM_MAXANNOTATETEXTLEN 256
 typedef struct OMX_CONFIG_BRCMANNOTATETYPE {
    OMX_U32 nSize;
@@ -2455,6 +2462,9 @@ typedef struct OMX_CONFIG_BRCMANNOTATETYPE {
    OMX_U8 nTextV;
    OMX_U8 nTextSize;   /**< Text size: 6-150 pixels */
    OMX_U8 sText[OMX_BRCM_MAXANNOTATETEXTLEN];
+   OMX_BRCMANNOTATEJUSTIFYTYPE eJustify;
+   OMX_U32 nXOffset;
+   OMX_U32 nYOffset;
 } OMX_CONFIG_BRCMANNOTATETYPE;
 
 /* OMX_IndexParamBrcmStereoscopicMode: Stereoscopic camera support */
