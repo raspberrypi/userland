@@ -203,7 +203,7 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandStereoMode,  "-stereo",    "3d", "Select stereoscopic mode", 1},
    {CommandStereoDecimate,"-decimate","dec", "Half width/height of stereo image"},
    {CommandStereoSwap,  "-3dswap",    "3dswap", "Swap camera order for stereoscopic"},
-   {CommandAnnotateExtras,"-annotateex","ae",  "Set extra annotation parameters (text size, text colour(hex YUV), bg colour(hex YUV))", 2},
+   {CommandAnnotateExtras,"-annotateex","ae",  "Set extra annotation parameters (text size, text colour(hex YUV), bg colour(hex YUV), justify, x, y)", 2},
    {CommandAnalogGain,  "-analoggain", "ag", "Set the analog gain (floating point)", 1},
    {CommandDigitalGain, "-digitalgain", "dg", "Set the digital gain (floating point)", 1},
 };
@@ -772,9 +772,13 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
    case CommandAnnotateExtras:
    {
       // 3 parameters - text size (6-80), text colour (Hex VVUUYY) and background colour (Hex VVUUYY)
-      sscanf(arg2, "%u,%X,%X", &params->annotate_text_size,
+      sscanf(arg2, "%u,%X,%X,%u,%u,%u", &params->annotate_text_size,
                                &params->annotate_text_colour,
-                               &params->annotate_bg_colour);
+                               &params->annotate_bg_colour,
+                               &params->annotate_justify,
+                               &params->annotate_x,
+                               &params->annotate_y
+                               );
       used=2;
       break;
    }
@@ -1065,7 +1069,11 @@ int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_
    result += raspicamcontrol_set_annotate(camera, params->enable_annotate, params->annotate_string,
                        params->annotate_text_size,
                        params->annotate_text_colour,
-                       params->annotate_bg_colour);
+                       params->annotate_bg_colour,
+                       params->annotate_justify,
+                       params->annotate_x,
+                       params->annotate_y
+                       );
    result += raspicamcontrol_set_gains(camera, params->analog_gain, params->digital_gain);
 
    return result;
@@ -1594,16 +1602,17 @@ int raspicamcontrol_set_stats_pass(MMAL_COMPONENT_T *camera, int stats_pass)
  * @return 0 if successful, non-zero if any parameters out of range
  */
 int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, const char *string,
-                const int text_size, const int text_colour, const int bg_colour)
+                const int text_size, const int text_colour, const int bg_colour,
+                const unsigned int justify, const unsigned int x, const unsigned int y)
 {
-   MMAL_PARAMETER_CAMERA_ANNOTATE_V3_T annotate =
-      {{MMAL_PARAMETER_ANNOTATE, sizeof(MMAL_PARAMETER_CAMERA_ANNOTATE_V3_T)}};
+   MMAL_PARAMETER_CAMERA_ANNOTATE_V4_T annotate =
+      {{MMAL_PARAMETER_ANNOTATE, sizeof(MMAL_PARAMETER_CAMERA_ANNOTATE_V4_T)}};
 
    if (settings)
    {
       time_t t = time(NULL);
       struct tm tm = *localtime(&t);
-      char tmp[MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3];
+      char tmp[MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V4];
       int process_datetime = 1;
 
       annotate.enable = 1;
@@ -1682,6 +1691,10 @@ int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, c
       }
       else
          annotate.custom_background_colour = MMAL_FALSE;
+
+      annotate.justify = justify;
+      annotate.x_offset = x;
+      annotate.y_offset = y;
     }
     else
        annotate.enable = 0;
