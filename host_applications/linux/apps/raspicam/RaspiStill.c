@@ -2065,7 +2065,11 @@ int main(int argc, const char **argv)
                                       state.camera_parameters.annotate_string,
                                       state.camera_parameters.annotate_text_size,
                                       state.camera_parameters.annotate_text_colour,
-                                      state.camera_parameters.annotate_bg_colour);
+                                      state.camera_parameters.annotate_bg_colour,
+                                      state.camera_parameters.annotate_justify,
+                                      state.camera_parameters.annotate_x,
+                                      state.camera_parameters.annotate_y
+                                      );
 
                   if (state.verbose)
                      fprintf(stderr, "Starting capture %d\n", frame);

@@ -258,11 +258,6 @@ video_encode_test(char *outputfilename)
 
 	 out = ilclient_get_output_buffer(video_encode, 201, 1);
 
-	 r = OMX_FillThisBuffer(ILC_GET_HANDLE(video_encode), out);
-	 if (r != OMX_ErrorNone) {
-	    printf("Error filling buffer: %x\n", r);
-	 }
-
 	 if (out != NULL) {
 	    if (out->nFlags & OMX_BUFFERFLAG_CODECCONFIG) {
 	       int i;
@@ -283,6 +278,11 @@ video_encode_test(char *outputfilename)
 	 else {
 	    printf("Not getting it :(\n");
 	 }
+
+         r = OMX_FillThisBuffer(ILC_GET_HANDLE(video_encode), out);
+         if (r != OMX_ErrorNone) {
+            printf("Error filling buffer: %x\n", r);
+         }
 
       }
    }
