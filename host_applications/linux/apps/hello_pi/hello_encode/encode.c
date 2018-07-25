@@ -38,34 +38,33 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define NUMFRAMES 300
 #define WIDTH     640
-#define PITCH     ((WIDTH+31)&~31)
 #define HEIGHT    ((WIDTH)*9/16)
-#define HEIGHT16  ((HEIGHT+15)&~15)
-#define SIZE      ((WIDTH * HEIGHT16 * 3)/2)
 
 // generate an animated test card in YUV format
 static int
-generate_test_card(void *buf, OMX_U32 * filledLen, int frame)
+generate_test_card(void *buf, OMX_U32 * filledLen, int frame, OMX_PARAM_PORTDEFINITIONTYPE *def)
 {
    int i, j;
-   char *y = buf, *u = y + PITCH * HEIGHT16, *v =
-      u + (PITCH >> 1) * (HEIGHT16 >> 1);
+   OMX_VIDEO_PORTDEFINITIONTYPE *vid = &def->format.video;
+   char *y = buf;
+   char *u = y + vid->nStride * vid->nSliceHeight;
+   char *v = u + (vid->nStride >> 1) * (vid->nSliceHeight >> 1);
 
-   for (j = 0; j < HEIGHT / 2; j++) {
-      char *py = y + 2 * j * PITCH;
-      char *pu = u + j * (PITCH >> 1);
-      char *pv = v + j * (PITCH >> 1);
-      for (i = 0; i < WIDTH / 2; i++) {
-	 int z = (((i + frame) >> 4) ^ ((j + frame) >> 4)) & 15;
-	 py[0] = py[1] = py[PITCH] = py[PITCH + 1] = 0x80 + z * 0x8;
-	 pu[0] = 0x00 + z * 0x10;
-	 pv[0] = 0x80 + z * 0x30;
-	 py += 2;
-	 pu++;
-	 pv++;
+   for (j = 0; j < vid->nFrameHeight / 2; j++) {
+      char *py = y + 2 * j * vid->nStride;
+      char *pu = u + j * (vid->nStride >> 1);
+      char *pv = v + j * (vid->nStride >> 1);
+      for (i = 0; i < vid->nFrameWidth / 2; i++) {
+         int z = (((i + frame) >> 4) ^ ((j + frame) >> 4)) & 15;
+         py[0] = py[1] = py[vid->nStride] = py[vid->nStride + 1] = 0x80 + z * 0x8;
+         pu[0] = 0x00 + z * 0x10;
+         pv[0] = 0x80 + z * 0x30;
+         py += 2;
+         pu++;
+         pv++;
       }
    }
-   *filledLen = SIZE;
+   *filledLen = (vid->nStride * vid->nSliceHeight * 3) >> 1;
    return 1;
 }
 
@@ -148,7 +147,7 @@ video_encode_test(char *outputfilename)
    def.format.video.nFrameWidth = WIDTH;
    def.format.video.nFrameHeight = HEIGHT;
    def.format.video.xFramerate = 30 << 16;
-   def.format.video.nSliceHeight = def.format.video.nFrameHeight;
+   def.format.video.nSliceHeight = ALIGN_UP(def.format.video.nFrameHeight, 16);
    def.format.video.nStride = def.format.video.nFrameWidth;
    def.format.video.eColorFormat = OMX_COLOR_FormatYUV420PackedPlanar;
 
