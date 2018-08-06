@@ -57,6 +57,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define LOGGING_IMAGE_POOL_VERBOSE        (2<<18)
 #define LOGGING_HDMI                      (1<<20) /* HDMI and HDCP messages */
 #define LOGGING_HDMI_VERBOSE              (2<<20)
+#define LOGGING_HDMI_I2C                  (2<<20) /* Re-use HDMI verbose for HDMI I2C traces */
 #define LOGGING_MINIMAL                   (1<<22) /* minimal logging for bandwidth measurement, ie all others off. */
 #define LOGGING_MINIMAL_VERBOSE           (2<<22)
 #define LOGGING_TUNER                     (1<<24) /* ISP Tuner logs - AGC, AWB etc */
