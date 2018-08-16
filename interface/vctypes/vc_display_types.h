@@ -102,7 +102,7 @@ typedef struct
    // Format required for image data for 3D displays
    DISPLAY_3D_FORMAT_T format_3d;
    // If display requires PV1 (e.g. DSI1), special config is required in HVS
-   uint32_t use_pixelvalve_1;
+   uint32_t use_pixelvalve;
    // Set for DSI displays which use video mode.
    uint32_t dsi_video_mode;
    // Select HVS channel (usually 0).
