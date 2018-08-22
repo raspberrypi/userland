@@ -191,14 +191,17 @@ MMAL_STATUS_T mmal_connection_create(MMAL_CONNECTION_T **cx,
 
    connection->time_setup = vcos_getmicrosecs();
 
-   /* Set the format of the input port to match the output one */
-   status = mmal_format_full_copy(in->format, out->format);
-   if (status == MMAL_SUCCESS)
-      status = mmal_port_format_commit(in);
-   if (status != MMAL_SUCCESS)
+   if (!(connection->flags & MMAL_CONNECTION_FLAG_KEEP_PORT_FORMATS))
    {
-      LOG_ERROR("format not set on input port");
-      goto error;
+      /* Set the format of the input port to match the output one */
+      status = mmal_format_full_copy(in->format, out->format);
+      if (status == MMAL_SUCCESS)
+         status = mmal_port_format_commit(in);
+      if (status != MMAL_SUCCESS)
+      {
+         LOG_ERROR("format not set on input port");
+         goto error;
+      }
    }
 
    /* In pass-through mode we need to propagate the buffer requirements of the
