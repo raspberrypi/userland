@@ -81,6 +81,15 @@ typedef int (*override_callback_t)(int override_type,
 				   int target_off, int target_size,
 				   void *callback_value);
 
+uint8_t dtoverlay_read_u8(const void *src, int off);
+uint16_t dtoverlay_read_u16(const void *src, int off);
+uint32_t dtoverlay_read_u32(const void *src, int off);
+uint64_t dtoverlay_read_u64(const void *src, int off);
+void dtoverlay_write_u8(void *dst, int off, uint32_t val);
+void dtoverlay_write_u16(void *dst, int off, uint32_t val);
+void dtoverlay_write_u32(void *dst, int off, uint32_t val);
+void dtoverlay_write_u64(void *dst, int off, uint64_t val);
+
 /* Return values: -ve = fatal error, positive = non-fatal error */
 int dtoverlay_create_node(DTBLOB_T *dtb, const char *node_name, int path_len);
 

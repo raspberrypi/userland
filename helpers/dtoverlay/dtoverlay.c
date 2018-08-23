@@ -65,27 +65,48 @@ static void dtoverlay_stdio_logging(dtoverlay_logging_type_t type,
 static DTOVERLAY_LOGGING_FUNC *dtoverlay_logging_func = dtoverlay_stdio_logging;
 static int dtoverlay_debug_enabled = 0;
 
-static uint32_t dtoverlay_read_u32(const void *src, int off)
+uint8_t dtoverlay_read_u8(const void *src, int off)
+{
+   const unsigned char *p = src;
+   return (p[off + 0] << 0);
+}
+
+uint16_t dtoverlay_read_u16(const void *src, int off)
+{
+   const unsigned char *p = src;
+   return (p[off + 0] << 8) | (p[off + 1] << 0);
+}
+
+uint32_t dtoverlay_read_u32(const void *src, int off)
 {
    const unsigned char *p = src;
    return (p[off + 0] << 24) | (p[off + 1] << 16) |
           (p[off + 2] << 8)  | (p[off + 3] << 0);
 }
 
-static void dtoverlay_write_u8(void *dst, int off, uint32_t val)
+uint64_t dtoverlay_read_u64(const void *src, int off)
+{
+   const unsigned char *p = src;
+   return ((uint64_t)p[off + 0] << 56) | ((uint64_t)p[off + 1] << 48) |
+          ((uint64_t)p[off + 2] << 40)  | ((uint64_t)p[off + 3] << 32) |
+          (p[off + 4] << 24) | (p[off + 5] << 16) |
+          (p[off + 6] << 8)  | (p[off + 7] << 0);
+}
+
+void dtoverlay_write_u8(void *dst, int off, uint32_t val)
 {
    unsigned char *p = dst;
    p[off] = (val >> 0) & 0xff;
 }
 
-static void dtoverlay_write_u16(void *dst, int off, uint32_t val)
+void dtoverlay_write_u16(void *dst, int off, uint32_t val)
 {
    unsigned char *p = dst;
    p[off + 0] = (val >> 8) & 0xff;
    p[off + 1] = (val >> 0) & 0xff;
 }
 
-static void dtoverlay_write_u32(void *dst, int off, uint32_t val)
+void dtoverlay_write_u32(void *dst, int off, uint32_t val)
 {
    unsigned char *p = dst;
    p[off + 0] = (val >> 24) & 0xff;
@@ -94,7 +115,7 @@ static void dtoverlay_write_u32(void *dst, int off, uint32_t val)
    p[off + 3] = (val >> 0) & 0xff;
 }
 
-static void dtoverlay_write_u64(void *dst, int off, uint64_t val)
+void dtoverlay_write_u64(void *dst, int off, uint64_t val)
 {
    unsigned char *p = dst;
    p[off + 0] = (val >> 56) & 0xff;
