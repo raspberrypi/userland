@@ -4,7 +4,7 @@ if [ "$DISPLAY" == "" ]; then
 fi
 CMD="which lxpanelctl >/dev/null 2>&1 && lxpanelctl alsastart >/dev/null"
 if [ $(id -u) -eq 0 ]; then
-        exec su $(id -un) -c "$CMD"
+        exec su $(who am i | cut -d' ' -f1) -c "$CMD"
 else
         exec $CMD
 fi
