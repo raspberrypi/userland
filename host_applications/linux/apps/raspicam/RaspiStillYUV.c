@@ -116,7 +116,7 @@ typedef struct
    char *linkname;                     /// filename of output file
    int verbose;                        /// !0 if want detailed run information
    int timelapse;                      /// Delay between each picture in timelapse mode. If 0, disable timelapse
-   int useRGB;                         /// Output RGB data rather than YUV
+   MMAL_FOURCC_T encoding;             /// Use a MMAL encoding other than YUV
    int fullResPreview;                 /// If set, the camera preview port runs at capture resolution. Reduces fps.
    int frameNextMethod;                /// Which method to use to advance to next frame
    int settings;                       /// Request settings from the camera
@@ -164,6 +164,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandBurstMode    14
 #define CommandOnlyLuma     15
 #define CommandSensorMode   16
+#define CommandUseBGR       17
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -184,6 +185,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},
    { CommandOnlyLuma,  "-luma",     "y",  "Only output the luma / Y of the YUV data'", 0},
    { CommandSensorMode,    "-mode",       "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
+   { CommandUseBGR,  "-bgr",        "bgr","Save as BGR data rather than YUV", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -413,10 +415,10 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
       case CommandUseRGB: // display lots of data during run
          if (state->onlyLuma)
          {
-            fprintf(stderr, "--luma and --rgb are mutually exclusive\n");
+            fprintf(stderr, "--luma and --rgb/--bgr are mutually exclusive\n");
             valid = 0;
          }
-         state->useRGB = 1;
+         state->encoding = MMAL_ENCODING_RGB24;
          break;
 
       case CommandCamSelect:  //Select camera input port
@@ -453,7 +455,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
          break;
 
       case CommandOnlyLuma:
-         if (state->useRGB)
+         if (state->encoding)
          {
             fprintf(stderr, "--luma and --rgb are mutually exclusive\n");
             valid = 0;
@@ -468,6 +470,15 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
          }
          else
             valid = 0;
+         break;
+
+      case CommandUseBGR:
+         if (state->onlyLuma)
+         {
+            fprintf(stderr, "--luma and --rgb/--bgr are mutually exclusive\n");
+            valid = 0;
+         }
+         state->encoding = MMAL_ENCODING_BGR24;
          break;
 
       default:
@@ -833,9 +844,16 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
         mmal_port_parameter_set(still_port, &fps_range.hdr);
    }
    // Set our stills format on the stills  port
-   if (state->useRGB)
+   if (state->encoding)
    {
-      format->encoding = mmal_util_rgb_order_fixed(still_port) ? MMAL_ENCODING_RGB24 : MMAL_ENCODING_BGR24;
+      format->encoding = state->encoding;
+      if (!mmal_util_rgb_order_fixed(still_port))
+      {
+         if (format->encoding == MMAL_ENCODING_RGB24)
+            format->encoding = MMAL_ENCODING_BGR24;
+         else if (format->encoding == MMAL_ENCODING_BGR24)
+            format->encoding = MMAL_ENCODING_RGB24;
+      }
       format->encoding_variant = 0;  //Irrelevant when not in opaque mode
    }
    else
