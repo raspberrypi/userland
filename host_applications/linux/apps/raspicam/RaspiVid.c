@@ -2210,7 +2210,8 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
       // Continue rather than abort..
    }
 
-   if (state->encoding == MMAL_ENCODING_H264) {
+   if (state->encoding == MMAL_ENCODING_H264)
+   {
       //set INLINE HEADER flag to generate SPS and PPS for every IDR if requested
       if (mmal_port_parameter_set_boolean(encoder_output, MMAL_PARAMETER_VIDEO_ENCODE_INLINE_HEADER, state->bInlineHeaders) != MMAL_SUCCESS)
       {
