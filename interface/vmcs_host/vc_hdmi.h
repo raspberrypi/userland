@@ -69,7 +69,8 @@ typedef enum {
    HDMI_ASPECT_16_10    = 5, /**< 16:10*/
    HDMI_ASPECT_15_9     = 6, /**< 15:9 */
    HDMI_ASPECT_64_27    = 7, /**< 64:27 */
-   HDMI_ASPECT_21_9     = HDMI_ASPECT_64_27 /**< 21:9 is jargon, 64:27 is the actual aspect ratio */
+   HDMI_ASPECT_21_9     = HDMI_ASPECT_64_27, /**< 21:9 is jargon, 64:27 is the actual aspect ratio */
+   HDMI_ASPECT_256_135  = 8, /**< 256:135 */
    /* More aspect ratio values may be added here if defined by CEA in future */
 } HDMI_ASPECT_T;
 
