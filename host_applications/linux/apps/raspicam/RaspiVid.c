@@ -59,6 +59,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <memory.h>
 #include <sysexits.h>
 
@@ -1089,11 +1090,21 @@ static FILE *open_filename(RASPIVID_STATE *pState, char *filename)
    {
       // Create a new filename string
 
-      // If %d or %u, assume a segment numnber, otherwise use the formatter as
-      // input to strnftime
-      if (strstr(filename,"%u") != NULL || strstr(filename,"%d") != NULL)
-      {
-          asprintf(&tempname, filename, pState->segmentNumber);
+	  //If %d/%u or any valid combination e.g. %04d is specified, assume segment number.
+	  bool bSegmentNumber = false;
+	  const char* pPercent = strstr(filename, "%");
+	  if (pPercent)
+	  {
+	  	pPercent++;
+	  	while (*pPercent != '\0' && isdigit(*pPercent))
+	  		pPercent++;
+	  	if (*pPercent == 'u' || *pPercent == 'd')
+	  		bSegmentNumber = true;
+	  }
+
+	  if (bSegmentNumber)
+	  {
+		asprintf(&tempname, filename, pState->segmentNumber);
       }
       else
       {
