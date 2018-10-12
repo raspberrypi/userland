@@ -1092,7 +1092,7 @@ static FILE *open_filename(RASPIVID_STATE *pState, char *filename)
 
 	  //If %d/%u or any valid combination e.g. %04d is specified, assume segment number.
 	  bool bSegmentNumber = false;
-	  const char* pPercent = strchr(filename, "%");
+	  const char* pPercent = strchr(filename, '%');
 	  if (pPercent)
 	  {
 	  	pPercent++;
