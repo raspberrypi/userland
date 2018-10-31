@@ -2300,7 +2300,7 @@ int main(int argc, const char **argv)
                         vcos_log_error("Unable to send a buffer to encoder output port (%d)", q);
                   }
 
-                  if (state.burstCaptureMode && frame==1)
+                  if (state.burstCaptureMode)
                   {
                      mmal_port_parameter_set_boolean(state.camera_component->control,  MMAL_PARAMETER_CAMERA_BURST_CAPTURE, 1);
                   }
