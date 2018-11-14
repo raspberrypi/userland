@@ -2916,11 +2916,12 @@ int main(int argc, const char **argv)
          {
             // Only encode stuff if we have a filename and it opened
             // Note we use the copy in the callback, as the call back MIGHT change the file handle
-            if (state.callback_data.file_handle)
+            if (state.callback_data.file_handle || state.callback_data.raw_file_handle)
             {
                int running = 1;
 
                // Send all the buffers to the encoder output port
+               if (state.callback_data.file_handle)
                {
                   int num = mmal_queue_length(state.encoder_pool->queue);
                   int q;
@@ -2937,7 +2938,7 @@ int main(int argc, const char **argv)
                }
 
                // Send all the buffers to the splitter output port
-               if (state.raw_output) {
+               if (state.callback_data.raw_file_handle) {
                   int num = mmal_queue_length(state.splitter_pool->queue);
                   int q;
                   for (q = 0; q < num; q++)
