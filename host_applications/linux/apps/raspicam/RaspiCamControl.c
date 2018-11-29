@@ -175,6 +175,7 @@ static const int stereo_mode_map_size = sizeof(stereo_mode_map)/sizeof(stereo_mo
 #define CommandFlicker     25
 #define CommandAnalogGain  26
 #define CommandDigitalGain 27
+#define CommandSettings    28
 
 static COMMAND_LIST  cmdline_commands[] =
 {
@@ -206,6 +207,7 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandAnnotateExtras,"-annotateex","ae",  "Set extra annotation parameters (text size, text colour(hex YUV), bg colour(hex YUV), justify, x, y)", 2},
    {CommandAnalogGain,  "-analoggain", "ag", "Set the analog gain (floating point)", 1},
    {CommandDigitalGain, "-digitalgain", "dg", "Set the digital gain (floating point)", 1},
+   {CommandSettings,    "-settings",   "set","Retrieve camera settings and write to stdout", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -615,7 +617,7 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
       params->exposureMode = exposure_mode_from_string(arg2);
       used = 2;
       break;
-      
+
    case CommandFlicker : // flicker avoid mode - needs string
       params->flickerAvoidMode = flicker_avoid_mode_from_string(arg2);
       used = 2;
@@ -839,6 +841,12 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
       break;
    }
 
+   case CommandSettings:
+   {
+      params->settings = 1;
+      used = 1;
+      break;
+   }
 
    }
 
@@ -862,7 +870,7 @@ void raspicamcontrol_display_help()
    {
       fprintf(stdout, ",%s", exposure_map[i].mode);
    }
-   
+
    fprintf(stdout, "\n\nFlicker avoid mode options :\n%s", flicker_avoid_map[0].mode );
 
    for (i=1;i<flicker_avoid_map_size;i++)
@@ -1075,6 +1083,21 @@ int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_
                        params->annotate_y
                        );
    result += raspicamcontrol_set_gains(camera, params->analog_gain, params->digital_gain);
+
+   if (params->settings)
+   {
+	  MMAL_PARAMETER_CHANGE_EVENT_REQUEST_T change_event_request =
+		 {{MMAL_PARAMETER_CHANGE_EVENT_REQUEST, sizeof(MMAL_PARAMETER_CHANGE_EVENT_REQUEST_T)},
+		  MMAL_PARAMETER_CAMERA_SETTINGS, 1};
+
+	  MMAL_STATUS_T status = mmal_port_parameter_set(camera->control, &change_event_request.hdr);
+	  if ( status != MMAL_SUCCESS )
+	  {
+		 vcos_log_error("No camera settings events");
+	  }
+
+	  result += status;
+   }
 
    return result;
 }
@@ -1427,7 +1450,7 @@ int raspicamcontrol_set_rotation(MMAL_COMPONENT_T *camera, int rotation)
    mmal_port_parameter_set_int32(camera->output[1], MMAL_PARAMETER_ROTATION, my_rotation);
    mmal_port_parameter_set_int32(camera->output[2], MMAL_PARAMETER_ROTATION, my_rotation);
 
-   return ret;
+   return mmal_status_to_int(ret);
 }
 
 /**
@@ -1453,7 +1476,7 @@ int raspicamcontrol_set_flips(MMAL_COMPONENT_T *camera, int hflip, int vflip)
 
    mmal_port_parameter_set(camera->output[0], &mirror.hdr);
    mmal_port_parameter_set(camera->output[1], &mirror.hdr);
-   return mmal_port_parameter_set(camera->output[2], &mirror.hdr);
+   return mmal_status_to_int(mmal_port_parameter_set(camera->output[2], &mirror.hdr));
 }
 
 /**
@@ -1472,7 +1495,7 @@ int raspicamcontrol_set_ROI(MMAL_COMPONENT_T *camera, PARAM_FLOAT_RECT_T rect)
    crop.rect.width = (65536 * rect.w);
    crop.rect.height = (65536 * rect.h);
 
-   return mmal_port_parameter_set(camera->control, &crop.hdr);
+   return mmal_status_to_int(mmal_port_parameter_set(camera->control, &crop.hdr));
 }
 
 /**
@@ -1749,7 +1772,7 @@ static int raspicamcontrol_get_mem_gpu(void)
 
 /**
  * Ask GPU about its camera abilities
- * @param supported None-zero if software supports the camera 
+ * @param supported None-zero if software supports the camera
  * @param detected  None-zero if a camera has been detected
  */
 static void raspicamcontrol_get_camera(int *supported, int *detected)
@@ -1765,8 +1788,9 @@ static void raspicamcontrol_get_camera(int *supported, int *detected)
 }
 
 /**
- * Check to see if camera is supported, and we have allocated enough meooryAsk GPU about its camera abilities
- * @param supported None-zero if software supports the camera 
+ * Check to see if camera is supported, and we have allocated enough memory
+ * Ask GPU about its camera abilities
+ * @param supported None-zero if software supports the camera
  * @param detected  None-zero if a camera has been detected
  */
 void raspicamcontrol_check_configuration(int min_gpu_mem)
@@ -1784,3 +1808,43 @@ void raspicamcontrol_check_configuration(int min_gpu_mem)
       vcos_log_error("Failed to run camera app. Please check for firmware updates\n");
 }
 
+
+/** Default camera callback function
+ * Handles the --settings
+ * @param port
+ * @param Callback data
+ */
+void default_camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
+{
+   fprintf(stderr, "Camera control callback  cmd=0x%08x", buffer->cmd);
+
+   if (buffer->cmd == MMAL_EVENT_PARAMETER_CHANGED)
+   {
+      MMAL_EVENT_PARAMETER_CHANGED_T *param = (MMAL_EVENT_PARAMETER_CHANGED_T *)buffer->data;
+      switch (param->hdr.id) {
+         case MMAL_PARAMETER_CAMERA_SETTINGS:
+         {
+            MMAL_PARAMETER_CAMERA_SETTINGS_T *settings = (MMAL_PARAMETER_CAMERA_SETTINGS_T*)param;
+            vcos_log_error("Exposure now %u, analog gain %u/%u, digital gain %u/%u",
+			settings->exposure,
+                        settings->analog_gain.num, settings->analog_gain.den,
+                        settings->digital_gain.num, settings->digital_gain.den);
+            vcos_log_error("AWB R=%u/%u, B=%u/%u",
+                        settings->awb_red_gain.num, settings->awb_red_gain.den,
+                        settings->awb_blue_gain.num, settings->awb_blue_gain.den
+                        );
+         }
+         break;
+      }
+   }
+   else if (buffer->cmd == MMAL_EVENT_ERROR)
+   {
+      vcos_log_error("No data received from sensor. Check all connections, including the Sunny one on the camera board");
+   }
+   else
+   {
+      vcos_log_error("Received unexpected camera control callback event, 0x%08x", buffer->cmd);
+   }
+
+   mmal_buffer_header_release(buffer);
+}

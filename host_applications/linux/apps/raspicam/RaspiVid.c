@@ -225,7 +225,6 @@ struct RASPIVID_STATE_S
    RAW_OUTPUT_FMT raw_output_fmt;       /// The raw video format
    char *raw_filename;                  /// Filename for raw video output
    int cameraNum;                       /// Camera number
-   int settings;                        /// Request settings from the camera
    int sensor_mode;			            /// Sensor mode. 0=auto. Check docs/forum for modes selected by other values.
    int intra_refresh_type;              /// What intra refresh type to use. -1 to not set.
    int frame;
@@ -316,7 +315,6 @@ static void display_valid_parameters(char *app_name);
 #define CommandCircular     22
 #define CommandIMV          23
 #define CommandCamSelect    24
-#define CommandSettings     25
 #define CommandSensorMode   26
 #define CommandIntraRefreshType 27
 #define CommandFlush        28
@@ -358,7 +356,6 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandCircular,      "-circular",   "c",  "Run encoded data through circular buffer until triggered then save", 0},
    { CommandIMV,           "-vectors",    "x",  "Output filename <filename> for inline motion vectors", 1 },
    { CommandCamSelect,     "-camselect",  "cs", "Select camera <number>. Default 0", 1 },
-   { CommandSettings,      "-settings",   "set","Retrieve camera settings and write to stdout", 0},
    { CommandSensorMode,    "-mode",       "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
    { CommandIntraRefreshType,"-irefresh", "if", "Set intra refresh type", 1},
    { CommandFlush,         "-flush",      "fl",  "Flush buffers in order to decrease latency", 0 },
@@ -436,7 +433,6 @@ static void default_status(RASPIVID_STATE *state)
 
    state->inlineMotionVectors = 0;
    state->cameraNum = 0;
-   state->settings = 0;
    state->sensor_mode = 0;
 
    state->intra_refresh_type = -1;
@@ -673,7 +669,7 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
             valid = 0;
          break;
       }
-      
+
       case CommandPreviewEnc:
          state->immutableInput = 0;
          break;
@@ -824,10 +820,6 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
             valid = 0;
          break;
       }
-
-      case CommandSettings:
-         state->settings = 1;
-         break;
 
       case CommandSensorMode:
       {
@@ -1032,47 +1024,6 @@ static void display_valid_parameters(char *app_name)
    fprintf(stdout, "\n");
 
    return;
-}
-
-/**
- *  buffer header callback function for camera control
- *
- *  Callback will dump buffer data to the specific file
- *
- * @param port Pointer to port from which callback originated
- * @param buffer mmal buffer header pointer
- */
-static void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
-{
-   if (buffer->cmd == MMAL_EVENT_PARAMETER_CHANGED)
-   {
-      MMAL_EVENT_PARAMETER_CHANGED_T *param = (MMAL_EVENT_PARAMETER_CHANGED_T *)buffer->data;
-      switch (param->hdr.id) {
-         case MMAL_PARAMETER_CAMERA_SETTINGS:
-         {
-            MMAL_PARAMETER_CAMERA_SETTINGS_T *settings = (MMAL_PARAMETER_CAMERA_SETTINGS_T*)param;
-            vcos_log_error("Exposure now %u, analog gain %u/%u, digital gain %u/%u",
-			settings->exposure,
-                        settings->analog_gain.num, settings->analog_gain.den,
-                        settings->digital_gain.num, settings->digital_gain.den);
-            vcos_log_error("AWB R=%u/%u, B=%u/%u",
-                        settings->awb_red_gain.num, settings->awb_red_gain.den,
-                        settings->awb_blue_gain.num, settings->awb_blue_gain.den
-                        );
-         }
-         break;
-      }
-   }
-   else if (buffer->cmd == MMAL_EVENT_ERROR)
-   {
-      vcos_log_error("No data received from sensor. Check all connections, including the Sunny one on the camera board");
-   }
-   else
-   {
-      vcos_log_error("Received unexpected camera control callback event, 0x%08x", buffer->cmd);
-   }
-
-   mmal_buffer_header_release(buffer);
 }
 
 
@@ -1670,21 +1621,8 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
    video_port = camera->output[MMAL_CAMERA_VIDEO_PORT];
    still_port = camera->output[MMAL_CAMERA_CAPTURE_PORT];
 
-   if (state->settings)
-   {
-      MMAL_PARAMETER_CHANGE_EVENT_REQUEST_T change_event_request =
-         {{MMAL_PARAMETER_CHANGE_EVENT_REQUEST, sizeof(MMAL_PARAMETER_CHANGE_EVENT_REQUEST_T)},
-          MMAL_PARAMETER_CAMERA_SETTINGS, 1};
-
-      status = mmal_port_parameter_set(camera->control, &change_event_request.hdr);
-      if ( status != MMAL_SUCCESS )
-      {
-         vcos_log_error("No camera settings events");
-      }
-   }
-
    // Enable the camera, and tell it its control callback function
-   status = mmal_port_enable(camera->control, camera_control_callback);
+   status = mmal_port_enable(camera->control, default_camera_control_callback);
 
    if (status != MMAL_SUCCESS)
    {
@@ -2097,7 +2035,7 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
          state->bitrate = MAX_BITRATE_MJPEG;
       }
    }
-   
+
    encoder_output->format->bitrate = state->bitrate;
 
    if (state->encoding == MMAL_ENCODING_H264)
@@ -2204,7 +2142,7 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
             goto error;
          }
       }
-      
+
       param.profile[0].level = state->level;
 
       status = mmal_port_parameter_set(encoder_output, &param.hdr);
@@ -2250,7 +2188,7 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
          MMAL_PARAMETER_VIDEO_INTRA_REFRESH_T  param;
          param.hdr.id = MMAL_PARAMETER_VIDEO_INTRA_REFRESH;
          param.hdr.size = sizeof(param);
-   
+
          // Get first so we don't overwrite anything unexpectedly
          status = mmal_port_parameter_get(encoder_output, &param.hdr);
          if (status != MMAL_SUCCESS)
