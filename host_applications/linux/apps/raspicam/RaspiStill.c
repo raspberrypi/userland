@@ -47,7 +47,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 // We use some GNU extensions (asprintf, basename)
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -361,7 +363,7 @@ static void default_status(RASPISTILL_STATE *state)
       return;
    }
 
-   state->timeout = 5000; // 5s delay before take image
+   state->timeout = -1; // replaced with 5000ms later if unset
    state->quality = 85;
    state->wantRAW = 0;
    state->filename = NULL;
@@ -623,7 +625,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
 
       case CommandTimeout: // Time to run viewfinder for before taking picture, in seconds
       {
-         if (sscanf(argv[i + 1], "%u", &state->timeout) == 1)
+         if (sscanf(argv[i + 1], "%d", &state->timeout) == 1)
          {
             // Ensure that if previously selected CommandKeypress we don't overwrite it
             if (state->timeout == 0 && state->frameNextMethod == FRAME_NEXT_SINGLE)
@@ -717,7 +719,6 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
             else
                state->frameNextMethod = FRAME_NEXT_IMMEDIATELY;
 
-
             i++;
          }
          break;
@@ -728,6 +729,10 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
 
       case CommandKeypress: // Set keypress between capture mode
          state->frameNextMethod = FRAME_NEXT_KEYPRESS;
+
+         if (state->timeout == -1)
+            state->timeout = 0;
+
          break;
 
       case CommandSignal:   // Set SIGUSR1 & SIGUSR2 between capture mode
@@ -735,6 +740,10 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          // Reenable the signal
          signal(SIGUSR1, signal_handler);
          signal(SIGUSR2, signal_handler);
+
+         if (state->timeout == -1)
+            state->timeout = 0;
+
          break;
 
       case CommandGL:
@@ -2018,6 +2027,9 @@ int main(int argc, const char **argv)
       exit(EX_USAGE);
    }
 
+   if (state.timeout == -1)
+	   state.timeout = 5000;
+
    // Setup for sensor specific parameters
    set_sensor_defaults(&state);
 
@@ -2306,7 +2318,7 @@ int main(int argc, const char **argv)
                   }
 
                   if(state.camera_parameters.enable_annotate)
-                     raspicamcontrol_set_annotate(state.camera_component, state.camera_parameters.enable_annotate, 
+                     raspicamcontrol_set_annotate(state.camera_component, state.camera_parameters.enable_annotate,
                                       state.camera_parameters.annotate_string,
                                       state.camera_parameters.annotate_text_size,
                                       state.camera_parameters.annotate_text_colour,
