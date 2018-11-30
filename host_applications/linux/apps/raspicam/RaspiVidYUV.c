@@ -267,7 +267,7 @@ static void default_status(RASPIVIDYUV_STATE *state)
    memset(state, 0, sizeof(RASPIVIDYUV_STATE));
 
    // Now set anything non-zero
-   state->timeout = 5000;     // 5s delay before take image
+   state->timeout = -1; // replaced with 5000ms later if unset
    state->width = 1920;       // Default to 1080p
    state->height = 1080;
    state->framerate = VIDEO_FRAME_RATE_NUM;
@@ -418,7 +418,7 @@ static int parse_cmdline(int argc, const char **argv, RASPIVIDYUV_STATE *state)
 
       case CommandTimeout: // Time to run viewfinder/capture
       {
-         if (sscanf(argv[i + 1], "%u", &state->timeout) == 1)
+         if (sscanf(argv[i + 1], "%d", &state->timeout) == 1)
          {
             // Ensure that if previously selected a waitMethod we don't overwrite it
             if (state->timeout == 0 && state->waitMethod == WAIT_METHOD_NONE)
@@ -482,6 +482,9 @@ static int parse_cmdline(int argc, const char **argv, RASPIVIDYUV_STATE *state)
                state->offTime = 1000;
 
             state->waitMethod = WAIT_METHOD_TIMED;
+
+            if (state->timeout == -1)
+               state->timeout = 0;
          }
          else
             valid = 0;
@@ -490,12 +493,20 @@ static int parse_cmdline(int argc, const char **argv, RASPIVIDYUV_STATE *state)
 
       case CommandKeypress:
          state->waitMethod = WAIT_METHOD_KEYPRESS;
+
+         if (state->timeout == -1)
+            state->timeout = 0;
+
          break;
 
       case CommandSignal:
          state->waitMethod = WAIT_METHOD_SIGNAL;
          // Reenable the signal
          signal(SIGUSR1, signal_handler);
+
+         if (state->timeout == -1)
+            state->timeout = 0;
+
          break;
 
       case CommandInitialState:
@@ -1360,6 +1371,9 @@ int main(int argc, const char **argv)
       status = -1;
       exit(EX_USAGE);
    }
+
+   if (state.timeout == -1)
+	   state.timeout = 5000;
 
    if (state.verbose)
    {
