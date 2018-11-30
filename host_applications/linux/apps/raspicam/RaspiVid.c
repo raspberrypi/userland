@@ -119,17 +119,14 @@ const int ABORT_INTERVAL = 100; // ms
 
 /// Capture/Pause switch method
 /// Simply capture for time specified
-#define WAIT_METHOD_NONE           0
-/// Cycle between capture and pause for times specified
-#define WAIT_METHOD_TIMED          1
-/// Switch between capture and pause on keypress
-#define WAIT_METHOD_KEYPRESS       2
-/// Switch between capture and pause on signal
-#define WAIT_METHOD_SIGNAL         3
-/// Run/record forever
-#define WAIT_METHOD_FOREVER        4
-
-
+enum
+{
+   WAIT_METHOD_NONE,       /// Simply capture for time specified
+   WAIT_METHOD_TIMED,      /// Cycle between capture and pause for times specified
+   WAIT_METHOD_KEYPRESS,   /// Switch between capture and pause on keypress
+   WAIT_METHOD_SIGNAL,     /// Switch between capture and pause on signal
+   WAIT_METHOD_FOREVER     /// Run/record forever
+};
 
 int mmal_status_to_int(MMAL_STATUS_T status);
 static void signal_handler(int signal_number);
@@ -290,41 +287,43 @@ static int raw_output_fmt_map_size = sizeof(raw_output_fmt_map) / sizeof(raw_out
 static void display_valid_parameters(char *app_name);
 
 /// Command ID's and Structure defining our command line options
-#define CommandHelp         0
-#define CommandWidth        1
-#define CommandHeight       2
-#define CommandBitrate      3
-#define CommandOutput       4
-#define CommandVerbose      5
-#define CommandTimeout      6
-#define CommandDemoMode     7
-#define CommandFramerate    8
-#define CommandPreviewEnc   9
-#define CommandIntraPeriod  10
-#define CommandProfile      11
-#define CommandTimed        12
-#define CommandSignal       13
-#define CommandKeypress     14
-#define CommandInitialState 15
-#define CommandQP           16
-#define CommandInlineHeaders 17
-#define CommandSegmentFile  18
-#define CommandSegmentWrap  19
-#define CommandSegmentStart 20
-#define CommandSplitWait    21
-#define CommandCircular     22
-#define CommandIMV          23
-#define CommandCamSelect    24
-#define CommandSensorMode   26
-#define CommandIntraRefreshType 27
-#define CommandFlush        28
-#define CommandSavePTS      29
-#define CommandCodec        30
-#define CommandLevel        31
-#define CommandRaw          32
-#define CommandRawFormat    33
-#define CommandNetListen    34
-#define CommandSPSTimings   35
+enum {
+   CommandHelp,
+   CommandWidth,
+   CommandHeight,
+   CommandBitrate,
+   CommandOutput,
+   CommandVerbose,
+   CommandTimeout,
+   CommandDemoMode,
+   CommandFramerate,
+   CommandPreviewEnc,
+   CommandIntraPeriod,
+   CommandProfile,
+   CommandTimed,
+   CommandSignal,
+   CommandKeypress,
+   CommandInitialState,
+   CommandQP,
+   CommandInlineHeaders,
+   CommandSegmentFile,
+   CommandSegmentWrap,
+   CommandSegmentStart,
+   CommandSplitWait,
+   CommandCircular,
+   CommandIMV,
+   CommandCamSelect,
+   CommandSensorMode,
+   CommandIntraRefreshType,
+   CommandFlush,
+   CommandSavePTS,
+   CommandCodec,
+   CommandLevel,
+   CommandRaw,
+   CommandRawFormat,
+   CommandNetListen,
+   CommandSPSTimings
+};
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -1037,7 +1036,6 @@ static void display_valid_parameters(char *app_name)
    return;
 }
 
-
 /**
  * Open a file based on the settings in state
  *
@@ -1263,8 +1261,6 @@ static void update_annotation_data(RASPIVID_STATE *state)
                        );
    }
 }
-
-
 
 /**
  *  buffer header callback function for encoder

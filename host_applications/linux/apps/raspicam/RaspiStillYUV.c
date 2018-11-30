@@ -94,13 +94,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define VIDEO_OUTPUT_BUFFERS_NUM 3
 
 /// Frame advance method
-#define FRAME_NEXT_SINGLE        0
-#define FRAME_NEXT_TIMELAPSE     1
-#define FRAME_NEXT_KEYPRESS      2
-#define FRAME_NEXT_FOREVER       3
-#define FRAME_NEXT_GPIO          4
-#define FRAME_NEXT_SIGNAL        5
-#define FRAME_NEXT_IMMEDIATELY   6
+enum
+{
+   FRAME_NEXT_SINGLE,
+   FRAME_NEXT_TIMELAPSE,
+   FRAME_NEXT_KEYPRESS,
+   FRAME_NEXT_FOREVER,
+   FRAME_NEXT_GPIO,
+   FRAME_NEXT_SIGNAL,
+   FRAME_NEXT_IMMEDIATELY
+};
 
 #define CAMERA_SETTLE_TIME       1000
 
@@ -148,23 +151,26 @@ typedef struct
 static void display_valid_parameters(char *app_name);
 
 /// Comamnd ID's and Structure defining our command line options
-#define CommandHelp         0
-#define CommandWidth        1
-#define CommandHeight       2
-#define CommandOutput       3
-#define CommandVerbose      4
-#define CommandTimeout      5
-#define CommandTimelapse    6
-#define CommandUseRGB       7
-#define CommandCamSelect    8
-#define CommandFullResPreview 9
-#define CommandLink         10
-#define CommandKeypress     11
-#define CommandSignal       12
-#define CommandBurstMode    14
-#define CommandOnlyLuma     15
-#define CommandSensorMode   16
-#define CommandUseBGR       17
+enum
+{
+   CommandHelp,
+   CommandWidth,
+   CommandHeight,
+   CommandOutput,
+   CommandVerbose,
+   CommandTimeout,
+   CommandTimelapse,
+   CommandUseRGB,
+   CommandCamSelect,
+   CommandFullResPreview,
+   CommandLink,
+   CommandKeypress,
+   CommandSignal,
+   CommandBurstMode,
+   CommandOnlyLuma,
+   CommandSensorMode,
+   CommandUseBGR
+};
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -542,13 +548,6 @@ static void display_valid_parameters(char *app_name)
 
    return;
 }
-
-/**
- *  buffer header callback function for camera control
- *
- * @param port Pointer to port from which callback originated
- * @param buffer mmal buffer header pointer
- */
 
 /**
  *  buffer header callback function for camera output port
@@ -1072,19 +1071,19 @@ static int wait_for_next_frame(RASPISTILLYUV_STATE *state, int *frame)
 
    case FRAME_NEXT_KEYPRESS :
    {
-	int ch;
+      int ch;
 
-	if (state->verbose)
+      if (state->verbose)
          fprintf(stderr, "Press Enter to capture, X then ENTER to exit\n");
 
-	ch = getchar();
-	*frame+=1;
-	if (ch == 'x' || ch == 'X')
-	   return 0;
-	else
-	{
-	      return keep_running;
-	}
+      ch = getchar();
+      *frame+=1;
+      if (ch == 'x' || ch == 'X')
+         return 0;
+      else
+      {
+         return keep_running;
+      }
    }
 
    case FRAME_NEXT_IMMEDIATELY :

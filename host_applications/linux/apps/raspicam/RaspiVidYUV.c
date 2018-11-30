@@ -103,16 +103,14 @@ const int ABORT_INTERVAL = 100; // ms
 
 
 /// Capture/Pause switch method
-/// Simply capture for time specified
-#define WAIT_METHOD_NONE           0
-/// Cycle between capture and pause for times specified
-#define WAIT_METHOD_TIMED          1
-/// Switch between capture and pause on keypress
-#define WAIT_METHOD_KEYPRESS       2
-/// Switch between capture and pause on signal
-#define WAIT_METHOD_SIGNAL         3
-/// Run/record forever
-#define WAIT_METHOD_FOREVER        4
+enum
+{
+   WAIT_METHOD_NONE,       /// Simply capture for time specified
+   WAIT_METHOD_TIMED,      /// Cycle between capture and pause for times specified
+   WAIT_METHOD_KEYPRESS,   /// Switch between capture and pause on keypress
+   WAIT_METHOD_SIGNAL,     /// Switch between capture and pause on signal
+   WAIT_METHOD_FOREVER     /// Run/record forever
+};
 
 int mmal_status_to_int(MMAL_STATUS_T status);
 static void signal_handler(int signal_number);
@@ -189,24 +187,27 @@ static int initial_map_size = sizeof(initial_map) / sizeof(initial_map[0]);
 static void display_valid_parameters(char *app_name);
 
 /// Command ID's and Structure defining our command line options
-#define CommandHelp         0
-#define CommandWidth        1
-#define CommandHeight       2
-#define CommandOutput       3
-#define CommandVerbose      4
-#define CommandTimeout      5
-#define CommandDemoMode     6
-#define CommandFramerate    7
-#define CommandTimed        8
-#define CommandSignal       9
-#define CommandKeypress     10
-#define CommandInitialState 11
-#define CommandCamSelect    12
-#define CommandSensorMode   14
-#define CommandOnlyLuma     15
-#define CommandUseRGB       16
-#define CommandSavePTS      17
-#define CommandNetListen    18
+enum
+{
+   CommandHelp,
+   CommandWidth,
+   CommandHeight,
+   CommandOutput,
+   CommandVerbose,
+   CommandTimeout,
+   CommandDemoMode,
+   CommandFramerate,
+   CommandTimed,
+   CommandSignal,
+   CommandKeypress,
+   CommandInitialState,
+   CommandCamSelect,
+   CommandSensorMode,
+   CommandOnlyLuma,
+   CommandUseRGB,
+   CommandSavePTS,
+   CommandNetListen
+};
 
 static COMMAND_LIST cmdline_commands[] =
 {
