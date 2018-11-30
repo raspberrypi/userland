@@ -47,7 +47,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 // We use some GNU extensions (basename)
-#define _GNU_SOURCE
+#ifndef _GNU_SOURCE
+   #define _GNU_SOURCE
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -119,7 +121,6 @@ typedef struct
    MMAL_FOURCC_T encoding;             /// Use a MMAL encoding other than YUV
    int fullResPreview;                 /// If set, the camera preview port runs at capture resolution. Reduces fps.
    int frameNextMethod;                /// Which method to use to advance to next frame
-   int settings;                       /// Request settings from the camera
    int cameraNum;                      /// Camera number
    int burstCaptureMode;               /// Enable burst mode
    int onlyLuma;                       /// Only output the luma / Y plane of the YUV data
@@ -160,7 +161,6 @@ static void display_valid_parameters(char *app_name);
 #define CommandLink         10
 #define CommandKeypress     11
 #define CommandSignal       12
-#define CommandSettings     13
 #define CommandBurstMode    14
 #define CommandOnlyLuma     15
 #define CommandSensorMode   16
@@ -181,7 +181,6 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandLink,    "-latest",     "l",  "Link latest complete image to filename <filename>", 1},
    { CommandKeypress,"-keypress",   "k",  "Wait between captures for a ENTER, X then ENTER to exit", 0},
    { CommandSignal,  "-signal",     "s",  "Wait between captures for a SIGUSR1 from another process", 0},
-   { CommandSettings, "-settings",  "set","Retrieve camera settings and write to stdout", 0},
    { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},
    { CommandOnlyLuma,  "-luma",     "y",  "Only output the luma / Y of the YUV data'", 0},
    { CommandSensorMode,    "-mode",       "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
@@ -232,7 +231,6 @@ static void default_status(RASPISTILLYUV_STATE *state)
    state->verbose = 0;
    state->fullResPreview = 0;
    state->frameNextMethod = FRAME_NEXT_SINGLE;
-   state->settings = 0;
    state->burstCaptureMode=0;
    state->onlyLuma = 0;
 
@@ -446,10 +444,6 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
          signal(SIGUSR1, signal_handler);
          break;
 
-      case CommandSettings:
-         state->settings = 1;
-         break;
-
       case CommandBurstMode:
          state->burstCaptureMode=1;
          break;
@@ -547,40 +541,6 @@ static void display_valid_parameters(char *app_name)
  * @param port Pointer to port from which callback originated
  * @param buffer mmal buffer header pointer
  */
-static void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
-{
-   fprintf(stderr, "Camera control callback  cmd=0x%08x", buffer->cmd);
-
-   if (buffer->cmd == MMAL_EVENT_PARAMETER_CHANGED)
-   {
-      MMAL_EVENT_PARAMETER_CHANGED_T *param = (MMAL_EVENT_PARAMETER_CHANGED_T *)buffer->data;
-      switch (param->hdr.id) {
-         case MMAL_PARAMETER_CAMERA_SETTINGS:
-         {
-            MMAL_PARAMETER_CAMERA_SETTINGS_T *settings = (MMAL_PARAMETER_CAMERA_SETTINGS_T*)param;
-            vcos_log_error("Exposure now %u, analog gain %u/%u, digital gain %u/%u",
-			settings->exposure,
-                        settings->analog_gain.num, settings->analog_gain.den,
-                        settings->digital_gain.num, settings->digital_gain.den);
-            vcos_log_error("AWB R=%u/%u, B=%u/%u",
-                        settings->awb_red_gain.num, settings->awb_red_gain.den,
-                        settings->awb_blue_gain.num, settings->awb_blue_gain.den
-                        );
-         }
-         break;
-      }
-   }
-   else if (buffer->cmd == MMAL_EVENT_ERROR)
-   {
-      vcos_log_error("No data received from sensor. Check all connections, including the Sunny one on the camera board");
-   }
-   else
-   {
-      vcos_log_error("Received unexpected camera control callback event, 0x%08x", buffer->cmd);
-   }
-
-   mmal_buffer_header_release(buffer);
-}
 
 /**
  *  buffer header callback function for camera output port
@@ -712,21 +672,8 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
    video_port = camera->output[MMAL_CAMERA_VIDEO_PORT];
    still_port = camera->output[MMAL_CAMERA_CAPTURE_PORT];
 
-   if (state->settings)
-   {
-      MMAL_PARAMETER_CHANGE_EVENT_REQUEST_T change_event_request =
-         {{MMAL_PARAMETER_CHANGE_EVENT_REQUEST, sizeof(MMAL_PARAMETER_CHANGE_EVENT_REQUEST_T)},
-          MMAL_PARAMETER_CAMERA_SETTINGS, 1};
-
-      status = mmal_port_parameter_set(camera->control, &change_event_request.hdr);
-      if ( status != MMAL_SUCCESS )
-      {
-         vcos_log_error("No camera settings events");
-      }
-   }
-
    // Enable the camera, and tell it its control callback function
-   status = mmal_port_enable(camera->control, camera_control_callback);
+   status = mmal_port_enable(camera->control, default_camera_control_callback);
 
    if (status != MMAL_SUCCESS )
    {
