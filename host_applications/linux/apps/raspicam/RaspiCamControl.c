@@ -146,36 +146,38 @@ static XREF_T stereo_mode_map[] =
 
 static const int stereo_mode_map_size = sizeof(stereo_mode_map)/sizeof(stereo_mode_map[0]);
 
-
-#define CommandSharpness   0
-#define CommandContrast    1
-#define CommandBrightness  2
-#define CommandSaturation  3
-#define CommandISO         4
-#define CommandVideoStab   5
-#define CommandEVComp      6
-#define CommandExposure    7
-#define CommandAWB         8
-#define CommandImageFX     9
-#define CommandColourFX    10
-#define CommandMeterMode   11
-#define CommandRotation    12
-#define CommandHFlip       13
-#define CommandVFlip       14
-#define CommandROI         15
-#define CommandShutterSpeed 16
-#define CommandAwbGains    17
-#define CommandDRCLevel    18
-#define CommandStatsPass   19
-#define CommandAnnotate    20
-#define CommandStereoMode  21
-#define CommandStereoDecimate 22
-#define CommandStereoSwap  23
-#define CommandAnnotateExtras 24
-#define CommandFlicker     25
-#define CommandAnalogGain  26
-#define CommandDigitalGain 27
-#define CommandSettings    28
+enum
+{
+   CommandSharpness,
+   CommandContrast,
+   CommandBrightness,
+   CommandSaturation,
+   CommandISO,
+   CommandVideoStab,
+   CommandEVComp,
+   CommandExposure,
+   CommandAWB,
+   CommandImageFX,
+   CommandColourFX,
+   CommandMeterMode,
+   CommandRotation,
+   CommandHFlip,
+   CommandVFlip,
+   CommandROI,
+   CommandShutterSpeed,
+   CommandAwbGains,
+   CommandDRCLevel,
+   CommandStatsPass,
+   CommandAnnotate,
+   CommandStereoMode,
+   CommandStereoDecimate,
+   CommandStereoSwap,
+   CommandAnnotateExtras,
+   CommandFlicker,
+   CommandAnalogGain,
+   CommandDigitalGain,
+   CommandSettings
+};
 
 static COMMAND_LIST  cmdline_commands[] =
 {
@@ -1075,28 +1077,27 @@ int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_
    result += raspicamcontrol_set_DRC(camera, params->drc_level);
    result += raspicamcontrol_set_stats_pass(camera, params->stats_pass);
    result += raspicamcontrol_set_annotate(camera, params->enable_annotate, params->annotate_string,
-                       params->annotate_text_size,
-                       params->annotate_text_colour,
-                       params->annotate_bg_colour,
-                       params->annotate_justify,
-                       params->annotate_x,
-                       params->annotate_y
-                       );
+                                          params->annotate_text_size,
+                                          params->annotate_text_colour,
+                                          params->annotate_bg_colour,
+                                          params->annotate_justify,
+                                          params->annotate_x,
+                                          params->annotate_y);
    result += raspicamcontrol_set_gains(camera, params->analog_gain, params->digital_gain);
 
    if (params->settings)
    {
-	  MMAL_PARAMETER_CHANGE_EVENT_REQUEST_T change_event_request =
-		 {{MMAL_PARAMETER_CHANGE_EVENT_REQUEST, sizeof(MMAL_PARAMETER_CHANGE_EVENT_REQUEST_T)},
-		  MMAL_PARAMETER_CAMERA_SETTINGS, 1};
+      MMAL_PARAMETER_CHANGE_EVENT_REQUEST_T change_event_request =
+                {{MMAL_PARAMETER_CHANGE_EVENT_REQUEST, sizeof(MMAL_PARAMETER_CHANGE_EVENT_REQUEST_T)},
+                 MMAL_PARAMETER_CAMERA_SETTINGS, 1};
 
-	  MMAL_STATUS_T status = mmal_port_parameter_set(camera->control, &change_event_request.hdr);
-	  if ( status != MMAL_SUCCESS )
-	  {
-		 vcos_log_error("No camera settings events");
-	  }
+      MMAL_STATUS_T status = mmal_port_parameter_set(camera->control, &change_event_request.hdr);
+      if ( status != MMAL_SUCCESS )
+      {
+         vcos_log_error("No camera settings events");
+      }
 
-	  result += status;
+      result += status;
    }
 
    return result;
@@ -1826,13 +1827,12 @@ void default_camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *bu
          {
             MMAL_PARAMETER_CAMERA_SETTINGS_T *settings = (MMAL_PARAMETER_CAMERA_SETTINGS_T*)param;
             vcos_log_error("Exposure now %u, analog gain %u/%u, digital gain %u/%u",
-			settings->exposure,
-                        settings->analog_gain.num, settings->analog_gain.den,
-                        settings->digital_gain.num, settings->digital_gain.den);
+                           settings->exposure,
+                           settings->analog_gain.num, settings->analog_gain.den,
+                           settings->digital_gain.num, settings->digital_gain.den);
             vcos_log_error("AWB R=%u/%u, B=%u/%u",
-                        settings->awb_red_gain.num, settings->awb_red_gain.den,
-                        settings->awb_blue_gain.num, settings->awb_blue_gain.den
-                        );
+                           settings->awb_red_gain.num, settings->awb_red_gain.den,
+                           settings->awb_blue_gain.num, settings->awb_blue_gain.den);
          }
          break;
       }

@@ -44,10 +44,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiPreview.h"
 #include "RaspiCLI.h"
 
-#define CommandPreview        1
-#define CommandFullScreen     2
-#define CommandOpacity        3
-#define CommandDisablePreview 4
+enum
+{
+   CommandPreview,
+   CommandFullScreen,
+   CommandOpacity,
+   CommandDisablePreview
+};
 
 static COMMAND_LIST cmdline_commands[] =
 {

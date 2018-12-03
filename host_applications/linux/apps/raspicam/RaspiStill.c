@@ -105,13 +105,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MAX_EXIF_PAYLOAD_LENGTH 128
 
 /// Frame advance method
-#define FRAME_NEXT_SINGLE        0
-#define FRAME_NEXT_TIMELAPSE     1
-#define FRAME_NEXT_KEYPRESS      2
-#define FRAME_NEXT_FOREVER       3
-#define FRAME_NEXT_GPIO          4
-#define FRAME_NEXT_SIGNAL        5
-#define FRAME_NEXT_IMMEDIATELY   6
+enum
+{
+   FRAME_NEXT_SINGLE,
+   FRAME_NEXT_TIMELAPSE,
+   FRAME_NEXT_KEYPRESS,
+   FRAME_NEXT_FOREVER,
+   FRAME_NEXT_GPIO,
+   FRAME_NEXT_SIGNAL,
+   FRAME_NEXT_IMMEDIATELY
+};
 
 /// Amount of time before first image taken to allow settling of
 /// exposure etc. in milliseconds.
@@ -197,34 +200,37 @@ static GPS_READER_DATA gps_reader_data;
 static void display_valid_parameters(char *app_name);
 static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 
-/// Comamnd ID's and Structure defining our command line options
-#define CommandHelp         0
-#define CommandWidth        1
-#define CommandHeight       2
-#define CommandQuality      3
-#define CommandRaw          4
-#define CommandOutput       5
-#define CommandVerbose      6
-#define CommandTimeout      7
-#define CommandThumbnail    8
-#define CommandDemoMode     9
-#define CommandEncoding     10
-#define CommandExifTag      11
-#define CommandTimelapse    12
-#define CommandFullResPreview 13
-#define CommandLink         14
-#define CommandKeypress     15
-#define CommandSignal       16
-#define CommandGL           17
-#define CommandGLCapture    18
-#define CommandCamSelect    20
-#define CommandBurstMode    21
-#define CommandSensorMode   22
-#define CommandDateTime     23
-#define CommandTimeStamp    24
-#define CommandFrameStart   25
-#define CommandRestartInterval 26
-#define CommandGpsdExif     27
+/// Command ID's and Structure defining our command line options
+enum
+{
+   CommandHelp,
+   CommandWidth,
+   CommandHeight,
+   CommandQuality,
+   CommandRaw,
+   CommandOutput,
+   CommandVerbose,
+   CommandTimeout,
+   CommandThumbnail,
+   CommandDemoMode,
+   CommandEncoding,
+   CommandExifTag,
+   CommandTimelapse,
+   CommandFullResPreview,
+   CommandLink,
+   CommandKeypress,
+   CommandSignal,
+   CommandGL,
+   CommandGLCapture,
+   CommandCamSelect,
+   CommandBurstMode,
+   CommandSensorMode,
+   CommandDateTime,
+   CommandTimeStamp,
+   CommandFrameStart,
+   CommandRestartInterval,
+   CommandGpsdExif
+};
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -420,12 +426,12 @@ static void dump_status(RASPISTILL_STATE *state)
    }
 
    fprintf(stderr, "Width %d, Height %d, quality %d, filename %s\n", state->width,
-         state->height, state->quality, state->filename);
+           state->height, state->quality, state->filename);
    fprintf(stderr, "Time delay %d, Raw %s\n", state->timeout,
-         state->wantRAW ? "yes" : "no");
+           state->wantRAW ? "yes" : "no");
    fprintf(stderr, "Thumbnail enabled %s, width %d, height %d, quality %d\n",
-         state->thumbnailConfig.enable ? "Yes":"No", state->thumbnailConfig.width,
-         state->thumbnailConfig.height, state->thumbnailConfig.quality);
+           state->thumbnailConfig.enable ? "Yes":"No", state->thumbnailConfig.width,
+           state->thumbnailConfig.height, state->thumbnailConfig.quality);
    fprintf(stderr, "Link to latest frame enabled ");
    if (state->linkname)
    {
@@ -447,18 +453,18 @@ static void dump_status(RASPISTILL_STATE *state)
 
    if (state->enableExifTags)
    {
-	   if (state->numExifTags)
-	   {
-		  fprintf(stderr, "User supplied EXIF tags :\n");
+     if (state->numExifTags)
+     {
+      fprintf(stderr, "User supplied EXIF tags :\n");
 
-		  for (i=0;i<state->numExifTags;i++)
-		  {
-			 fprintf(stderr, "%s", state->exifTags[i]);
-			 if (i != state->numExifTags-1)
-				fprintf(stderr, ",");
-		  }
-		  fprintf(stderr, "\n\n");
-	   }
+      for (i=0;i<state->numExifTags;i++)
+      {
+         fprintf(stderr, "%s", state->exifTags[i]);
+         if (i != state->numExifTags-1)
+            fprintf(stderr, ",");
+      }
+      fprintf(stderr, "\n\n");
+     }
    }
    else
       fprintf(stderr, "EXIF tags disabled\n");
@@ -1747,19 +1753,19 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
 
    case FRAME_NEXT_KEYPRESS :
    {
-    	int ch;
+      int ch;
 
-    	if (state->verbose)
+      if (state->verbose)
          fprintf(stderr, "Press Enter to capture, X then ENTER to exit\n");
 
-    	ch = getchar();
-    	*frame+=1;
-    	if (ch == 'x' || ch == 'X')
-    	   return 0;
-    	else
-    	{
- 	      return keep_running;
-    	}
+      ch = getchar();
+      *frame+=1;
+      if (ch == 'x' || ch == 'X')
+         return 0;
+      else
+      {
+         return keep_running;
+      }
    }
 
    case FRAME_NEXT_IMMEDIATELY :
@@ -1967,7 +1973,7 @@ int main(int argc, const char **argv)
    }
 
    if (state.timeout == -1)
-	   state.timeout = 5000;
+      state.timeout = 5000;
 
    // Setup for sensor specific parameters
    set_sensor_defaults(&state);
@@ -2130,30 +2136,30 @@ int main(int argc, const char **argv)
 
             while (keep_looping)
             {
-            	keep_looping = wait_for_next_frame(&state, &frame);
+               keep_looping = wait_for_next_frame(&state, &frame);
 
-                if (state.datetime)
-                {
-                   time_t rawtime;
-                   struct tm *timeinfo;
+               if (state.datetime)
+               {
+                  time_t rawtime;
+                  struct tm *timeinfo;
 
-                   time(&rawtime);
-                   timeinfo = localtime(&rawtime);
+                  time(&rawtime);
+                  timeinfo = localtime(&rawtime);
 
-                   frame = timeinfo->tm_mon+1;
-                   frame *= 100;
-                   frame += timeinfo->tm_mday;
-                   frame *= 100;
-                   frame += timeinfo->tm_hour;
-                   frame *= 100;
-                   frame += timeinfo->tm_min;
-                   frame *= 100;
-                   frame += timeinfo->tm_sec;
-                }
-                if (state.timestamp)
-                {
-                   frame = (int)time(NULL);
-                }
+                  frame = timeinfo->tm_mon+1;
+                  frame *= 100;
+                  frame += timeinfo->tm_mday;
+                  frame *= 100;
+                  frame += timeinfo->tm_hour;
+                  frame *= 100;
+                  frame += timeinfo->tm_min;
+                  frame *= 100;
+                  frame += timeinfo->tm_sec;
+               }
+               if (state.timestamp)
+               {
+                  frame = (int)time(NULL);
+               }
 
                // Open the file
                if (state.filename)

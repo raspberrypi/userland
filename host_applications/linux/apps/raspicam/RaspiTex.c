@@ -93,8 +93,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define DEFAULT_WIDTH   640
 #define DEFAULT_HEIGHT  480
 
-#define CommandGLScene   1
-#define CommandGLWin     2
+enum
+{
+   CommandGLScene,
+   CommandGLWin
+};
 
 static COMMAND_LIST cmdline_commands[] =
 {
