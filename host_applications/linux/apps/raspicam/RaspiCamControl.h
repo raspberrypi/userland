@@ -174,8 +174,9 @@ typedef struct raspicam_camera_parameters_s
    int settings;
 } RASPICAM_CAMERA_PARAMETERS;
 
-typedef enum {
-    ZOOM_IN, ZOOM_OUT, ZOOM_RESET
+typedef enum
+{
+   ZOOM_IN, ZOOM_OUT, ZOOM_RESET
 } ZOOM_COMMAND_T;
 
 

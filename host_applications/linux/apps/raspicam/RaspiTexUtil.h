@@ -73,17 +73,17 @@ typedef struct RASPITEXUTIL_SHADER_PROGRAM_T
 //#define CHECK_GL_ERRORS
 #if defined(CHECK_GL_ERRORS)
 #define GLCHK(X) \
-do { \
-    GLenum err = GL_NO_ERROR; \
-    X; \
-   while ((err = glGetError())) \
-   { \
-      vcos_log_error("GL error 0x%x in " #X "file %s line %d", err, __FILE__,__LINE__); \
-      vcos_assert(err == GL_NO_ERROR); \
-      exit(err); \
+   do { \
+      GLenum err = GL_NO_ERROR; \
+      X; \
+      while ((err = glGetError())) \
+      { \
+         vcos_log_error("GL error 0x%x in " #X "file %s line %d", err, __FILE__,__LINE__); \
+         vcos_assert(err == GL_NO_ERROR); \
+         exit(err); \
+      } \
    } \
-} \
-while(0)
+   while(0)
 #else
 #define GLCHK(X) X
 #endif /* CHECK_GL_ERRORS */
@@ -98,15 +98,15 @@ void raspitexutil_gl_term(RASPITEX_STATE *raspitex_state);
 void raspitexutil_destroy_native_window(RASPITEX_STATE *raspitex_state);
 int raspitexutil_create_textures(RASPITEX_STATE *raspitex_state);
 int raspitexutil_update_texture(RASPITEX_STATE *raspitex_state,
-      EGLClientBuffer mm_buf);
+                                EGLClientBuffer mm_buf);
 int raspitexutil_update_y_texture(RASPITEX_STATE *raspitex_state,
-      EGLClientBuffer mm_buf);
+                                  EGLClientBuffer mm_buf);
 int raspitexutil_update_u_texture(RASPITEX_STATE *raspitex_state,
-      EGLClientBuffer mm_buf);
+                                  EGLClientBuffer mm_buf);
 int raspitexutil_update_v_texture(RASPITEX_STATE *raspitex_state,
-      EGLClientBuffer mm_buf);
+                                  EGLClientBuffer mm_buf);
 int raspitexutil_capture_bgra(struct RASPITEX_STATE *state,
-      uint8_t **buffer, size_t *buffer_size);
+                              uint8_t **buffer, size_t *buffer_size);
 void raspitexutil_close(RASPITEX_STATE* raspitex_state);
 
 /* Utility functions */

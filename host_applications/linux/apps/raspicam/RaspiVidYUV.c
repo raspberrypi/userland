@@ -51,7 +51,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // We use some GNU extensions (basename)
 #ifndef _GNU_SOURCE
-   #define _GNU_SOURCE
+#define _GNU_SOURCE
 #endif
 
 #include <stdbool.h>
@@ -240,11 +240,11 @@ static struct
    int nextWaitMethod;
 } wait_method_description[] =
 {
-      {"Simple capture",         WAIT_METHOD_NONE},
-      {"Capture forever",        WAIT_METHOD_FOREVER},
-      {"Cycle on time",          WAIT_METHOD_TIMED},
-      {"Cycle on keypress",      WAIT_METHOD_KEYPRESS},
-      {"Cycle on signal",        WAIT_METHOD_SIGNAL},
+   {"Simple capture",         WAIT_METHOD_NONE},
+   {"Capture forever",        WAIT_METHOD_FOREVER},
+   {"Cycle on time",          WAIT_METHOD_TIMED},
+   {"Cycle on keypress",      WAIT_METHOD_KEYPRESS},
+   {"Cycle on signal",        WAIT_METHOD_SIGNAL},
 };
 
 static int wait_method_description_size = sizeof(wait_method_description) / sizeof(wait_method_description[0]);
@@ -326,7 +326,7 @@ static void dump_status(RASPIVIDYUV_STATE *state)
    fprintf(stderr, "Sub-image size %d bytes in total.\n  Y pitch %d, Y height %d, UV pitch %d, UV Height %d\n", size, ystride, yheight, ystride/2,yheight/2);
 
    fprintf(stderr, "Wait method : ");
-   for (i=0;i<wait_method_description_size;i++)
+   for (i=0; i<wait_method_description_size; i++)
    {
       if (state->waitMethod == wait_method_description[i].nextWaitMethod)
          fprintf(stderr, "%s", wait_method_description[i].description);
@@ -705,7 +705,7 @@ static FILE *open_filename(RASPIVIDYUV_STATE *pState, char *filename)
          char chTmp = *colon;
          *colon = 0;
 
-         struct sockaddr_in saddr={};
+         struct sockaddr_in saddr= {};
          saddr.sin_family = AF_INET;
          saddr.sin_port = htons(port);
          if(0 == inet_aton(filename, &saddr.sin_addr))
@@ -904,7 +904,7 @@ static MMAL_STATUS_T create_camera_component(RASPIVIDYUV_STATE *state)
    }
 
    MMAL_PARAMETER_INT32_T camera_num =
-      {{MMAL_PARAMETER_CAMERA_NUM, sizeof(camera_num)}, state->cameraNum};
+   {{MMAL_PARAMETER_CAMERA_NUM, sizeof(camera_num)}, state->cameraNum};
 
    status = mmal_port_parameter_set(camera->control, &camera_num.hdr);
 
@@ -970,15 +970,17 @@ static MMAL_STATUS_T create_camera_component(RASPIVIDYUV_STATE *state)
 
    if(state->camera_parameters.shutter_speed > 6000000)
    {
-        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
-                                                     { 50, 1000 }, {166, 1000}};
-        mmal_port_parameter_set(preview_port, &fps_range.hdr);
+      MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+         { 50, 1000 }, {166, 1000}
+      };
+      mmal_port_parameter_set(preview_port, &fps_range.hdr);
    }
    else if(state->camera_parameters.shutter_speed > 1000000)
    {
-        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
-                                                     { 166, 1000 }, {999, 1000}};
-        mmal_port_parameter_set(preview_port, &fps_range.hdr);
+      MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+         { 166, 1000 }, {999, 1000}
+      };
+      mmal_port_parameter_set(preview_port, &fps_range.hdr);
    }
 
    //enable dynamic framerate if necessary
@@ -1016,15 +1018,17 @@ static MMAL_STATUS_T create_camera_component(RASPIVIDYUV_STATE *state)
 
    if(state->camera_parameters.shutter_speed > 6000000)
    {
-        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
-                                                     { 50, 1000 }, {166, 1000}};
-        mmal_port_parameter_set(video_port, &fps_range.hdr);
+      MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+         { 50, 1000 }, {166, 1000}
+      };
+      mmal_port_parameter_set(video_port, &fps_range.hdr);
    }
    else if(state->camera_parameters.shutter_speed > 1000000)
    {
-        MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
-                                                     { 167, 1000 }, {999, 1000}};
-        mmal_port_parameter_set(video_port, &fps_range.hdr);
+      MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
+         { 167, 1000 }, {999, 1000}
+      };
+      mmal_port_parameter_set(video_port, &fps_range.hdr);
    }
 
    if (state->useRGB)
@@ -1374,7 +1378,7 @@ int main(int argc, const char **argv)
    }
 
    if (state.timeout == -1)
-	   state.timeout = 5000;
+      state.timeout = 5000;
 
    if (state.verbose)
    {
@@ -1485,7 +1489,7 @@ int main(int argc, const char **argv)
             if (state.verbose)
                fprintf(stderr, "Running in demo mode\n");
 
-            for (i=0;state.timeout == 0 || i<num_iterations;i++)
+            for (i=0; state.timeout == 0 || i<num_iterations; i++)
             {
                raspicamcontrol_cycle_test(state.camera_component);
                vcos_sleep(state.demoInterval);
@@ -1515,7 +1519,7 @@ int main(int argc, const char **argv)
                {
                   int num = mmal_queue_length(state.camera_pool->queue);
                   int q;
-                  for (q=0;q<num;q++)
+                  for (q=0; q<num; q++)
                   {
                      MMAL_BUFFER_HEADER_T *buffer = mmal_queue_get(state.camera_pool->queue);
 

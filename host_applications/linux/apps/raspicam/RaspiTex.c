@@ -114,15 +114,15 @@ static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_com
  * @return How many parameters were used, 0,1,2
  */
 int raspitex_parse_cmdline(RASPITEX_STATE *state,
-      const char *arg1, const char *arg2)
+                           const char *arg1, const char *arg2)
 {
    int command_id, used = 0, num_parameters;
 
    if (!arg1)
-       return 0;
+      return 0;
 
    command_id = raspicli_get_command_id(cmdline_commands,
-         cmdline_commands_size, arg1, &num_parameters);
+                                        cmdline_commands_size, arg1, &num_parameters);
 
    // If invalid command, or we are missing a parameter, drop out
    if (command_id==-1 || (command_id != -1 && num_parameters > 0 && arg2 == NULL))
@@ -130,47 +130,47 @@ int raspitex_parse_cmdline(RASPITEX_STATE *state,
 
    switch (command_id)
    {
-      case CommandGLWin: // Allows a GL window to be different to preview-res
+   case CommandGLWin: // Allows a GL window to be different to preview-res
+   {
+      int tmp;
+      tmp = sscanf(arg2, "%d,%d,%d,%d",
+                   &state->x, &state->y, &state->width, &state->height);
+      if (tmp != 4)
       {
-         int tmp;
-         tmp = sscanf(arg2, "%d,%d,%d,%d",
-               &state->x, &state->y, &state->width, &state->height);
-         if (tmp != 4)
-         {
-            // Default to safe size on parse error
-            state->x = state->y = 0;
-            state->width = DEFAULT_WIDTH;
-            state->height = DEFAULT_HEIGHT;
-         }
-         else
-         {
-            state->gl_win_defined = 1;
-         }
-
-         used = 2;
-         break;
+         // Default to safe size on parse error
+         state->x = state->y = 0;
+         state->width = DEFAULT_WIDTH;
+         state->height = DEFAULT_HEIGHT;
+      }
+      else
+      {
+         state->gl_win_defined = 1;
       }
 
-      case CommandGLScene: // Selects the GL scene
-      {
-         if (strcmp(arg2, "square") == 0)
-            state->scene_id = RASPITEX_SCENE_SQUARE;
-         else if (strcmp(arg2, "teapot") == 0)
-            state->scene_id = RASPITEX_SCENE_TEAPOT;
-         else if (strcmp(arg2, "mirror") == 0)
-            state->scene_id = RASPITEX_SCENE_MIRROR;
-         else if (strcmp(arg2, "yuv") == 0)
-            state->scene_id = RASPITEX_SCENE_YUV;
-         else if (strcmp(arg2, "sobel") == 0)
-            state->scene_id = RASPITEX_SCENE_SOBEL;
-         else if (strcmp(arg2, "vcsm_square") == 0)
-            state->scene_id = RASPITEX_SCENE_VCSM_SQUARE;
-         else
-            vcos_log_error("Unknown scene %s", arg2);
+      used = 2;
+      break;
+   }
 
-         used = 2;
-         break;
-      }
+   case CommandGLScene: // Selects the GL scene
+   {
+      if (strcmp(arg2, "square") == 0)
+         state->scene_id = RASPITEX_SCENE_SQUARE;
+      else if (strcmp(arg2, "teapot") == 0)
+         state->scene_id = RASPITEX_SCENE_TEAPOT;
+      else if (strcmp(arg2, "mirror") == 0)
+         state->scene_id = RASPITEX_SCENE_MIRROR;
+      else if (strcmp(arg2, "yuv") == 0)
+         state->scene_id = RASPITEX_SCENE_YUV;
+      else if (strcmp(arg2, "sobel") == 0)
+         state->scene_id = RASPITEX_SCENE_SOBEL;
+      else if (strcmp(arg2, "vcsm_square") == 0)
+         state->scene_id = RASPITEX_SCENE_VCSM_SQUARE;
+      else
+         vcos_log_error("Unknown scene %s", arg2);
+
+      used = 2;
+      break;
+   }
    }
    return used;
 }
@@ -283,7 +283,7 @@ static int raspitex_draw(RASPITEX_STATE *state, MMAL_BUFFER_HEADER_T *buf)
          if (rc != 0)
          {
             vcos_log_error("%s: Failed to update RGBX texture %d",
-                  VCOS_FUNCTION, rc);
+                           VCOS_FUNCTION, rc);
             goto end;
          }
       }
@@ -481,7 +481,7 @@ static void preview_output_cb(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf)
  * @return Zero if successful.
  */
 int raspitex_configure_preview_port(RASPITEX_STATE *state,
-      MMAL_PORT_T *preview_port)
+                                    MMAL_PORT_T *preview_port)
 {
    MMAL_STATUS_T status;
    vcos_log_trace("%s port %p", VCOS_FUNCTION, preview_port);
@@ -493,7 +493,7 @@ int raspitex_configure_preview_port(RASPITEX_STATE *state,
     * image is created.
     */
    status = mmal_port_parameter_set_boolean(preview_port,
-         MMAL_PARAMETER_ZERO_COPY, MMAL_TRUE);
+            MMAL_PARAMETER_ZERO_COPY, MMAL_TRUE);
    if (status != MMAL_SUCCESS)
    {
       vcos_log_error("Failed to enable zero copy on camera preview port");
@@ -515,11 +515,11 @@ int raspitex_configure_preview_port(RASPITEX_STATE *state,
    preview_port->buffer_size = preview_port->buffer_size_recommended;
 
    vcos_log_trace("Creating buffer pool for GL renderer num %d size %d",
-         preview_port->buffer_num, preview_port->buffer_size);
+                  preview_port->buffer_num, preview_port->buffer_size);
 
    /* Pool + queue to hold preview frames */
    state->preview_pool = mmal_port_pool_create(preview_port,
-         preview_port->buffer_num, preview_port->buffer_size);
+                         preview_port->buffer_num, preview_port->buffer_size);
 
    if (! state->preview_pool)
    {
@@ -561,42 +561,42 @@ int raspitex_init(RASPITEX_STATE *state)
 
    vcos_log_register("RaspiTex", VCOS_LOG_CATEGORY);
    vcos_log_set_level(VCOS_LOG_CATEGORY,
-         state->verbose ? VCOS_LOG_INFO : VCOS_LOG_WARN);
+                      state->verbose ? VCOS_LOG_INFO : VCOS_LOG_WARN);
    vcos_log_trace("%s", VCOS_FUNCTION);
 
    status = vcos_semaphore_create(&state->capture.start_sem,
-         "glcap_start_sem", 1);
+                                  "glcap_start_sem", 1);
    if (status != VCOS_SUCCESS)
       goto error;
 
    status = vcos_semaphore_create(&state->capture.completed_sem,
-         "glcap_completed_sem", 0);
+                                  "glcap_completed_sem", 0);
    if (status != VCOS_SUCCESS)
       goto error;
 
    switch (state->scene_id)
    {
-      case RASPITEX_SCENE_SQUARE:
-         rc = square_open(state);
-         break;
-      case RASPITEX_SCENE_MIRROR:
-         rc = mirror_open(state);
-         break;
-      case RASPITEX_SCENE_TEAPOT:
-         rc = teapot_open(state);
-         break;
-      case RASPITEX_SCENE_YUV:
-         rc = yuv_open(state);
-         break;
-      case RASPITEX_SCENE_SOBEL:
-         rc = sobel_open(state);
-         break;
-      case RASPITEX_SCENE_VCSM_SQUARE:
-         rc = vcsm_square_open(state);
-         break;
-      default:
-         rc = -1;
-         break;
+   case RASPITEX_SCENE_SQUARE:
+      rc = square_open(state);
+      break;
+   case RASPITEX_SCENE_MIRROR:
+      rc = mirror_open(state);
+      break;
+   case RASPITEX_SCENE_TEAPOT:
+      rc = teapot_open(state);
+      break;
+   case RASPITEX_SCENE_YUV:
+      rc = yuv_open(state);
+      break;
+   case RASPITEX_SCENE_SOBEL:
+      rc = sobel_open(state);
+      break;
+   case RASPITEX_SCENE_VCSM_SQUARE:
+      rc = vcsm_square_open(state);
+      break;
+   default:
+      rc = -1;
+      break;
    }
    if (rc != 0)
       goto error;
@@ -695,11 +695,11 @@ int raspitex_start(RASPITEX_STATE *state)
 
    vcos_log_trace("%s", VCOS_FUNCTION);
    status = vcos_thread_create(&state->preview_thread, "preview-worker",
-         NULL, preview_worker, state);
+                               NULL, preview_worker, state);
 
    if (status != VCOS_SUCCESS)
       vcos_log_error("%s: Failed to start worker thread %d",
-            VCOS_FUNCTION, status);
+                     VCOS_FUNCTION, status);
 
    return (status == VCOS_SUCCESS ? 0 : -1);
 }
@@ -718,7 +718,7 @@ int raspitex_capture(RASPITEX_STATE *state, FILE *output_file)
    size_t size = 0;
 
    vcos_log_trace("%s: state %p file %p", VCOS_FUNCTION,
-         state, output_file);
+                  state, output_file);
 
    if (state && output_file)
    {
