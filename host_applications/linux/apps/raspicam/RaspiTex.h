@@ -40,7 +40,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define RASPITEX_VERSION_MAJOR 1
 #define RASPITEX_VERSION_MINOR 0
 
-typedef enum {
+typedef enum
+{
    RASPITEX_SCENE_SQUARE = 0,
    RASPITEX_SCENE_MIRROR,
    RASPITEX_SCENE_TEAPOT,
@@ -86,7 +87,7 @@ typedef struct RASPITEX_SCENE_OPS
    /// Allocates a buffer and copies the pixels from the current
    /// frame-buffer into it.
    int (*capture)(struct RASPITEX_STATE *state,
-         uint8_t **buffer, size_t *buffer_size);
+                  uint8_t **buffer, size_t *buffer_size);
 
    /// Creates EGL surface for native window
    void (*gl_term)(struct RASPITEX_STATE *state);
@@ -183,10 +184,10 @@ int raspitex_start(RASPITEX_STATE *state);
 void raspitex_stop(RASPITEX_STATE *state);
 void raspitex_set_defaults(RASPITEX_STATE *state);
 int raspitex_configure_preview_port(RASPITEX_STATE *state,
-      MMAL_PORT_T *preview_port);
+                                    MMAL_PORT_T *preview_port);
 void raspitex_display_help();
 int raspitex_parse_cmdline(RASPITEX_STATE *state,
-      const char *arg1, const char *arg2);
+                           const char *arg1, const char *arg2);
 int raspitex_capture(RASPITEX_STATE *state, FILE* output_file);
 
 #endif /* RASPITEX_H_ */

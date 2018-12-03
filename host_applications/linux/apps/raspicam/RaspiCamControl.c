@@ -113,7 +113,7 @@ static XREF_T imagefx_map[] =
    {"colourpoint",   MMAL_PARAM_IMAGEFX_COLOURPOINT},
    {"colourbalance", MMAL_PARAM_IMAGEFX_COLOURBALANCE},
    {"cartoon",       MMAL_PARAM_IMAGEFX_CARTOON}
- };
+};
 
 static const int imagefx_map_size = sizeof(imagefx_map) / sizeof(imagefx_map[0]);
 
@@ -280,8 +280,7 @@ int raspicamcontrol_cycle_test(MMAL_COMPONENT_T *camera)
          parameter++;
       }
    }
-   else
-   if (parameter == 1)
+   else if (parameter == 1)
    {
       // contrast
       if (update_cycle_parameter(&parameter_option, -100, 100, 10))
@@ -292,8 +291,7 @@ int raspicamcontrol_cycle_test(MMAL_COMPONENT_T *camera)
          parameter++;
       }
    }
-   else
-   if (parameter == 2)
+   else if (parameter == 2)
    {
       // brightness
       if (update_cycle_parameter(&parameter_option, 0, 100, 10))
@@ -304,8 +302,7 @@ int raspicamcontrol_cycle_test(MMAL_COMPONENT_T *camera)
          parameter++;
       }
    }
-   else
-   if (parameter == 3)
+   else if (parameter == 3)
    {
       // contrast
       if (update_cycle_parameter(&parameter_option, -100, 100, 10))
@@ -316,8 +313,7 @@ int raspicamcontrol_cycle_test(MMAL_COMPONENT_T *camera)
          raspicamcontrol_set_saturation(camera, 0);
       }
    }
-   else
-   if (parameter == 4)
+   else if (parameter == 4)
    {
       // EV
       if (update_cycle_parameter(&parameter_option, -10, 10, 4))
@@ -328,8 +324,7 @@ int raspicamcontrol_cycle_test(MMAL_COMPONENT_T *camera)
          parameter++;
       }
    }
-   else
-   if (parameter == 5)
+   else if (parameter == 5)
    {
       // MMAL_PARAM_EXPOSUREMODE_T
       if (update_cycle_parameter(&parameter_option, 0, exposure_map_size, 1))
@@ -340,8 +335,7 @@ int raspicamcontrol_cycle_test(MMAL_COMPONENT_T *camera)
          parameter++;
       }
    }
-   else
-   if (parameter == 6)
+   else if (parameter == 6)
    {
       // MMAL_PARAM_AWB_T
       if (update_cycle_parameter(&parameter_option, 0, awb_map_size, 1))
@@ -368,21 +362,21 @@ int raspicamcontrol_cycle_test(MMAL_COMPONENT_T *camera)
       MMAL_PARAM_COLOURFX_T colfx = {0,0,0};
       switch (parameter_option)
       {
-         case parameter_reset :
-            parameter_option = 1;
-            colfx.u = 128;
-            colfx.v = 128;
-            break;
-         case 1 :
-            parameter_option = 2;
-            colfx.u = 100;
-            colfx.v = 200;
-            break;
-         case 2 :
-            parameter_option = parameter_reset;
-            colfx.enable = 0;
-            parameter++;
-            break;
+      case parameter_reset :
+         parameter_option = 1;
+         colfx.u = 128;
+         colfx.v = 128;
+         break;
+      case 1 :
+         parameter_option = 2;
+         colfx.u = 100;
+         colfx.v = 200;
+         break;
+      case 2 :
+         parameter_option = parameter_reset;
+         colfx.enable = 0;
+         parameter++;
+         break;
       }
       raspicamcontrol_set_colourFX(camera, &colfx);
    }
@@ -505,7 +499,7 @@ MMAL_PARAM_IMAGEFX_T imagefx_mode_from_string(const char *str)
    int i = raspicli_map_xref(str, imagefx_map, imagefx_map_size);
 
    if( i != -1)
-     return (MMAL_PARAM_IMAGEFX_T)i;
+      return (MMAL_PARAM_IMAGEFX_T)i;
 
    vcos_log_error("Unknown image fx: %s", str);
    return MMAL_PARAM_IMAGEFX_NONE;
@@ -570,7 +564,7 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
    int command_id, used = 0, num_parameters;
 
    if (!arg1)
-       return 0;
+      return 0;
 
    command_id = raspicli_get_command_id(cmdline_commands, cmdline_commands_size, arg1, &num_parameters);
 
@@ -697,7 +691,7 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
    }
 
    case CommandAwbGains :
-      {
+   {
       double r,b;
       int args;
 
@@ -713,7 +707,7 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
 
       used = 2;
       break;
-      }
+   }
 
    case CommandDRCLevel:
    {
@@ -752,11 +746,11 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
             {
                switch (c = *s++)
                {
-                  case 'n':
+               case 'n':
                   c = '\n';
                   break;
 
-                  default:
+               default:
                   c = '\\';
                   s--;
                   break;
@@ -777,12 +771,12 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
    {
       // 3 parameters - text size (6-80), text colour (Hex VVUUYY) and background colour (Hex VVUUYY)
       sscanf(arg2, "%u,%X,%X,%u,%u,%u", &params->annotate_text_size,
-                               &params->annotate_text_colour,
-                               &params->annotate_bg_colour,
-                               &params->annotate_justify,
-                               &params->annotate_x,
-                               &params->annotate_y
-                               );
+             &params->annotate_text_colour,
+             &params->annotate_bg_colour,
+             &params->annotate_justify,
+             &params->annotate_x,
+             &params->annotate_y
+            );
       used=2;
       break;
    }
@@ -868,42 +862,42 @@ void raspicamcontrol_display_help()
 
    fprintf(stdout, "\n\nNotes\n\nExposure mode options :\n%s", exposure_map[0].mode );
 
-   for (i=1;i<exposure_map_size;i++)
+   for (i=1; i<exposure_map_size; i++)
    {
       fprintf(stdout, ",%s", exposure_map[i].mode);
    }
 
    fprintf(stdout, "\n\nFlicker avoid mode options :\n%s", flicker_avoid_map[0].mode );
 
-   for (i=1;i<flicker_avoid_map_size;i++)
+   for (i=1; i<flicker_avoid_map_size; i++)
    {
       fprintf(stdout, ",%s", flicker_avoid_map[i].mode);
    }
 
    fprintf(stdout, "\n\nAWB mode options :\n%s", awb_map[0].mode );
 
-   for (i=1;i<awb_map_size;i++)
+   for (i=1; i<awb_map_size; i++)
    {
       fprintf(stdout, ",%s", awb_map[i].mode);
    }
 
    fprintf(stdout, "\n\nImage Effect mode options :\n%s", imagefx_map[0].mode );
 
-   for (i=1;i<imagefx_map_size;i++)
+   for (i=1; i<imagefx_map_size; i++)
    {
       fprintf(stdout, ",%s", imagefx_map[i].mode);
    }
 
    fprintf(stdout, "\n\nMetering Mode options :\n%s", metering_mode_map[0].mode );
 
-   for (i=1;i<metering_mode_map_size;i++)
+   for (i=1; i<metering_mode_map_size; i++)
    {
       fprintf(stdout, ",%s", metering_mode_map[i].mode);
    }
 
    fprintf(stdout, "\n\nDynamic Range Compression (DRC) options :\n%s", drc_mode_map[0].mode );
 
-   for (i=1;i<drc_mode_map_size;i++)
+   for (i=1; i<drc_mode_map_size; i++)
    {
       fprintf(stdout, ",%s", drc_mode_map[i].mode);
    }
@@ -949,22 +943,54 @@ int mmal_status_to_int(MMAL_STATUS_T status)
    {
       switch (status)
       {
-      case MMAL_ENOMEM :   vcos_log_error("Out of memory"); break;
-      case MMAL_ENOSPC :   vcos_log_error("Out of resources (other than memory)"); break;
-      case MMAL_EINVAL:    vcos_log_error("Argument is invalid"); break;
-      case MMAL_ENOSYS :   vcos_log_error("Function not implemented"); break;
-      case MMAL_ENOENT :   vcos_log_error("No such file or directory"); break;
-      case MMAL_ENXIO :    vcos_log_error("No such device or address"); break;
-      case MMAL_EIO :      vcos_log_error("I/O error"); break;
-      case MMAL_ESPIPE :   vcos_log_error("Illegal seek"); break;
-      case MMAL_ECORRUPT : vcos_log_error("Data is corrupt \attention FIXME: not POSIX"); break;
-      case MMAL_ENOTREADY :vcos_log_error("Component is not ready \attention FIXME: not POSIX"); break;
-      case MMAL_ECONFIG :  vcos_log_error("Component is not configured \attention FIXME: not POSIX"); break;
-      case MMAL_EISCONN :  vcos_log_error("Port is already connected "); break;
-      case MMAL_ENOTCONN : vcos_log_error("Port is disconnected"); break;
-      case MMAL_EAGAIN :   vcos_log_error("Resource temporarily unavailable. Try again later"); break;
-      case MMAL_EFAULT :   vcos_log_error("Bad address"); break;
-      default :            vcos_log_error("Unknown status error"); break;
+      case MMAL_ENOMEM :
+         vcos_log_error("Out of memory");
+         break;
+      case MMAL_ENOSPC :
+         vcos_log_error("Out of resources (other than memory)");
+         break;
+      case MMAL_EINVAL:
+         vcos_log_error("Argument is invalid");
+         break;
+      case MMAL_ENOSYS :
+         vcos_log_error("Function not implemented");
+         break;
+      case MMAL_ENOENT :
+         vcos_log_error("No such file or directory");
+         break;
+      case MMAL_ENXIO :
+         vcos_log_error("No such device or address");
+         break;
+      case MMAL_EIO :
+         vcos_log_error("I/O error");
+         break;
+      case MMAL_ESPIPE :
+         vcos_log_error("Illegal seek");
+         break;
+      case MMAL_ECORRUPT :
+         vcos_log_error("Data is corrupt \attention FIXME: not POSIX");
+         break;
+      case MMAL_ENOTREADY :
+         vcos_log_error("Component is not ready \attention FIXME: not POSIX");
+         break;
+      case MMAL_ECONFIG :
+         vcos_log_error("Component is not configured \attention FIXME: not POSIX");
+         break;
+      case MMAL_EISCONN :
+         vcos_log_error("Port is already connected ");
+         break;
+      case MMAL_ENOTCONN :
+         vcos_log_error("Port is disconnected");
+         break;
+      case MMAL_EAGAIN :
+         vcos_log_error("Resource temporarily unavailable. Try again later");
+         break;
+      case MMAL_EFAULT :
+         vcos_log_error("Bad address");
+         break;
+      default :
+         vcos_log_error("Unknown status error");
+         break;
       }
 
       return 1;
@@ -1027,21 +1053,21 @@ int raspicamcontrol_get_all_parameters(MMAL_COMPONENT_T *camera, RASPICAM_CAMERA
    if (!camera || !params)
       return 1;
 
-/* TODO : Write these get functions
-   params->sharpness = raspicamcontrol_get_sharpness(camera);
-   params->contrast = raspicamcontrol_get_contrast(camera);
-   params->brightness = raspicamcontrol_get_brightness(camera);
-   params->saturation = raspicamcontrol_get_saturation(camera);
-   params->ISO = raspicamcontrol_get_ISO(camera);
-   params->videoStabilisation = raspicamcontrol_get_video_stabilisation(camera);
-   params->exposureCompensation = raspicamcontrol_get_exposure_compensation(camera);
-   params->exposureMode = raspicamcontrol_get_exposure_mode(camera);
-   params->flickerAvoidMode = raspicamcontrol_get_flicker_avoid_mode(camera);
-   params->awbMode = raspicamcontrol_get_awb_mode(camera);
-   params->imageEffect = raspicamcontrol_get_image_effect(camera);
-   params->colourEffects = raspicamcontrol_get_colour_effect(camera);
-   params->thumbnailConfig = raspicamcontrol_get_thumbnail_config(camera);
-*/
+   /* TODO : Write these get functions
+      params->sharpness = raspicamcontrol_get_sharpness(camera);
+      params->contrast = raspicamcontrol_get_contrast(camera);
+      params->brightness = raspicamcontrol_get_brightness(camera);
+      params->saturation = raspicamcontrol_get_saturation(camera);
+      params->ISO = raspicamcontrol_get_ISO(camera);
+      params->videoStabilisation = raspicamcontrol_get_video_stabilisation(camera);
+      params->exposureCompensation = raspicamcontrol_get_exposure_compensation(camera);
+      params->exposureMode = raspicamcontrol_get_exposure_mode(camera);
+      params->flickerAvoidMode = raspicamcontrol_get_flicker_avoid_mode(camera);
+      params->awbMode = raspicamcontrol_get_awb_mode(camera);
+      params->imageEffect = raspicamcontrol_get_image_effect(camera);
+      params->colourEffects = raspicamcontrol_get_colour_effect(camera);
+      params->thumbnailConfig = raspicamcontrol_get_thumbnail_config(camera);
+   */
    return 0;
 }
 
@@ -1088,8 +1114,10 @@ int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_
    if (params->settings)
    {
       MMAL_PARAMETER_CHANGE_EVENT_REQUEST_T change_event_request =
-                {{MMAL_PARAMETER_CHANGE_EVENT_REQUEST, sizeof(MMAL_PARAMETER_CHANGE_EVENT_REQUEST_T)},
-                 MMAL_PARAMETER_CAMERA_SETTINGS, 1};
+      {
+         {MMAL_PARAMETER_CHANGE_EVENT_REQUEST, sizeof(MMAL_PARAMETER_CHANGE_EVENT_REQUEST_T)},
+         MMAL_PARAMETER_CAMERA_SETTINGS, 1
+      };
 
       MMAL_STATUS_T status = mmal_port_parameter_set(camera->control, &change_event_request.hdr);
       if ( status != MMAL_SUCCESS )
@@ -1237,7 +1265,8 @@ int raspicamcontrol_set_ISO(MMAL_COMPONENT_T *camera, int ISO)
 int raspicamcontrol_set_metering_mode(MMAL_COMPONENT_T *camera, MMAL_PARAM_EXPOSUREMETERINGMODE_T m_mode )
 {
    MMAL_PARAMETER_EXPOSUREMETERINGMODE_T meter_mode = {{MMAL_PARAMETER_EXP_METERING_MODE,sizeof(meter_mode)},
-                                                      m_mode};
+      m_mode
+   };
    if (!camera)
       return 1;
 
@@ -1270,7 +1299,7 @@ int raspicamcontrol_set_exposure_compensation(MMAL_COMPONENT_T *camera, int exp_
    if (!camera)
       return 1;
 
-   return mmal_status_to_int(mmal_port_parameter_set_int32(camera->control, MMAL_PARAMETER_EXPOSURE_COMP , exp_comp));
+   return mmal_status_to_int(mmal_port_parameter_set_int32(camera->control, MMAL_PARAMETER_EXPOSURE_COMP, exp_comp));
 }
 
 
@@ -1468,11 +1497,9 @@ int raspicamcontrol_set_flips(MMAL_COMPONENT_T *camera, int hflip, int vflip)
 
    if (hflip && vflip)
       mirror.value = MMAL_PARAM_MIRROR_BOTH;
-   else
-   if (hflip)
+   else if (hflip)
       mirror.value = MMAL_PARAM_MIRROR_HORIZONTAL;
-   else
-   if (vflip)
+   else if (vflip)
       mirror.value = MMAL_PARAM_MIRROR_VERTICAL;
 
    mmal_port_parameter_set(camera->output[0], &mirror.hdr);
@@ -1505,72 +1532,74 @@ int raspicamcontrol_set_ROI(MMAL_COMPONENT_T *camera, PARAM_FLOAT_RECT_T rect)
  * @param zoom_command zoom command enum
  * @return 0 if successful, non-zero otherwise
  */
-int raspicamcontrol_zoom_in_zoom_out(MMAL_COMPONENT_T *camera, ZOOM_COMMAND_T zoom_command, PARAM_FLOAT_RECT_T *roi) {
-    MMAL_PARAMETER_INPUT_CROP_T crop;
-    crop.hdr.id = MMAL_PARAMETER_INPUT_CROP;
-    crop.hdr.size = sizeof(crop);
+int raspicamcontrol_zoom_in_zoom_out(MMAL_COMPONENT_T *camera, ZOOM_COMMAND_T zoom_command, PARAM_FLOAT_RECT_T *roi)
+{
+   MMAL_PARAMETER_INPUT_CROP_T crop;
+   crop.hdr.id = MMAL_PARAMETER_INPUT_CROP;
+   crop.hdr.size = sizeof(crop);
 
-    if (mmal_port_parameter_get(camera->control, &crop.hdr) != MMAL_SUCCESS)
-    {
-        vcos_log_error("mmal_port_parameter_get(camera->control, &crop.hdr) failed, skip it");
-        return 0;
-    }
+   if (mmal_port_parameter_get(camera->control, &crop.hdr) != MMAL_SUCCESS)
+   {
+      vcos_log_error("mmal_port_parameter_get(camera->control, &crop.hdr) failed, skip it");
+      return 0;
+   }
 
-    if (zoom_command == ZOOM_IN)
-    {
-        if (crop.rect.width <= (zoom_full_16P16 + zoom_increment_16P16))
-        {
-            crop.rect.width = zoom_full_16P16;
-            crop.rect.height = zoom_full_16P16;
-        }
-        else
-        {
-            crop.rect.width -= zoom_increment_16P16;
-            crop.rect.height -= zoom_increment_16P16;
-        }
-    }
-    else if (zoom_command == ZOOM_OUT)
-    {
-        unsigned int increased_size = crop.rect.width + zoom_increment_16P16;
-        if (increased_size < crop.rect.width) //overflow
-        {
-            crop.rect.width = 65536;
-            crop.rect.height = 65536;
-        }
-        else
-        {
-            crop.rect.width = increased_size;
-            crop.rect.height = increased_size;
-        }
-    }
+   if (zoom_command == ZOOM_IN)
+   {
+      if (crop.rect.width <= (zoom_full_16P16 + zoom_increment_16P16))
+      {
+         crop.rect.width = zoom_full_16P16;
+         crop.rect.height = zoom_full_16P16;
+      }
+      else
+      {
+         crop.rect.width -= zoom_increment_16P16;
+         crop.rect.height -= zoom_increment_16P16;
+      }
+   }
+   else if (zoom_command == ZOOM_OUT)
+   {
+      unsigned int increased_size = crop.rect.width + zoom_increment_16P16;
+      if (increased_size < crop.rect.width) //overflow
+      {
+         crop.rect.width = 65536;
+         crop.rect.height = 65536;
+      }
+      else
+      {
+         crop.rect.width = increased_size;
+         crop.rect.height = increased_size;
+      }
+   }
 
-    if (zoom_command == ZOOM_RESET)
-    {
-        crop.rect.x = 0;
-        crop.rect.y = 0;
-        crop.rect.width = 65536;
-        crop.rect.height = 65536;
-    }
-    else
-    {
-        unsigned int centered_top_coordinate = (65536 - crop.rect.width) / 2;
-        crop.rect.x = centered_top_coordinate;
-        crop.rect.y = centered_top_coordinate;
-    }
+   if (zoom_command == ZOOM_RESET)
+   {
+      crop.rect.x = 0;
+      crop.rect.y = 0;
+      crop.rect.width = 65536;
+      crop.rect.height = 65536;
+   }
+   else
+   {
+      unsigned int centered_top_coordinate = (65536 - crop.rect.width) / 2;
+      crop.rect.x = centered_top_coordinate;
+      crop.rect.y = centered_top_coordinate;
+   }
 
-    int ret = mmal_status_to_int(mmal_port_parameter_set(camera->control, &crop.hdr));
+   int ret = mmal_status_to_int(mmal_port_parameter_set(camera->control, &crop.hdr));
 
-    if (ret == 0) {
-       roi->x = roi->y = (double)crop.rect.x/65536;
-       roi->w = roi->h = (double)crop.rect.width/65536;
-    }
-    else
-    {
-        vcos_log_error("Failed to set crop values, x/y: %u, w/h: %u", crop.rect.x, crop.rect.width);
-        ret = 1;
-    }
+   if (ret == 0)
+   {
+      roi->x = roi->y = (double)crop.rect.x/65536;
+      roi->w = roi->h = (double)crop.rect.width/65536;
+   }
+   else
+   {
+      vcos_log_error("Failed to set crop values, x/y: %u, w/h: %u", crop.rect.x, crop.rect.width);
+      ret = 1;
+   }
 
-    return ret;
+   return ret;
 }
 
 /**
@@ -1626,11 +1655,11 @@ int raspicamcontrol_set_stats_pass(MMAL_COMPONENT_T *camera, int stats_pass)
  * @return 0 if successful, non-zero if any parameters out of range
  */
 int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, const char *string,
-                const int text_size, const int text_colour, const int bg_colour,
-                const unsigned int justify, const unsigned int x, const unsigned int y)
+                                 const int text_size, const int text_colour, const int bg_colour,
+                                 const unsigned int justify, const unsigned int x, const unsigned int y)
 {
    MMAL_PARAMETER_CAMERA_ANNOTATE_V4_T annotate =
-      {{MMAL_PARAMETER_ANNOTATE, sizeof(MMAL_PARAMETER_CAMERA_ANNOTATE_V4_T)}};
+   {{MMAL_PARAMETER_ANNOTATE, sizeof(MMAL_PARAMETER_CAMERA_ANNOTATE_V4_T)}};
 
    if (settings)
    {
@@ -1644,10 +1673,13 @@ int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, c
       if (settings & (ANNOTATE_APP_TEXT | ANNOTATE_USER_TEXT))
       {
          if ((settings & (ANNOTATE_TIME_TEXT | ANNOTATE_DATE_TEXT)) && strchr(string,'%') != NULL)
-         {  //string contains strftime parameter?
+         {
+            //string contains strftime parameter?
             strftime(annotate.text, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3, string, &tm );
             process_datetime = 0;
-         }else{
+         }
+         else
+         {
             strncpy(annotate.text, string, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3);
          }
          annotate.text[MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3-1] = '\0';
@@ -1655,9 +1687,12 @@ int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, c
 
       if (process_datetime && (settings & ANNOTATE_TIME_TEXT))
       {
-         if(strlen(annotate.text)){
+         if(strlen(annotate.text))
+         {
             strftime(tmp, 32, " %X", &tm );
-         }else{
+         }
+         else
+         {
             strftime(tmp, 32, "%X", &tm );
          }
          strncat(annotate.text, tmp, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3 - strlen(annotate.text) - 1);
@@ -1665,9 +1700,12 @@ int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, c
 
       if (process_datetime && (settings & ANNOTATE_DATE_TEXT))
       {
-         if(strlen(annotate.text)){
+         if(strlen(annotate.text))
+         {
             strftime(tmp, 32, " %x", &tm );
-         }else{
+         }
+         else
+         {
             strftime(tmp, 32, "%x", &tm );
          }
          strncat(annotate.text, tmp, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3 - strlen(annotate.text) - 1);
@@ -1719,9 +1757,9 @@ int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, c
       annotate.justify = justify;
       annotate.x_offset = x;
       annotate.y_offset = y;
-    }
-    else
-       annotate.enable = 0;
+   }
+   else
+      annotate.enable = 0;
 
    return mmal_status_to_int(mmal_port_parameter_set(camera->control, &annotate.hdr));
 }
@@ -1729,7 +1767,8 @@ int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, c
 int raspicamcontrol_set_stereo_mode(MMAL_PORT_T *port, MMAL_PARAMETER_STEREOSCOPIC_MODE_T *stereo_mode)
 {
    MMAL_PARAMETER_STEREOSCOPIC_MODE_T stereo = { {MMAL_PARAMETER_STEREOSCOPIC_MODE, sizeof(stereo)},
-                               MMAL_STEREOSCOPIC_MODE_NONE, MMAL_FALSE, MMAL_FALSE };
+      MMAL_STEREOSCOPIC_MODE_NONE, MMAL_FALSE, MMAL_FALSE
+   };
    if (stereo_mode->mode != MMAL_STEREOSCOPIC_MODE_NONE)
    {
       stereo.mode = stereo_mode->mode;
@@ -1822,19 +1861,20 @@ void default_camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *bu
    if (buffer->cmd == MMAL_EVENT_PARAMETER_CHANGED)
    {
       MMAL_EVENT_PARAMETER_CHANGED_T *param = (MMAL_EVENT_PARAMETER_CHANGED_T *)buffer->data;
-      switch (param->hdr.id) {
-         case MMAL_PARAMETER_CAMERA_SETTINGS:
-         {
-            MMAL_PARAMETER_CAMERA_SETTINGS_T *settings = (MMAL_PARAMETER_CAMERA_SETTINGS_T*)param;
-            vcos_log_error("Exposure now %u, analog gain %u/%u, digital gain %u/%u",
-                           settings->exposure,
-                           settings->analog_gain.num, settings->analog_gain.den,
-                           settings->digital_gain.num, settings->digital_gain.den);
-            vcos_log_error("AWB R=%u/%u, B=%u/%u",
-                           settings->awb_red_gain.num, settings->awb_red_gain.den,
-                           settings->awb_blue_gain.num, settings->awb_blue_gain.den);
-         }
-         break;
+      switch (param->hdr.id)
+      {
+      case MMAL_PARAMETER_CAMERA_SETTINGS:
+      {
+         MMAL_PARAMETER_CAMERA_SETTINGS_T *settings = (MMAL_PARAMETER_CAMERA_SETTINGS_T*)param;
+         vcos_log_error("Exposure now %u, analog gain %u/%u, digital gain %u/%u",
+                        settings->exposure,
+                        settings->analog_gain.num, settings->analog_gain.den,
+                        settings->digital_gain.num, settings->digital_gain.den);
+         vcos_log_error("AWB R=%u/%u, B=%u/%u",
+                        settings->awb_red_gain.num, settings->awb_red_gain.den,
+                        settings->awb_blue_gain.num, settings->awb_blue_gain.den);
+      }
+      break;
       }
    }
    else if (buffer->cmd == MMAL_EVENT_ERROR)
