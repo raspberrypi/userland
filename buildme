@@ -8,11 +8,15 @@ fi
 
 BUILDSUBDIR=`echo $BUILDTYPE | tr '[A-Z]' '[a-z]'`;
 
-if [ "armv6l" = `arch` ] || [ "armv7l" = `arch` ]; then
+if [ "armv6l" = `arch` ] || [ "armv7l" = `arch` ] || [ "aarch64" = `arch` ]; then
 	# Native compile on the Raspberry Pi
 	mkdir -p build/raspberry/$BUILDSUBDIR
 	pushd build/raspberry/$BUILDSUBDIR
-	cmake -DCMAKE_BUILD_TYPE=$BUILDTYPE ../../..
+	if [ "aarch64" = `arch` ]; then
+		cmake -DCMAKE_BUILD_TYPE=$BUILDTYPE -DARM64=ON ../../..
+	else
+		cmake -DCMAKE_BUILD_TYPE=$BUILDTYPE ../../..
+	fi
 	if [ "armv6l" = `arch` ]; then
 		make
 	else
