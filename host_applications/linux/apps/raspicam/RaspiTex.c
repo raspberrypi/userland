@@ -180,7 +180,7 @@ int raspitex_parse_cmdline(RASPITEX_STATE *state,
  */
 void raspitex_display_help()
 {
-   fprintf(stdout, "\nPreview parameter commands\n\n");
+   fprintf(stdout, "\nGL parameter commands\n\n");
    raspicli_display_help(cmdline_commands, cmdline_commands_size);
 }
 

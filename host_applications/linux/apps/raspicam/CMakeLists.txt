@@ -24,7 +24,9 @@ set (GL_SCENE_SOURCES
 set (COMMON_SOURCES
    RaspiCamControl.c
    RaspiCLI.c
-   RaspiPreview.c)
+   RaspiPreview.c
+   RaspiCommonSettings.c
+   RaspiHelpers.c)
 
 add_executable(raspistill ${COMMON_SOURCES} RaspiStill.c  RaspiTex.c RaspiTexUtil.c tga.c ${GL_SCENE_SOURCES} libgps_loader.c)
 add_executable(raspiyuv   ${COMMON_SOURCES} RaspiStillYUV.c)
