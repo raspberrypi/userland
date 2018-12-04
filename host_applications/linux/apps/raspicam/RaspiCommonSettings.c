@@ -1,5 +1,9 @@
 /*
+<<<<<<< HEAD
 Copyright (c) 2018, Raspberry Pi (Trading) Ltd.
+=======
+Copyright (c) 2018, Raspberry Pi (Trading) Ltd
+>>>>>>> Moved common settings to own file
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -28,6 +32,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /**
  * \file RaspiCommonSettings.c
  *
+<<<<<<< HEAD
+=======
+ * \Author: James Hughes
+ *
+>>>>>>> Moved common settings to own file
  * Description
  *
  * Handles general settings applicable to all the camera applications
@@ -95,7 +104,11 @@ void raspicommonsettings_set_defaults(RASPICOMMONSETTINGS_PARAMETERS *state)
 };
 
 /**
+<<<<<<< HEAD
  * Dump parameters as human readable to stderr
+=======
+ * Dump parameters as human readable to stdout
+>>>>>>> Moved common settings to own file
  *
  * @param state Pointer to parameter block
  *
@@ -109,7 +122,11 @@ void raspicommonsettings_dump_parameters(RASPICOMMONSETTINGS_PARAMETERS *state)
 };
 
 /**
+<<<<<<< HEAD
  * Display help for command line options for this module
+=======
+ * Display help for command line options for his module
+>>>>>>> Moved common settings to own file
  */
 void raspicommonsettings_display_help()
 {

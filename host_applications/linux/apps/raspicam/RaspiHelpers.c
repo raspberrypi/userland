@@ -1,5 +1,9 @@
 /*
+<<<<<<< HEAD
 Copyright (c) 2018, Raspberry Pi (Trading) Ltd.
+=======
+Copyright (c) 2018, Raspberry Pi (Trading) Ltd
+>>>>>>> Moved common settings to own file
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -47,6 +51,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 static const char *app_name;
 
+<<<<<<< HEAD
+=======
+void __attribute__((weak)) application_help_message(char *name)
+{
+   fprintf(stdout, "No application help function for %s has been defined\n", name);
+}
+
+
+
+>>>>>>> Moved common settings to own file
 void display_valid_parameters(char *name, void (*app_help)(char*))
 {
    fprintf(stdout, "\n%s Camera App\n\n", basename(app_name));

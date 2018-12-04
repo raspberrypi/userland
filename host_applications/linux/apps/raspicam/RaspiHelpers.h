@@ -1,5 +1,9 @@
 /*
+<<<<<<< HEAD
 Copyright (c) 2018, Raspberry Pi (Trading) Ltd.
+=======
+Copyright (c) 2018, Raspberry Pi (Trading) Ltd
+>>>>>>> Moved common settings to own file
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
