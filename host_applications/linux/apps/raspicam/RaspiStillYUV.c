@@ -1296,6 +1296,17 @@ int main(int argc, const char **argv)
                   mmal_port_parameter_set_boolean(state.camera_component->control,  MMAL_PARAMETER_CAMERA_BURST_CAPTURE, 1);
                }
 
+               if(state.camera_parameters.enable_annotate)
+                  raspicamcontrol_set_annotate(state.camera_component, state.camera_parameters.enable_annotate,
+                                               state.camera_parameters.annotate_string,
+                                               state.camera_parameters.annotate_text_size,
+                                               state.camera_parameters.annotate_text_colour,
+                                               state.camera_parameters.annotate_bg_colour,
+                                               state.camera_parameters.annotate_justify,
+                                               state.camera_parameters.annotate_x,
+                                               state.camera_parameters.annotate_y
+                                              );
+
                if (state.common_settings.verbose)
                   fprintf(stderr, "Starting capture %d\n", frame);
 
