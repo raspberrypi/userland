@@ -712,6 +712,7 @@ static FILE *open_filename(RASPIVIDYUV_STATE *pState, char *filename)
 static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
    MMAL_BUFFER_HEADER_T *new_buffer;
+   static int64_t last_second = -1;
 
    // We pass our file handle and other stuff in via the userdata field.
 
@@ -721,6 +722,7 @@ static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buff
    {
       int bytes_written = 0;
       int bytes_to_write = buffer->length;
+      int64_t current_time = vcos_getmicrosecs64()/1000000;
 
       if (pData->pstate->onlyLuma)
          bytes_to_write = vcos_min(buffer->length, port->format->es->video.width * port->format->es->video.height);
@@ -758,6 +760,23 @@ static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buff
             }
          }
       }
+
+      // See if the second count has changed and we need to update any annotation
+      if (current_time != last_second)
+      {
+         raspicamcontrol_set_annotate(pData->pstate->camera_component,
+                                      pData->pstate->camera_parameters.enable_annotate,
+                                      pData->pstate->camera_parameters.annotate_string,
+                                      pData->pstate->camera_parameters.annotate_text_size,
+                                      pData->pstate->camera_parameters.annotate_text_colour,
+                                      pData->pstate->camera_parameters.annotate_bg_colour,
+                                      pData->pstate->camera_parameters.annotate_justify,
+                                      pData->pstate->camera_parameters.annotate_x,
+                                      pData->pstate->camera_parameters.annotate_y
+                                      );
+         last_second = current_time;
+      }
+
    }
    else
    {
