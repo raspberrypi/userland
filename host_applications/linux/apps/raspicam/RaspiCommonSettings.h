@@ -1,9 +1,5 @@
 /*
-<<<<<<< HEAD
 Copyright (c) 2018, Raspberry Pi (Trading) Ltd.
-=======
-Copyright (c) 2018, Raspberry Pi (Trading) Ltd
->>>>>>> Moved common settings to own file
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -32,11 +28,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /**
  * \file RaspiCommonSettings.c
  *
-<<<<<<< HEAD
-=======
- * \Author: James Hughes
- *
->>>>>>> Moved common settings to own file
  * Description
  *
  * Handles general settings applicable to all the camera applications
