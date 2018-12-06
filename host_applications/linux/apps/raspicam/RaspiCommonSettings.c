@@ -55,6 +55,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiCommonSettings.h"
 #include "RaspiCLI.h"
 #include "RaspiHelpers.h"
+#include "RaspiGPS.h"
 
 enum
 {
@@ -65,6 +66,7 @@ enum
    CommandVerbose,
    CommandCamSelect,
    CommandSensorMode,
+   CommandGpsd,
 };
 
 
@@ -77,6 +79,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandVerbose, "-verbose",    "v",  "Output verbose information during run", 0 },
    { CommandCamSelect, "-camselect","cs", "Select camera <number>. Default 0", 1 },
    { CommandSensorMode,"-mode",     "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
+   { CommandGpsd,    "-gpsdexif",   "gps","Apply real-time GPS information to output (e.g. EXIF in JPG, annotation in video (requires " LIBGPS_SO_VERSION ")", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -92,6 +95,7 @@ void raspicommonsettings_set_defaults(RASPICOMMONSETTINGS_PARAMETERS *state)
    state->verbose = 0;
    state->cameraNum = 0;
    state->sensor_mode = 0;
+   state->gps = 0;
 };
 
 /**
@@ -106,6 +110,7 @@ void raspicommonsettings_dump_parameters(RASPICOMMONSETTINGS_PARAMETERS *state)
    fprintf(stderr, "Width %d, Height %d, filename %s\n", state->width,
            state->height, state->filename);
    fprintf(stderr, "Using camera %d, sensor mode %d\n\n", state->cameraNum, state->sensor_mode);
+   fprintf(stderr, "GPS output %s\n\n", state->gps ? "Enabled" : "Disabled");
 };
 
 /**
@@ -210,6 +215,11 @@ int raspicommonsettings_parse_cmdline(RASPICOMMONSETTINGS_PARAMETERS *state, con
          used = 2;
       break;
    }
+
+   case CommandGpsd:
+      state->gps = 1;
+      used = 1;
+      break;
    }
 
    return used;

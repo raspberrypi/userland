@@ -74,6 +74,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiCLI.h"
 #include "RaspiCommonSettings.h"
 #include "RaspiHelpers.h"
+#include "RaspiGPS.h"
 
 #include <semaphore.h>
 
@@ -1086,6 +1087,11 @@ int main(int argc, const char **argv)
    if (state.timeout == -1)
       state.timeout = 5000;
 
+   if (state.common_settings.gps)
+      if (raspi_gps_setup(state.common_settings.verbose))
+         state.common_settings.gps = false;
+
+
    // Setup for sensor specific parameters
    get_sensor_defaults(state.common_settings.cameraNum, state.common_settings.camera_name,
                        &state.common_settings.width, &state.common_settings.height);
@@ -1236,15 +1242,32 @@ int main(int argc, const char **argv)
                }
 
                if(state.camera_parameters.enable_annotate)
-                  raspicamcontrol_set_annotate(state.camera_component, state.camera_parameters.enable_annotate,
-                                               state.camera_parameters.annotate_string,
-                                               state.camera_parameters.annotate_text_size,
-                                               state.camera_parameters.annotate_text_colour,
-                                               state.camera_parameters.annotate_bg_colour,
-                                               state.camera_parameters.annotate_justify,
-                                               state.camera_parameters.annotate_x,
-                                               state.camera_parameters.annotate_y
-                                              );
+               {
+                  if ((state.camera_parameters.enable_annotate & ANNOTATE_APP_TEXT) && state.common_settings.gps)
+                  {
+                     char *text = raspi_gps_location_string();
+                     raspicamcontrol_set_annotate(state.camera_component, state.camera_parameters.enable_annotate,
+                                                  text,
+                                                  state.camera_parameters.annotate_text_size,
+                                                  state.camera_parameters.annotate_text_colour,
+                                                  state.camera_parameters.annotate_bg_colour,
+                                                  state.camera_parameters.annotate_justify,
+                                                  state.camera_parameters.annotate_x,
+                                                  state.camera_parameters.annotate_y
+                                                 );
+                     free(text);
+                  }
+                  else
+                     raspicamcontrol_set_annotate(state.camera_component, state.camera_parameters.enable_annotate,
+                                                  state.camera_parameters.annotate_string,
+                                                  state.camera_parameters.annotate_text_size,
+                                                  state.camera_parameters.annotate_text_colour,
+                                                  state.camera_parameters.annotate_bg_colour,
+                                                  state.camera_parameters.annotate_justify,
+                                                  state.camera_parameters.annotate_x,
+                                                  state.camera_parameters.annotate_y
+                                                 );
+               }
 
                if (state.common_settings.verbose)
                   fprintf(stderr, "Starting capture %d\n", frame);
@@ -1321,6 +1344,9 @@ error:
 
       raspipreview_destroy(&state.preview_parameters);
       destroy_camera_component(&state);
+
+      if (state.common_settings.gps)
+         raspi_gps_shutdown(state.common_settings.verbose);
 
       if (state.common_settings.verbose)
          fprintf(stderr, "Close down completed, all components disconnected, disabled and destroyed\n\n");

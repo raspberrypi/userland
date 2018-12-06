@@ -84,6 +84,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiPreview.h"
 #include "RaspiCLI.h"
 #include "RaspiHelpers.h"
+#include "RaspiGPS.h"
 
 #include <semaphore.h>
 
@@ -542,13 +543,13 @@ static void application_help_message(char *app_name)
       fprintf(stdout, ",%s", raw_output_fmt_map[i].mode);
    }
 
-   fprintf(stdout, "\n");
+   fprintf(stdout, "\n\n");
 
    fprintf(stdout, "Raspivid allows output to a remote IPv4 host e.g. -o tcp://192.168.1.2:1234"
            "or -o udp://192.168.1.2:1234\n"
            "To listen on a TCP port (IPv4) and wait for an incoming connection use the -l option\n"
            "e.g. raspivid -l -o tcp://0.0.0.0:3333 -> bind to all network interfaces,\n"
-           "raspivid -l -o tcp://192.168.1.1:3333 -> bind to a certain local IPv4 port");
+           "raspivid -l -o tcp://192.168.1.1:3333 -> bind to a certain local IPv4 port\n");
 
    return;
 }
@@ -925,8 +926,7 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          if (!parms_used)
             parms_used = raspipreview_parse_cmdline(&state->preview_parameters, &argv[i][1], second_arg);
 
-
-         // If no parms were used, this must be a bad parameters
+         // If no parms were used, this must be a bad parameter
          if (!parms_used)
             valid = 0;
          else
@@ -1135,18 +1135,26 @@ static FILE *open_filename(RASPIVID_STATE *pState, char *filename)
  */
 static void update_annotation_data(RASPIVID_STATE *state)
 {
-   // So, if we have asked for a application supplied string, set it to the H264 parameters
+   // So, if we have asked for a application supplied string, set it to the H264 or GPS parameters
    if (state->camera_parameters.enable_annotate & ANNOTATE_APP_TEXT)
    {
       char *text;
-      const char *refresh = raspicli_unmap_xref(state->intra_refresh_type, intra_refresh_map, intra_refresh_map_size);
 
-      asprintf(&text,  "%dk,%df,%s,%d,%s,%s",
-               state->bitrate / 1000,  state->framerate,
-               refresh ? refresh : "(none)",
-               state->intraperiod,
-               raspicli_unmap_xref(state->profile, profile_map, profile_map_size),
-               raspicli_unmap_xref(state->level, level_map, level_map_size));
+      if (state->common_settings.gps)
+      {
+         text = raspi_gps_location_string();
+      }
+      else
+      {
+         const char *refresh = raspicli_unmap_xref(state->intra_refresh_type, intra_refresh_map, intra_refresh_map_size);
+
+         asprintf(&text,  "%dk,%df,%s,%d,%s,%s",
+                  state->bitrate / 1000,  state->framerate,
+                  refresh ? refresh : "(none)",
+                  state->intraperiod,
+                  raspicli_unmap_xref(state->profile, profile_map, profile_map_size),
+                  raspicli_unmap_xref(state->level, level_map, level_map_size));
+      }
 
       raspicamcontrol_set_annotate(state->camera_component, state->camera_parameters.enable_annotate, text,
                                    state->camera_parameters.annotate_text_size,
@@ -2408,6 +2416,10 @@ int main(int argc, const char **argv)
 
    check_camera_model(state.common_settings.cameraNum);
 
+   if (state.common_settings.gps)
+      if (raspi_gps_setup(state.common_settings.verbose))
+         state.common_settings.gps = 0;
+
    // OK, we have a nice set of parameters. Now set up our components
    // We have three components. Camera, Preview and encoder.
 
@@ -2904,6 +2916,9 @@ error:
 
    if (status != MMAL_SUCCESS)
       raspicamcontrol_check_configuration(128);
+
+   if (state.common_settings.gps)
+      raspi_gps_shutdown(state.common_settings.verbose);
 
    return exit_code;
 }
