@@ -46,11 +46,29 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiCamControl.h"
 #include "RaspiCommonSettings.h"
 
+#ifndef GIT_COMMIT_ID
+#define GIT_COMMIT_ID "Not found"
+#endif
+
+#if (GIT_TAINTED > 0)
+#define TAINTED " Tainted"
+#else
+#define TAINTED ""
+#endif
+
 static const char *app_name;
+
+void print_app_details(FILE *fd)
+{
+   if (!app_name)
+      app_name = "Un-named";
+
+   fprintf(fd, "\n\"%s\" Camera App (commit %s%s)\n\n", basename(app_name), GIT_COMMIT_ID, TAINTED);
+}
 
 void display_valid_parameters(char *name, void (*app_help)(char*))
 {
-   fprintf(stdout, "\n%s Camera App\n\n", basename(app_name));
+   print_app_details(stdout);
 
    // This should be defined in the main app source code
    if (app_help)

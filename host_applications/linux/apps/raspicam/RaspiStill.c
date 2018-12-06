@@ -58,8 +58,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <errno.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.11"
-
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
 
@@ -1760,8 +1758,7 @@ int main(int argc, const char **argv)
 
    if (state.common_settings.verbose)
    {
-      fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
-
+      print_app_details(stderr);
       dump_status(&state);
    }
 

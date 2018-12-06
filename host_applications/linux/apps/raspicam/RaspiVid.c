@@ -67,8 +67,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <arpa/inet.h>
 #include <time.h>
 
-#define VERSION_STRING "v1.3.12"
-
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
 
@@ -505,8 +503,6 @@ static void dump_status(RASPIVID_STATE *state)
 static void application_help_message(char *app_name)
 {
    int i;
-
-   fprintf(stdout, "\n%s Camera App %s\n\n", basename(app_name), VERSION_STRING);
 
    fprintf(stdout, "Display camera output to display, and optionally saves an H264 capture at requested bitrate\n\n");
    fprintf(stdout, "\nusage: %s [options]\n\n", app_name);
@@ -2403,7 +2399,7 @@ int main(int argc, const char **argv)
 
    if (state.common_settings.verbose)
    {
-      fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
+      print_app_details(stderr);
       dump_status(&state);
    }
 
