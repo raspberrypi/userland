@@ -119,10 +119,6 @@ enum
 /// exposure etc. in milliseconds.
 #define CAMERA_SETTLE_TIME       1000
 
-int mmal_status_to_int(MMAL_STATUS_T status);
-static void signal_handler(int signal_number);
-
-
 /** Structure containing all state information for the current run
  */
 typedef struct
@@ -628,8 +624,8 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
       case CommandSignal:   // Set SIGUSR1 & SIGUSR2 between capture mode
          state->frameNextMethod = FRAME_NEXT_SIGNAL;
          // Reenable the signal
-         signal(SIGUSR1, signal_handler);
-         signal(SIGUSR2, signal_handler);
+         signal(SIGUSR1, default_signal_handler);
+         signal(SIGUSR2, default_signal_handler);
 
          if (state->timeout == -1)
             state->timeout = 0;
@@ -1416,32 +1412,6 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag)
 }
 
 /**
- * Connect two specific ports together
- *
- * @param output_port Pointer the output port
- * @param input_port Pointer the input port
- * @param Pointer to a mmal connection pointer, reassigned if function successful
- * @return Returns a MMAL_STATUS_T giving result of operation
- *
- */
-static MMAL_STATUS_T connect_ports(MMAL_PORT_T *output_port, MMAL_PORT_T *input_port, MMAL_CONNECTION_T **connection)
-{
-   MMAL_STATUS_T status;
-
-   status =  mmal_connection_create(connection, output_port, input_port, MMAL_CONNECTION_FLAG_TUNNELLING | MMAL_CONNECTION_FLAG_ALLOCATION_ON_INPUT);
-
-   if (status == MMAL_SUCCESS)
-   {
-      status =  mmal_connection_enable(*connection);
-      if (status != MMAL_SUCCESS)
-         mmal_connection_destroy(*connection);
-   }
-
-   return status;
-}
-
-
-/**
  * Allocates and generates a filename based on the
  * user-supplied pattern and the frame number.
  * On successful return, finalName and tempName point to malloc()ed strings
@@ -1469,40 +1439,6 @@ MMAL_STATUS_T create_filenames(char** finalName, char** tempName, char * pattern
    }
    return MMAL_SUCCESS;
 }
-
-/**
- * Checks if specified port is valid and enabled, then disables it
- *
- * @param port  Pointer the port
- *
- */
-static void check_disable_port(MMAL_PORT_T *port)
-{
-   if (port && port->is_enabled)
-      mmal_port_disable(port);
-}
-
-/**
- * Handler for sigint signals
- *
- * @param signal_number ID of incoming signal.
- *
- */
-static void signal_handler(int signal_number)
-{
-   if (signal_number == SIGUSR1 || signal_number == SIGUSR2)
-   {
-      // Handle but ignore - prevents us dropping out if started in none-signal mode
-      // and someone sends us the USR1 or USR2 signal anyway
-   }
-   else
-   {
-      // Going to abort on all other signals
-      vcos_log_error("Aborting program\n");
-      exit(130);
-   }
-}
-
 
 /**
  * Function to wait in various ways (depending on settings) for the next frame
@@ -1792,7 +1728,7 @@ int main(int argc, const char **argv)
    // Register our application with the logging system
    vcos_log_register("RaspiStill", VCOS_LOG_CATEGORY);
 
-   signal(SIGINT, signal_handler);
+   signal(SIGINT, default_signal_handler);
 
    // Disable USR1 and USR2 for the moment - may be reenabled if go in to signal capture mode
    signal(SIGUSR1, SIG_IGN);

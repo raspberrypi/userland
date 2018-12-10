@@ -38,8 +38,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/mmal/util/mmal_util.h"
 #include "interface/mmal/util/mmal_util_params.h"
 #include "interface/mmal/util/mmal_default_components.h"
+#include "interface/mmal/util/mmal_connection.h"
+
 #include "RaspiCamControl.h"
 #include "RaspiCLI.h"
+#include "RaspiHelpers.h"
 
 /// Structure to cross reference exposure strings against the MMAL parameter equivalent
 static XREF_T  exposure_map[] =
@@ -928,74 +931,7 @@ void raspicamcontrol_dump_parameters(const RASPICAM_CAMERA_PARAMETERS *params)
    fprintf(stderr, "ROI x %lf, y %f, w %f h %f\n", params->roi.x, params->roi.y, params->roi.w, params->roi.h);
 }
 
-/**
- * Convert a MMAL status return value to a simple boolean of success
- * ALso displays a fault if code is not success
- *
- * @param status The error code to convert
- * @return 0 if status is success, 1 otherwise
- */
-int mmal_status_to_int(MMAL_STATUS_T status)
-{
-   if (status == MMAL_SUCCESS)
-      return 0;
-   else
-   {
-      switch (status)
-      {
-      case MMAL_ENOMEM :
-         vcos_log_error("Out of memory");
-         break;
-      case MMAL_ENOSPC :
-         vcos_log_error("Out of resources (other than memory)");
-         break;
-      case MMAL_EINVAL:
-         vcos_log_error("Argument is invalid");
-         break;
-      case MMAL_ENOSYS :
-         vcos_log_error("Function not implemented");
-         break;
-      case MMAL_ENOENT :
-         vcos_log_error("No such file or directory");
-         break;
-      case MMAL_ENXIO :
-         vcos_log_error("No such device or address");
-         break;
-      case MMAL_EIO :
-         vcos_log_error("I/O error");
-         break;
-      case MMAL_ESPIPE :
-         vcos_log_error("Illegal seek");
-         break;
-      case MMAL_ECORRUPT :
-         vcos_log_error("Data is corrupt \attention FIXME: not POSIX");
-         break;
-      case MMAL_ENOTREADY :
-         vcos_log_error("Component is not ready \attention FIXME: not POSIX");
-         break;
-      case MMAL_ECONFIG :
-         vcos_log_error("Component is not configured \attention FIXME: not POSIX");
-         break;
-      case MMAL_EISCONN :
-         vcos_log_error("Port is already connected ");
-         break;
-      case MMAL_ENOTCONN :
-         vcos_log_error("Port is disconnected");
-         break;
-      case MMAL_EAGAIN :
-         vcos_log_error("Resource temporarily unavailable. Try again later");
-         break;
-      case MMAL_EFAULT :
-         vcos_log_error("Bad address");
-         break;
-      default :
-         vcos_log_error("Unknown status error");
-         break;
-      }
 
-      return 1;
-   }
-}
 
 /**
  * Give the supplied parameter block a set of default values
