@@ -1,5 +1,6 @@
 /*
-Copyright (c) 2013, Broadcom Europe Ltd
+Copyright (c) 2018, Raspberry Pi (Trading) Ltd.
+Copyright (c) 2013, Broadcom Europe Ltd.
 Copyright (c) 2013, James Hughes
 All rights reserved.
 
@@ -30,9 +31,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * \file RaspiVid.c
  * Command line program to capture a camera video stream and encode it to file.
  * Also optionally display a preview/viewfinder of current camera input.
- *
- * \date 28th Feb 2013
- * \Author: James Hughes
  *
  * Description
  *
@@ -83,9 +81,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/mmal/util/mmal_connection.h"
 #include "interface/mmal/mmal_parameters_camera.h"
 
+#include "RaspiCommonSettings.h"
 #include "RaspiCamControl.h"
 #include "RaspiPreview.h"
 #include "RaspiCLI.h"
+#include "RaspiHelpers.h"
 
 #include <semaphore.h>
 
@@ -171,9 +171,8 @@ typedef enum
  */
 struct RASPIVID_STATE_S
 {
+   RASPICOMMONSETTINGS_PARAMETERS common_settings;     /// Common settings
    int timeout;                        /// Time taken before frame is grabbed and app then shuts down. Units are milliseconds
-   int width;                          /// Requested width of image
-   int height;                         /// requested height of image
    MMAL_FOURCC_T encoding;             /// Requested codec video encoding (MJPEG or H264)
    int bitrate;                        /// Requested bitrate
    int framerate;                      /// Requested frame rate (fps)
@@ -181,7 +180,6 @@ struct RASPIVID_STATE_S
    int quantisationParameter;          /// Quantisation parameter - quality. Set bitrate 0 and set this for variable bitrate
    int bInlineHeaders;                  /// Insert inline headers to stream (SPS, PPS)
    char *filename;                     /// filename of output file
-   int verbose;                        /// !0 if want detailed run information
    int demoMode;                       /// Run app in demo mode
    int demoInterval;                   /// Interval between camera settings changes
    int immutableInput;                 /// Flag to specify whether encoder works in place or creates a new buffer. Result is preview can display either
@@ -222,8 +220,6 @@ struct RASPIVID_STATE_S
    int raw_output;                      /// Output raw video from camera as well
    RAW_OUTPUT_FMT raw_output_fmt;       /// The raw video format
    char *raw_filename;                  /// Filename for raw video output
-   int cameraNum;                       /// Camera number
-   int sensor_mode;			            /// Sensor mode. 0=auto. Check docs/forum for modes selected by other values.
    int intra_refresh_type;              /// What intra refresh type to use. -1 to not set.
    int frame;
    char *pts_filename;
@@ -285,17 +281,10 @@ static XREF_T  raw_output_fmt_map[] =
 
 static int raw_output_fmt_map_size = sizeof(raw_output_fmt_map) / sizeof(raw_output_fmt_map[0]);
 
-static void display_valid_parameters(char *app_name);
-
 /// Command ID's and Structure defining our command line options
 enum
 {
-   CommandHelp,
-   CommandWidth,
-   CommandHeight,
    CommandBitrate,
-   CommandOutput,
-   CommandVerbose,
    CommandTimeout,
    CommandDemoMode,
    CommandFramerate,
@@ -314,8 +303,6 @@ enum
    CommandSplitWait,
    CommandCircular,
    CommandIMV,
-   CommandCamSelect,
-   CommandSensorMode,
    CommandIntraRefreshType,
    CommandFlush,
    CommandSavePTS,
@@ -329,17 +316,7 @@ enum
 
 static COMMAND_LIST cmdline_commands[] =
 {
-   { CommandHelp,          "-help",       "?",  "This help information", 0 },
-   { CommandWidth,         "-width",      "w",  "Set image width <size>. Default 1920", 1 },
-   { CommandHeight,        "-height",     "h",  "Set image height <size>. Default 1080", 1 },
    { CommandBitrate,       "-bitrate",    "b",  "Set bitrate. Use bits per second (e.g. 10MBits/s would be -b 10000000)", 1 },
-   {
-      CommandOutput,        "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -').\n"
-      "\t\t  Connect to a remote IPv4 host (e.g. tcp://192.168.1.2:1234, udp://192.168.1.2:1234)\n"
-      "\t\t  To listen on a TCP port (IPv4) and wait for an incoming connection use -l\n"
-      "\t\t  (e.g. raspivid -l -o tcp://0.0.0.0:3333 -> bind to all network interfaces, raspivid -l -o tcp://192.168.1.1:3333 -> bind to a certain local IPv4)", 1
-   },
-   { CommandVerbose,       "-verbose",    "v",  "Output verbose information during run", 0 },
    { CommandTimeout,       "-timeout",    "t",  "Time (in ms) to capture for. If not specified, set to 5s. Zero to disable", 1 },
    { CommandDemoMode,      "-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 1},
    { CommandFramerate,     "-framerate",  "fps","Specify the frames per second to record", 1},
@@ -358,8 +335,6 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandSplitWait,     "-split",      "sp", "In wait mode, create new output file for each start event", 0},
    { CommandCircular,      "-circular",   "c",  "Run encoded data through circular buffer until triggered then save", 0},
    { CommandIMV,           "-vectors",    "x",  "Output filename <filename> for inline motion vectors", 1 },
-   { CommandCamSelect,     "-camselect",  "cs", "Select camera <number>. Default 0", 1 },
-   { CommandSensorMode,    "-mode",       "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
    { CommandIntraRefreshType,"-irefresh", "if", "Set intra refresh type", 1},
    { CommandFlush,         "-flush",      "fl",  "Flush buffers in order to decrease latency", 0 },
    { CommandSavePTS,       "-save-pts",   "pts","Save Timestamps to file for mkvmerge", 1 },
@@ -407,10 +382,12 @@ static void default_status(RASPIVID_STATE *state)
    // Default everything to zero
    memset(state, 0, sizeof(RASPIVID_STATE));
 
+   raspicommonsettings_set_defaults(&state->common_settings);
+
    // Now set anything non-zero
    state->timeout = -1; // replaced with 5000ms later if unset
-   state->width = 1920;       // Default to 1080p
-   state->height = 1080;
+   state->common_settings.width = 1920;       // Default to 1080p
+   state->common_settings.height = 1080;
    state->encoding = MMAL_ENCODING_H264;
    state->bitrate = 17000000; // This is a decent default bitrate for 1080p
    state->framerate = VIDEO_FRAME_RATE_NUM;
@@ -424,28 +401,19 @@ static void default_status(RASPIVID_STATE *state)
    state->waitMethod = WAIT_METHOD_NONE;
    state->onTime = 5000;
    state->offTime = 5000;
-
    state->bCapturing = 0;
    state->bInlineHeaders = 0;
-
    state->segmentSize = 0;  // 0 = not segmenting the file.
    state->segmentNumber = 1;
    state->segmentWrap = 0; // Point at which to wrap segment number back to 1. 0 = no wrap
    state->splitNow = 0;
    state->splitWait = 0;
-
    state->inlineMotionVectors = 0;
-   state->cameraNum = 0;
-   state->sensor_mode = 0;
-
    state->intra_refresh_type = -1;
-
    state->frame = 0;
    state->save_pts = 0;
-
    state->netListen = false;
    state->addSPSTiming = MMAL_FALSE;
-
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -503,7 +471,8 @@ static void dump_status(RASPIVID_STATE *state)
       return;
    }
 
-   fprintf(stderr, "Width %d, Height %d, filename %s\n", state->width, state->height, state->filename);
+   raspicommonsettings_dump_parameters(&state->common_settings);
+
    fprintf(stderr, "bitrate %d, framerate %d, time delay %d\n", state->bitrate, state->framerate, state->timeout);
    fprintf(stderr, "H264 Profile %s\n", raspicli_unmap_xref(state->profile, profile_map, profile_map_size));
    fprintf(stderr, "H264 Level %s\n", raspicli_unmap_xref(state->level, level_map, level_map_size));
@@ -529,6 +498,67 @@ static void dump_status(RASPIVID_STATE *state)
 
    raspipreview_dump_parameters(&state->preview_parameters);
    raspicamcontrol_dump_parameters(&state->camera_parameters);
+}
+
+/**
+ * Display usage information for the application to stdout
+ *
+ * @param app_name String to display as the application name
+ */
+static void application_help_message(char *app_name)
+{
+   int i;
+
+   fprintf(stdout, "\n%s Camera App %s\n\n", basename(app_name), VERSION_STRING);
+
+   fprintf(stdout, "Display camera output to display, and optionally saves an H264 capture at requested bitrate\n\n");
+   fprintf(stdout, "\nusage: %s [options]\n\n", app_name);
+
+   fprintf(stdout, "Image parameter commands\n\n");
+
+   raspicli_display_help(cmdline_commands, cmdline_commands_size);
+
+   // Profile options
+   fprintf(stdout, "\n\nH264 Profile options :\n%s", profile_map[0].mode );
+
+   for (i=1; i<profile_map_size; i++)
+   {
+      fprintf(stdout, ",%s", profile_map[i].mode);
+   }
+
+   // Level options
+   fprintf(stdout, "\n\nH264 Level options :\n%s", level_map[0].mode );
+
+   for (i=1; i<level_map_size; i++)
+   {
+      fprintf(stdout, ",%s", level_map[i].mode);
+   }
+
+   // Intra refresh options
+   fprintf(stdout, "\n\nH264 Intra refresh options :\n%s", intra_refresh_map[0].mode );
+
+   for (i=1; i<intra_refresh_map_size; i++)
+   {
+      fprintf(stdout, ",%s", intra_refresh_map[i].mode);
+   }
+
+   // Raw output format options
+   fprintf(stdout, "\n\nRaw output format options :\n%s", raw_output_fmt_map[0].mode );
+
+   for (i=1; i<raw_output_fmt_map_size; i++)
+   {
+      fprintf(stdout, ",%s", raw_output_fmt_map[i].mode);
+   }
+
+   fprintf(stdout, "\n");
+
+   fprintf(stdout, "Raspivid allows output to a remote IPv4 host e.g. -o tcp://192.168.1.2:1234"
+           "or -o udp://192.168.1.2:1234\n"
+           "To listen on a TCP port (IPv4) and wait for an incoming connection use the -l option\n"
+           "e.g. raspivid -l -o tcp://0.0.0.0:3333 -> bind to all network interfaces,\n"
+           "raspivid -l -o tcp://192.168.1.1:3333 -> bind to a certain local IPv4 port");
+
+   return;
 }
 
 /**
@@ -572,24 +602,6 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
       //  We are now dealing with a command line option
       switch (command_id)
       {
-      case CommandHelp:
-         display_valid_parameters(basename(argv[0]));
-         return -1;
-
-      case CommandWidth: // Width > 0
-         if (sscanf(argv[i + 1], "%u", &state->width) != 1)
-            valid = 0;
-         else
-            i++;
-         break;
-
-      case CommandHeight: // Height > 0
-         if (sscanf(argv[i + 1], "%u", &state->height) != 1)
-            valid = 0;
-         else
-            i++;
-         break;
-
       case CommandBitrate: // 1-100
          if (sscanf(argv[i + 1], "%u", &state->bitrate) == 1)
          {
@@ -598,26 +610,6 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          else
             valid = 0;
 
-         break;
-
-      case CommandOutput:  // output filename
-      {
-         int len = strlen(argv[i + 1]);
-         if (len)
-         {
-            state->filename = malloc(len + 1);
-            vcos_assert(state->filename);
-            if (state->filename)
-               strncpy(state->filename, argv[i + 1], len+1);
-            i++;
-         }
-         else
-            valid = 0;
-         break;
-      }
-
-      case CommandVerbose: // display lots of data during run
-         state->verbose = 1;
          break;
 
       case CommandTimeout: // Time to run viewfinder/capture
@@ -824,27 +816,6 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
             valid = 0;
          break;
       }
-      case CommandCamSelect:  //Select camera input port
-      {
-         if (sscanf(argv[i + 1], "%u", &state->cameraNum) == 1)
-         {
-            i++;
-         }
-         else
-            valid = 0;
-         break;
-      }
-
-      case CommandSensorMode:
-      {
-         if (sscanf(argv[i + 1], "%u", &state->sensor_mode) == 1)
-         {
-            i++;
-         }
-         else
-            valid = 0;
-         break;
-      }
 
       case CommandIntraRefreshType:
       {
@@ -954,6 +925,10 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          const char *second_arg = (i + 1 < argc) ? argv[i + 1] : NULL;
          int parms_used = (raspicamcontrol_parse_cmdline(&state->camera_parameters, &argv[i][1], second_arg));
 
+         // Still unused, try common settings
+         if (!parms_used)
+            parms_used = raspicommonsettings_parse_cmdline(&state->common_settings, &argv[i][1], second_arg, &application_help_message);
+
          // Still unused, try preview options
          if (!parms_used)
             parms_used = raspipreview_parse_cmdline(&state->preview_parameters, &argv[i][1], second_arg);
@@ -977,67 +952,6 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
    }
 
    return 0;
-}
-
-/**
- * Display usage information for the application to stdout
- *
- * @param app_name String to display as the application name
- */
-static void display_valid_parameters(char *app_name)
-{
-   int i;
-
-   fprintf(stdout, "Display camera output to display, and optionally saves an H264 capture at requested bitrate\n\n");
-   fprintf(stdout, "\nusage: %s [options]\n\n", app_name);
-
-   fprintf(stdout, "Image parameter commands\n\n");
-
-   raspicli_display_help(cmdline_commands, cmdline_commands_size);
-
-   // Profile options
-   fprintf(stdout, "\n\nH264 Profile options :\n%s", profile_map[0].mode );
-
-   for (i=1; i<profile_map_size; i++)
-   {
-      fprintf(stdout, ",%s", profile_map[i].mode);
-   }
-
-   // Level options
-   fprintf(stdout, "\n\nH264 Level options :\n%s", level_map[0].mode );
-
-   for (i=1; i<level_map_size; i++)
-   {
-      fprintf(stdout, ",%s", level_map[i].mode);
-   }
-
-   // Intra refresh options
-   fprintf(stdout, "\n\nH264 Intra refresh options :\n%s", intra_refresh_map[0].mode );
-
-   for (i=1; i<intra_refresh_map_size; i++)
-   {
-      fprintf(stdout, ",%s", intra_refresh_map[i].mode);
-   }
-
-   // Raw output format options
-   fprintf(stdout, "\n\nRaw output format options :\n%s", raw_output_fmt_map[0].mode );
-
-   for (i=1; i<raw_output_fmt_map_size; i++)
-   {
-      fprintf(stdout, ",%s", raw_output_fmt_map[i].mode);
-   }
-
-   fprintf(stdout, "\n");
-
-   // Help for preview options
-   raspipreview_display_help();
-
-   // Now display any help information from the camcontrol code
-   raspicamcontrol_display_help();
-
-   fprintf(stdout, "\n");
-
-   return;
 }
 
 /**
@@ -1204,7 +1118,7 @@ static FILE *open_filename(RASPIVID_STATE *pState, char *filename)
       }
    }
 
-   if (pState->verbose)
+   if (pState->common_settings.verbose)
    {
       if (new_handle)
          fprintf(stderr, "Opening output file \"%s\"\n", filename);
@@ -1603,7 +1517,7 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
    }
 
    MMAL_PARAMETER_INT32_T camera_num =
-   {{MMAL_PARAMETER_CAMERA_NUM, sizeof(camera_num)}, state->cameraNum};
+   {{MMAL_PARAMETER_CAMERA_NUM, sizeof(camera_num)}, state->common_settings.cameraNum};
 
    status = mmal_port_parameter_set(camera->control, &camera_num.hdr);
 
@@ -1620,7 +1534,7 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
       goto error;
    }
 
-   status = mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_CAMERA_CUSTOM_SENSOR_CONFIG, state->sensor_mode);
+   status = mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_CAMERA_CUSTOM_SENSOR_CONFIG, state->common_settings.sensor_mode);
 
    if (status != MMAL_SUCCESS)
    {
@@ -1646,12 +1560,12 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
       MMAL_PARAMETER_CAMERA_CONFIG_T cam_config =
       {
          { MMAL_PARAMETER_CAMERA_CONFIG, sizeof(cam_config) },
-         .max_stills_w = state->width,
-         .max_stills_h = state->height,
+         .max_stills_w = state->common_settings.width,
+         .max_stills_h = state->common_settings.height,
          .stills_yuv422 = 0,
          .one_shot_stills = 0,
-         .max_preview_video_w = state->width,
-         .max_preview_video_h = state->height,
+         .max_preview_video_w = state->common_settings.width,
+         .max_preview_video_h = state->common_settings.height,
          .num_preview_video_frames = 3 + vcos_max(0, (state->framerate-30)/10),
          .stills_capture_circular_buffer_height = 0,
          .fast_preview_resume = 0,
@@ -1691,18 +1605,18 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
       if (state->framerate > 1000000./state->camera_parameters.shutter_speed)
       {
          state->framerate=0;
-         if (state->verbose)
+         if (state->common_settings.verbose)
             fprintf(stderr, "Enable dynamic frame rate to fulfil shutter speed requirement\n");
       }
    }
 
    format->encoding = MMAL_ENCODING_OPAQUE;
-   format->es->video.width = VCOS_ALIGN_UP(state->width, 32);
-   format->es->video.height = VCOS_ALIGN_UP(state->height, 16);
+   format->es->video.width = VCOS_ALIGN_UP(state->common_settings.width, 32);
+   format->es->video.height = VCOS_ALIGN_UP(state->common_settings.height, 16);
    format->es->video.crop.x = 0;
    format->es->video.crop.y = 0;
-   format->es->video.crop.width = state->width;
-   format->es->video.crop.height = state->height;
+   format->es->video.crop.width = state->common_settings.width;
+   format->es->video.crop.height = state->common_settings.height;
    format->es->video.frame_rate.num = PREVIEW_FRAME_RATE_NUM;
    format->es->video.frame_rate.den = PREVIEW_FRAME_RATE_DEN;
 
@@ -1735,12 +1649,12 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
    }
 
    format->encoding = MMAL_ENCODING_OPAQUE;
-   format->es->video.width = VCOS_ALIGN_UP(state->width, 32);
-   format->es->video.height = VCOS_ALIGN_UP(state->height, 16);
+   format->es->video.width = VCOS_ALIGN_UP(state->common_settings.width, 32);
+   format->es->video.height = VCOS_ALIGN_UP(state->common_settings.height, 16);
    format->es->video.crop.x = 0;
    format->es->video.crop.y = 0;
-   format->es->video.crop.width = state->width;
-   format->es->video.crop.height = state->height;
+   format->es->video.crop.width = state->common_settings.width;
+   format->es->video.crop.height = state->common_settings.height;
    format->es->video.frame_rate.num = state->framerate;
    format->es->video.frame_rate.den = VIDEO_FRAME_RATE_DEN;
 
@@ -1764,12 +1678,12 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
    format->encoding = MMAL_ENCODING_OPAQUE;
    format->encoding_variant = MMAL_ENCODING_I420;
 
-   format->es->video.width = VCOS_ALIGN_UP(state->width, 32);
-   format->es->video.height = VCOS_ALIGN_UP(state->height, 16);
+   format->es->video.width = VCOS_ALIGN_UP(state->common_settings.width, 32);
+   format->es->video.height = VCOS_ALIGN_UP(state->common_settings.height, 16);
    format->es->video.crop.x = 0;
    format->es->video.crop.y = 0;
-   format->es->video.crop.width = state->width;
-   format->es->video.crop.height = state->height;
+   format->es->video.crop.width = state->common_settings.width;
+   format->es->video.crop.height = state->common_settings.height;
    format->es->video.frame_rate.num = 0;
    format->es->video.frame_rate.den = 1;
 
@@ -1801,7 +1715,7 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
 
    update_annotation_data(state);
 
-   if (state->verbose)
+   if (state->common_settings.verbose)
       fprintf(stderr, "Camera component done\n");
 
    return status;
@@ -1950,7 +1864,7 @@ static MMAL_STATUS_T create_splitter_component(RASPIVID_STATE *state)
    state->splitter_pool = pool;
    state->splitter_component = splitter;
 
-   if (state->verbose)
+   if (state->common_settings.verbose)
       fprintf(stderr, "Splitter component done\n");
 
    return status;
@@ -2143,9 +2057,9 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
 
       param.profile[0].profile = state->profile;
 
-      if((VCOS_ALIGN_UP(state->width,16) >> 4) * (VCOS_ALIGN_UP(state->height,16) >> 4) * state->framerate > 245760)
+      if((VCOS_ALIGN_UP(state->common_settings.width,16) >> 4) * (VCOS_ALIGN_UP(state->common_settings.height,16) >> 4) * state->framerate > 245760)
       {
-         if((VCOS_ALIGN_UP(state->width,16) >> 4) * (VCOS_ALIGN_UP(state->height,16) >> 4) * state->framerate <= 522240)
+         if((VCOS_ALIGN_UP(state->common_settings.width,16) >> 4) * (VCOS_ALIGN_UP(state->common_settings.height,16) >> 4) * state->framerate <= 522240)
          {
             fprintf(stderr, "Too many macroblocks/s: Increasing H264 Level to 4.2\n");
             state->level=MMAL_VIDEO_LEVEL_H264_42;
@@ -2247,7 +2161,7 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
    state->encoder_pool = pool;
    state->encoder_component = encoder;
 
-   if (state->verbose)
+   if (state->common_settings.verbose)
       fprintf(stderr, "Encoder component done\n");
 
    return status;
@@ -2425,7 +2339,7 @@ static int wait_for_next_change(RASPIVID_STATE *state)
    {
       char ch;
 
-      if (state->verbose)
+      if (state->common_settings.verbose)
          fprintf(stderr, "Press Enter to %s, X then ENTER to exit, [i,o,r] then ENTER to change zoom\n", state->bCapturing ? "pause" : "capture");
 
       ch = getchar();
@@ -2433,32 +2347,32 @@ static int wait_for_next_change(RASPIVID_STATE *state)
          return 0;
       else if (ch == 'i' || ch == 'I')
       {
-         if (state->verbose)
+         if (state->common_settings.verbose)
             fprintf(stderr, "Starting zoom in\n");
 
          raspicamcontrol_zoom_in_zoom_out(state->camera_component, ZOOM_IN, &(state->camera_parameters).roi);
 
-         if (state->verbose)
+         if (state->common_settings.verbose)
             dump_status(state);
       }
       else if (ch == 'o' || ch == 'O')
       {
-         if (state->verbose)
+         if (state->common_settings.verbose)
             fprintf(stderr, "Starting zoom out\n");
 
          raspicamcontrol_zoom_in_zoom_out(state->camera_component, ZOOM_OUT, &(state->camera_parameters).roi);
 
-         if (state->verbose)
+         if (state->common_settings.verbose)
             dump_status(state);
       }
       else if (ch == 'r' || ch == 'R')
       {
-         if (state->verbose)
+         if (state->common_settings.verbose)
             fprintf(stderr, "starting reset zoom\n");
 
          raspicamcontrol_zoom_in_zoom_out(state->camera_component, ZOOM_RESET, &(state->camera_parameters).roi);
 
-         if (state->verbose)
+         if (state->common_settings.verbose)
             dump_status(state);
       }
 
@@ -2480,14 +2394,14 @@ static int wait_for_next_change(RASPIVID_STATE *state)
       // variant of procmask to block SIGUSR1 so we can wait on it.
       pthread_sigmask( SIG_BLOCK, &waitset, NULL );
 
-      if (state->verbose)
+      if (state->common_settings.verbose)
       {
          fprintf(stderr, "Waiting for SIGUSR1 to %s\n", state->bCapturing ? "pause" : "capture");
       }
 
       result = sigwait( &waitset, &sig );
 
-      if (state->verbose && result != 0)
+      if (state->common_settings.verbose && result != 0)
          fprintf(stderr, "Bad signal received - error %d\n", errno);
 
       return keep_running;
@@ -2528,16 +2442,16 @@ int main(int argc, const char **argv)
    // Disable USR1 for the moment - may be reenabled if go in to signal capture mode
    signal(SIGUSR1, SIG_IGN);
 
-   default_status(&state);
+   set_app_name(argv[0]);
 
    // Do we have any parameters
    if (argc == 1)
    {
-      fprintf(stdout, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
-
-      display_valid_parameters(basename(argv[0]));
+      display_valid_parameters(basename(get_app_name()), &application_help_message);
       exit(EX_USAGE);
    }
+
+   default_status(&state);
 
    // Parse the command line and put options in to our status structure
    if (parse_cmdline(argc, argv, &state))
@@ -2549,13 +2463,13 @@ int main(int argc, const char **argv)
    if (state.timeout == -1)
       state.timeout = 5000;
 
-   if (state.verbose)
+   if (state.common_settings.verbose)
    {
       fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
       dump_status(&state);
    }
 
-   check_camera_model(state.cameraNum);
+   check_camera_model(state.common_settings.cameraNum);
 
    // OK, we have a nice set of parameters. Now set up our components
    // We have three components. Camera, Preview and encoder.
@@ -2588,7 +2502,7 @@ int main(int argc, const char **argv)
    }
    else
    {
-      if (state.verbose)
+      if (state.common_settings.verbose)
          fprintf(stderr, "Starting component connection stage\n");
 
       camera_preview_port = state.camera_component->output[MMAL_CAMERA_PREVIEW_PORT];
@@ -2609,7 +2523,7 @@ int main(int argc, const char **argv)
       {
          if (state.raw_output)
          {
-            if (state.verbose)
+            if (state.common_settings.verbose)
                fprintf(stderr, "Connecting camera preview port to splitter input port\n");
 
             // Connect camera to splitter
@@ -2622,7 +2536,7 @@ int main(int argc, const char **argv)
                goto error;
             }
 
-            if (state.verbose)
+            if (state.common_settings.verbose)
             {
                fprintf(stderr, "Connecting splitter preview port to preview input port\n");
                fprintf(stderr, "Starting video preview\n");
@@ -2633,7 +2547,7 @@ int main(int argc, const char **argv)
          }
          else
          {
-            if (state.verbose)
+            if (state.common_settings.verbose)
             {
                fprintf(stderr, "Connecting camera preview port to preview input port\n");
                fprintf(stderr, "Starting video preview\n");
@@ -2650,7 +2564,7 @@ int main(int argc, const char **argv)
       {
          if (state.raw_output)
          {
-            if (state.verbose)
+            if (state.common_settings.verbose)
                fprintf(stderr, "Connecting camera preview port to splitter input port\n");
 
             // Connect camera to splitter
@@ -2671,7 +2585,7 @@ int main(int argc, const char **argv)
 
       if (status == MMAL_SUCCESS)
       {
-         if (state.verbose)
+         if (state.common_settings.verbose)
             fprintf(stderr, "Connecting camera video port to encoder input port\n");
 
          // Now connect the camera to the encoder
@@ -2695,7 +2609,7 @@ int main(int argc, const char **argv)
          {
             splitter_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&state.callback_data;
 
-            if (state.verbose)
+            if (state.common_settings.verbose)
                fprintf(stderr, "Enabling splitter output port\n");
 
             // Enable the splitter output port and tell it its callback function
@@ -2841,7 +2755,7 @@ int main(int argc, const char **argv)
          // Set up our userdata - this is passed though to the callback where we need the information.
          encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&state.callback_data;
 
-         if (state.verbose)
+         if (state.common_settings.verbose)
             fprintf(stderr, "Enabling encoder output port\n");
 
          // Enable the encoder output port and tell it its callback function
@@ -2859,7 +2773,7 @@ int main(int argc, const char **argv)
             int num_iterations = state.timeout / state.demoInterval;
             int i;
 
-            if (state.verbose)
+            if (state.common_settings.verbose)
                fprintf(stderr, "Running in demo mode\n");
 
             for (i=0; state.timeout == 0 || i<num_iterations; i++)
@@ -2928,7 +2842,7 @@ int main(int argc, const char **argv)
                      break;
                   }
 
-                  if (state.verbose)
+                  if (state.common_settings.verbose)
                   {
                      if (state.bCapturing)
                         fprintf(stderr, "Starting video capture\n");
@@ -2955,7 +2869,7 @@ int main(int argc, const char **argv)
                   running = wait_for_next_change(&state);
                }
 
-               if (state.verbose)
+               if (state.common_settings.verbose)
                   fprintf(stderr, "Finished capture\n");
             }
             else
@@ -3001,7 +2915,7 @@ error:
 
       mmal_status_to_int(status);
 
-      if (state.verbose)
+      if (state.common_settings.verbose)
          fprintf(stderr, "Closing down\n");
 
       // Disable all our ports that are not handled by connections
@@ -3047,7 +2961,7 @@ error:
       destroy_splitter_component(&state);
       destroy_camera_component(&state);
 
-      if (state.verbose)
+      if (state.common_settings.verbose)
          fprintf(stderr, "Close down completed, all components disconnected, disabled and destroyed\n\n");
    }
 

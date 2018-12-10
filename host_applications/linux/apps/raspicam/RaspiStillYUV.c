@@ -1,4 +1,5 @@
 /*
+Copyright (c) 2018, Raspberry Pi (Trading) Ltd.
 Copyright (c) 2013, Broadcom Europe Ltd
 Copyright (c) 2013, James Hughes
 All rights reserved.
@@ -30,9 +31,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * \file RaspiStillYUV.c
  * Command line program to capture a still frame and dump uncompressed it to file.
  * Also optionally display a preview/viewfinder of current camera input.
- *
- * \date 4th March 2013
- * \Author: James Hughes
  *
  * Description
  *
@@ -76,6 +74,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiCamControl.h"
 #include "RaspiPreview.h"
 #include "RaspiCLI.h"
+#include "RaspiCommonSettings.h"
+#include "RaspiHelpers.h"
 
 #include <semaphore.h>
 
@@ -114,20 +114,15 @@ static void signal_handler(int signal_number);
  */
 typedef struct
 {
+   RASPICOMMONSETTINGS_PARAMETERS common_settings; /// Non-app specific settings
    int timeout;                        /// Time taken before frame is grabbed and app then shuts down. Units are milliseconds
-   int width;                          /// Requested width of image
-   int height;                         /// requested height of image
-   char *filename;                     /// filename of output file
    char *linkname;                     /// filename of output file
-   int verbose;                        /// !0 if want detailed run information
    int timelapse;                      /// Delay between each picture in timelapse mode. If 0, disable timelapse
    MMAL_FOURCC_T encoding;             /// Use a MMAL encoding other than YUV
    int fullResPreview;                 /// If set, the camera preview port runs at capture resolution. Reduces fps.
    int frameNextMethod;                /// Which method to use to advance to next frame
-   int cameraNum;                      /// Camera number
    int burstCaptureMode;               /// Enable burst mode
    int onlyLuma;                       /// Only output the luma / Y plane of the YUV data
-   int sensor_mode;                    /// Sensor mode. 0=auto. Check docs/forum for modes selected by other values.
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -148,48 +143,32 @@ typedef struct
    RASPISTILLYUV_STATE *pstate;            /// pointer to our state in case required in callback
 } PORT_USERDATA;
 
-static void display_valid_parameters(char *app_name);
-
 /// Comamnd ID's and Structure defining our command line options
 enum
 {
-   CommandHelp,
-   CommandWidth,
-   CommandHeight,
-   CommandOutput,
-   CommandVerbose,
    CommandTimeout,
    CommandTimelapse,
    CommandUseRGB,
-   CommandCamSelect,
    CommandFullResPreview,
    CommandLink,
    CommandKeypress,
    CommandSignal,
    CommandBurstMode,
    CommandOnlyLuma,
-   CommandSensorMode,
    CommandUseBGR
 };
 
 static COMMAND_LIST cmdline_commands[] =
 {
-   { CommandHelp,    "-help",       "?",  "This help information", 0 },
-   { CommandWidth,   "-width",      "w",  "Set image width <size>", 1 },
-   { CommandHeight,  "-height",     "h",  "Set image height <size>", 1 },
-   { CommandOutput,  "-output",     "o",  "Output filename <filename>. If not specifed, no image is saved", 1 },
-   { CommandVerbose, "-verbose",    "v",  "Output verbose information during run", 0 },
    { CommandTimeout, "-timeout",    "t",  "Time (in ms) before takes picture and shuts down. If not specified set to 5s", 1 },
    { CommandTimelapse,"-timelapse", "tl", "Timelapse mode. Takes a picture every <t>ms", 1},
    { CommandUseRGB,  "-rgb",        "rgb","Save as RGB data rather than YUV", 0},
-   { CommandCamSelect,"-camselect", "cs", "Select camera <number>. Default 0", 1 },
    { CommandFullResPreview,"-fullpreview","fp", "Run the preview using the still capture resolution (may reduce preview fps)", 0},
    { CommandLink,    "-latest",     "l",  "Link latest complete image to filename <filename>", 1},
    { CommandKeypress,"-keypress",   "k",  "Wait between captures for a ENTER, X then ENTER to exit", 0},
    { CommandSignal,  "-signal",     "s",  "Wait between captures for a SIGUSR1 from another process", 0},
    { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},
    { CommandOnlyLuma,  "-luma",     "y",  "Only output the luma / Y of the YUV data'", 0},
-   { CommandSensorMode,    "-mode",       "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
    { CommandUseBGR,  "-bgr",        "bgr","Save as BGR data rather than YUV", 0},
 };
 
@@ -227,14 +206,12 @@ static void default_status(RASPISTILLYUV_STATE *state)
    // Default everything to zero
    memset(state, 0, sizeof(RASPISTILLYUV_STATE));
 
+   raspicommonsettings_set_defaults(&state->common_settings);
+
    // Now set anything non-zero
    state->timeout = -1; // replaced with 5000ms later if unset
-   state->width = 2592;
-   state->height = 1944;
    state->timelapse = 0;
-   state->filename = NULL;
    state->linkname = NULL;
-   state->verbose = 0;
    state->fullResPreview = 0;
    state->frameNextMethod = FRAME_NEXT_SINGLE;
    state->burstCaptureMode=0;
@@ -245,9 +222,6 @@ static void default_status(RASPISTILLYUV_STATE *state)
 
    // Set up the camera_parameters to default
    raspicamcontrol_set_defaults(&state->camera_parameters);
-
-   // Set default camera
-   state->cameraNum = 0;
 }
 
 /**
@@ -264,8 +238,8 @@ static void dump_status(RASPISTILLYUV_STATE *state)
       return;
    }
 
-   fprintf(stderr, "Width %d, Height %d, filename %s\n", state->width,
-           state->height, state->filename);
+   raspicommonsettings_dump_parameters(&state->common_settings);
+
    fprintf(stderr, "Time delay %d, Timelapse %d\n", state->timeout, state->timelapse);
    fprintf(stderr, "Link to latest frame enabled ");
    if (state->linkname)
@@ -288,6 +262,24 @@ static void dump_status(RASPISTILLYUV_STATE *state)
 
    raspipreview_dump_parameters(&state->preview_parameters);
    raspicamcontrol_dump_parameters(&state->camera_parameters);
+}
+
+/**
+ * Display usage information for the application to stdout
+ *
+ * @param app_name String to display as the application name
+ *
+ */
+static void application_help_message(char *app_name)
+{
+   fprintf(stdout, "Runs camera for specific time, and take uncompressed YUV or RGB capture at end if requested\n\n");
+   fprintf(stdout, "usage: %s [options]\n\n", app_name);
+
+   fprintf(stdout, "Image parameter commands\n\n");
+
+   raspicli_display_help(cmdline_commands, cmdline_commands_size);
+
+   return;
 }
 
 /**
@@ -331,40 +323,6 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
       //  We are now dealing with a command line option
       switch (command_id)
       {
-      case CommandHelp:
-         display_valid_parameters(basename(argv[0]));
-         return -1;
-
-      case CommandWidth: // Width > 0
-         if (sscanf(argv[i + 1], "%u", &state->width) != 1)
-            valid = 0;
-         else
-            i++;
-         break;
-
-      case CommandHeight: // Height > 0
-         if (sscanf(argv[i + 1], "%u", &state->height) != 1)
-            valid = 0;
-         else
-            i++;
-         break;
-
-      case CommandOutput:  // output filename
-      {
-         int len = strlen(argv[i + 1]);
-         if (len)
-         {
-            state->filename = malloc(len + 10); // leave enough space for any timelapse generated changes to filename
-            vcos_assert(state->filename);
-            if (state->filename)
-               strncpy(state->filename, argv[i + 1], len+1);
-            i++;
-         }
-         else
-            valid = 0;
-         break;
-      }
-
       case CommandLink :
       {
          int len = strlen(argv[i+1]);
@@ -381,10 +339,6 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
          break;
 
       }
-
-      case CommandVerbose: // display lots of data during run
-         state->verbose = 1;
-         break;
 
       case CommandTimeout: // Time to run viewfinder for before taking picture, in seconds
       {
@@ -411,7 +365,6 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
             else
                state->frameNextMethod = FRAME_NEXT_IMMEDIATELY;
 
-
             i++;
          }
          break;
@@ -424,17 +377,6 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
          }
          state->encoding = MMAL_ENCODING_RGB24;
          break;
-
-      case CommandCamSelect:  //Select camera input port
-      {
-         if (sscanf(argv[i + 1], "%u", &state->cameraNum) == 1)
-         {
-            i++;
-         }
-         else
-            valid = 0;
-         break;
-      }
 
       case CommandFullResPreview:
          state->fullResPreview = 1;
@@ -471,15 +413,6 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
          state->onlyLuma = 1;
          break;
 
-      case CommandSensorMode:
-         if (sscanf(argv[i + 1], "%u", &state->sensor_mode) == 1)
-         {
-            i++;
-         }
-         else
-            valid = 0;
-         break;
-
       case CommandUseBGR:
          if (state->onlyLuma)
          {
@@ -497,6 +430,10 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
          const char *second_arg = (i + 1 < argc) ? argv[i + 1] : NULL;
 
          int parms_used = (raspicamcontrol_parse_cmdline(&state->camera_parameters, &argv[i][1], second_arg));
+
+         // Still unused, try common settings
+         if (!parms_used)
+            parms_used = raspicommonsettings_parse_cmdline(&state->common_settings, &argv[i][1], second_arg, &application_help_message);
 
          // Still unused, try preview options
          if (!parms_used)
@@ -523,31 +460,6 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
    return 0;
 }
 
-/**
- * Display usage information for the application to stdout
- *
- * @param app_name String to display as the application name
- *
- */
-static void display_valid_parameters(char *app_name)
-{
-   fprintf(stdout, "Runs camera for specific time, and take uncompressed YUV capture at end if requested\n\n");
-   fprintf(stdout, "usage: %s [options]\n\n", app_name);
-
-   fprintf(stdout, "Image parameter commands\n\n");
-
-   raspicli_display_help(cmdline_commands, cmdline_commands_size);
-
-   // Help for preview options
-   raspipreview_display_help();
-
-   // Now display any help information from the camcontrol code
-   raspicamcontrol_display_help();
-
-   fprintf(stdout, "\n");
-
-   return;
-}
 
 /**
  *  buffer header callback function for camera output port
@@ -650,7 +562,7 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
    }
 
    MMAL_PARAMETER_INT32_T camera_num =
-   {{MMAL_PARAMETER_CAMERA_NUM, sizeof(camera_num)}, state->cameraNum};
+   {{MMAL_PARAMETER_CAMERA_NUM, sizeof(camera_num)}, state->common_settings.cameraNum};
 
    status = mmal_port_parameter_set(camera->control, &camera_num.hdr);
 
@@ -667,7 +579,7 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
       goto error;
    }
 
-   status = mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_CAMERA_CUSTOM_SENSOR_CONFIG, state->sensor_mode);
+   status = mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_CAMERA_CUSTOM_SENSOR_CONFIG, state->common_settings.sensor_mode);
 
    if (status != MMAL_SUCCESS)
    {
@@ -693,8 +605,8 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
       MMAL_PARAMETER_CAMERA_CONFIG_T cam_config =
       {
          { MMAL_PARAMETER_CAMERA_CONFIG, sizeof(cam_config) },
-         .max_stills_w = state->width,
-         .max_stills_h = state->height,
+         .max_stills_w = state->common_settings.width,
+         .max_stills_h = state->common_settings.height,
          .stills_yuv422 = 0,
          .one_shot_stills = 1,
          .max_preview_video_w = state->preview_parameters.previewWindow.width,
@@ -707,8 +619,8 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
 
       if (state->fullResPreview)
       {
-         cam_config.max_preview_video_w = state->width;
-         cam_config.max_preview_video_h = state->height;
+         cam_config.max_preview_video_w = state->common_settings.width;
+         cam_config.max_preview_video_h = state->common_settings.height;
       }
 
       mmal_port_parameter_set(camera->control, &cam_config.hdr);
@@ -741,12 +653,12 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
    {
       // In this mode we are forcing the preview to be generated from the full capture resolution.
       // This runs at a max of 15fps with the OV5647 sensor.
-      format->es->video.width = VCOS_ALIGN_UP(state->width, 32);
-      format->es->video.height = VCOS_ALIGN_UP(state->height, 16);
+      format->es->video.width = VCOS_ALIGN_UP(state->common_settings.width, 32);
+      format->es->video.height = VCOS_ALIGN_UP(state->common_settings.height, 16);
       format->es->video.crop.x = 0;
       format->es->video.crop.y = 0;
-      format->es->video.crop.width = state->width;
-      format->es->video.crop.height = state->height;
+      format->es->video.crop.width = state->common_settings.width;
+      format->es->video.crop.height = state->common_settings.height;
       format->es->video.frame_rate.num = FULL_RES_PREVIEW_FRAME_RATE_NUM;
       format->es->video.frame_rate.den = FULL_RES_PREVIEW_FRAME_RATE_DEN;
    }
@@ -819,12 +731,12 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
       format->encoding = MMAL_ENCODING_I420;
       format->encoding_variant = MMAL_ENCODING_I420;
    }
-   format->es->video.width = VCOS_ALIGN_UP(state->width, 32);
-   format->es->video.height = VCOS_ALIGN_UP(state->height, 16);
+   format->es->video.width = VCOS_ALIGN_UP(state->common_settings.width, 32);
+   format->es->video.height = VCOS_ALIGN_UP(state->common_settings.height, 16);
    format->es->video.crop.x = 0;
    format->es->video.crop.y = 0;
-   format->es->video.crop.width = state->width;
-   format->es->video.crop.height = state->height;
+   format->es->video.crop.width = state->common_settings.width;
+   format->es->video.crop.height = state->common_settings.height;
    format->es->video.frame_rate.num = STILLS_FRAME_RATE_NUM;
    format->es->video.frame_rate.den = STILLS_FRAME_RATE_DEN;
 
@@ -868,7 +780,7 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
    state->camera_pool = pool;
    state->camera_component = camera;
 
-   if (state->verbose)
+   if (state->common_settings.verbose)
       fprintf(stderr, "Camera component done\n");
 
    return status;
@@ -1077,7 +989,7 @@ static int wait_for_next_frame(RASPISTILLYUV_STATE *state, int *frame)
    {
       int ch;
 
-      if (state->verbose)
+      if (state->common_settings.verbose)
          fprintf(stderr, "Press Enter to capture, X then ENTER to exit\n");
 
       ch = getchar();
@@ -1127,14 +1039,14 @@ static int wait_for_next_frame(RASPISTILLYUV_STATE *state, int *frame)
       // variant of procmask to block SIGUSR1 so we can wait on it.
       pthread_sigmask( SIG_BLOCK, &waitset, NULL );
 
-      if (state->verbose)
+      if (state->common_settings.verbose)
       {
          fprintf(stderr, "Waiting for SIGUSR1 to initiate capture\n");
       }
 
       result = sigwait( &waitset, &sig );
 
-      if (state->verbose)
+      if (state->common_settings.verbose)
       {
          if( result == 0)
          {
@@ -1214,14 +1126,12 @@ int main(int argc, const char **argv)
    // Disable USR1 for the moment - may be reenabled if go in to signal capture mode
    signal(SIGUSR1, SIG_IGN);
 
-   default_status(&state);
+   set_app_name(argv[0]);
 
    // Do we have any parameters
    if (argc == 1)
    {
-      fprintf(stdout, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
-
-      display_valid_parameters(basename(argv[0]));
+      display_valid_parameters(basename(argv[0]), &application_help_message);
       exit(EX_USAGE);
    }
 
@@ -1237,9 +1147,13 @@ int main(int argc, const char **argv)
    if (state.timeout == -1)
       state.timeout = 5000;
 
-   if (state.verbose)
+   // Setup for sensor specific parameters
+   get_sensor_defaults(state.common_settings.cameraNum, state.common_settings.camera_name,
+                       &state.common_settings.width, &state.common_settings.height);
+
+   if (state.common_settings.verbose)
    {
-      fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
+      fprintf(stderr, "\n%s Camera App %s\n\n", basename(get_app_name()), VERSION_STRING);
       dump_status(&state);
    }
 
@@ -1263,7 +1177,7 @@ int main(int argc, const char **argv)
    {
       PORT_USERDATA callback_data;
 
-      if (state.verbose)
+      if (state.common_settings.verbose)
          fprintf(stderr, "Starting component connection stage\n");
 
       camera_preview_port = state.camera_component->output[MMAL_CAMERA_PREVIEW_PORT];
@@ -1291,7 +1205,7 @@ int main(int argc, const char **argv)
 
          camera_still_port->userdata = (struct MMAL_PORT_USERDATA_T *)&callback_data;
 
-         if (state.verbose)
+         if (state.common_settings.verbose)
             fprintf(stderr, "Enabling camera still output port\n");
 
          // Enable the camera still output port and tell it its callback function
@@ -1303,7 +1217,7 @@ int main(int argc, const char **argv)
             goto error;
          }
 
-         if (state.verbose)
+         if (state.common_settings.verbose)
             fprintf(stderr, "Starting video preview\n");
 
 
@@ -1319,26 +1233,26 @@ int main(int argc, const char **argv)
             keep_looping = wait_for_next_frame(&state, &frame);
 
             // Open the file
-            if (state.filename)
+            if (state.common_settings.filename)
             {
-               if (state.filename[0] == '-')
+               if (state.common_settings.filename[0] == '-')
                {
                   output_file = stdout;
 
                   // Ensure we don't upset the output stream with diagnostics/info
-                  state.verbose = 0;
+                  state.common_settings.verbose = 0;
                }
                else
                {
                   vcos_assert(use_filename == NULL && final_filename == NULL);
-                  status = create_filenames(&final_filename, &use_filename, state.filename, frame);
+                  status = create_filenames(&final_filename, &use_filename, state.common_settings.filename, frame);
                   if (status  != MMAL_SUCCESS)
                   {
                      vcos_log_error("Unable to create filenames");
                      goto error;
                   }
 
-                  if (state.verbose)
+                  if (state.common_settings.verbose)
                      fprintf(stderr, "Opening output file %s\n", final_filename);
                   // Technically it is opening the temp~ filename which will be ranamed to the final filename
 
@@ -1382,7 +1296,7 @@ int main(int argc, const char **argv)
                   mmal_port_parameter_set_boolean(state.camera_component->control,  MMAL_PARAMETER_CAMERA_BURST_CAPTURE, 1);
                }
 
-               if (state.verbose)
+               if (state.common_settings.verbose)
                   fprintf(stderr, "Starting capture %d\n", frame);
 
                if (mmal_port_parameter_set_boolean(camera_still_port, MMAL_PARAMETER_CAPTURE, 1) != MMAL_SUCCESS)
@@ -1395,7 +1309,7 @@ int main(int argc, const char **argv)
                   // For some reason using vcos_semaphore_wait_timeout sometimes returns immediately with bad parameter error
                   // even though it appears to be all correct, so reverting to untimed one until figure out why its erratic
                   vcos_semaphore_wait(&callback_data.complete_semaphore);
-                  if (state.verbose)
+                  if (state.common_settings.verbose)
                      fprintf(stderr, "Finished capture %d\n", frame);
                }
 
@@ -1436,7 +1350,7 @@ error:
 
       mmal_status_to_int(status);
 
-      if (state.verbose)
+      if (state.common_settings.verbose)
          fprintf(stderr, "Closing down\n");
 
       if (output_file)
@@ -1458,7 +1372,7 @@ error:
       raspipreview_destroy(&state.preview_parameters);
       destroy_camera_component(&state);
 
-      if (state.verbose)
+      if (state.common_settings.verbose)
          fprintf(stderr, "Close down completed, all components disconnected, disabled and destroyed\n\n");
    }
 
