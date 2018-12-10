@@ -176,7 +176,6 @@ struct RASPIVID_STATE_S
    int intraperiod;                    /// Intra-refresh period (key frame rate)
    int quantisationParameter;          /// Quantisation parameter - quality. Set bitrate 0 and set this for variable bitrate
    int bInlineHeaders;                  /// Insert inline headers to stream (SPS, PPS)
-   char *filename;                     /// filename of output file
    int demoMode;                       /// Run app in demo mode
    int demoInterval;                   /// Interval between camera settings changes
    int immutableInput;                 /// Flag to specify whether encoder works in place or creates a new buffer. Result is preview can display either
@@ -1307,9 +1306,9 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
             if (pData->pstate->segmentWrap && pData->pstate->segmentNumber > pData->pstate->segmentWrap)
                pData->pstate->segmentNumber = 1;
 
-            if (pData->pstate->filename && pData->pstate->filename[0] != '-')
+            if (pData->pstate->common_settings.filename && pData->pstate->common_settings.filename[0] != '-')
             {
-               new_handle = open_filename(pData->pstate, pData->pstate->filename);
+               new_handle = open_filename(pData->pstate, pData->pstate->common_settings.filename);
 
                if (new_handle)
                {
@@ -2401,6 +2400,10 @@ int main(int argc, const char **argv)
    if (state.timeout == -1)
       state.timeout = 5000;
 
+   // Setup for sensor specific parameters, only set W/H settings if zero on entry
+   get_sensor_defaults(state.common_settings.cameraNum, state.common_settings.camera_name,
+                       &state.common_settings.width, &state.common_settings.height);
+
    if (state.common_settings.verbose)
    {
       fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
@@ -2562,21 +2565,21 @@ int main(int argc, const char **argv)
 
          state.callback_data.file_handle = NULL;
 
-         if (state.filename)
+         if (state.common_settings.filename)
          {
-            if (state.filename[0] == '-')
+            if (state.common_settings.filename[0] == '-')
             {
                state.callback_data.file_handle = stdout;
             }
             else
             {
-               state.callback_data.file_handle = open_filename(&state, state.filename);
+               state.callback_data.file_handle = open_filename(&state, state.common_settings.filename);
             }
 
             if (!state.callback_data.file_handle)
             {
                // Notify user, carry on but discarding encoded output buffers
-               vcos_log_error("%s: Error opening output file: %s\nNo output file will be generated\n", __func__, state.filename);
+               vcos_log_error("%s: Error opening output file: %s\nNo output file will be generated\n", __func__, state.common_settings.filename);
             }
          }
 

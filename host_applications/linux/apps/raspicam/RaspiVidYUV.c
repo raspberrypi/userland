@@ -135,7 +135,6 @@ struct RASPIVIDYUV_STATE_S
    RASPICOMMONSETTINGS_PARAMETERS common_settings;
    int timeout;                        /// Time taken before frame is grabbed and app then shuts down. Units are milliseconds
    int framerate;                      /// Requested frame rate (fps)
-   char *filename;                     /// filename of output file
    int demoMode;                       /// Run app in demo mode
    int demoInterval;                   /// Interval between camera settings changes
    int waitMethod;                     /// Method for switching between pause and capture
@@ -1228,6 +1227,10 @@ int main(int argc, const char **argv)
    if (state.timeout == -1)
       state.timeout = 5000;
 
+   // Setup for sensor specific parameters, only set W/H settings if zero on entry
+   get_sensor_defaults(state.common_settings.cameraNum, state.common_settings.camera_name,
+                       &state.common_settings.width, &state.common_settings.height);
+
    if (state.common_settings.verbose)
    {
       fprintf(stderr, "\n%s Camera App %s\n\n", basename(get_app_name()), VERSION_STRING);
@@ -1281,21 +1284,21 @@ int main(int argc, const char **argv)
       {
          state.callback_data.file_handle = NULL;
 
-         if (state.filename)
+         if (state.common_settings.filename)
          {
-            if (state.filename[0] == '-')
+            if (state.common_settings.filename[0] == '-')
             {
                state.callback_data.file_handle = stdout;
             }
             else
             {
-               state.callback_data.file_handle = open_filename(&state, state.filename);
+               state.callback_data.file_handle = open_filename(&state, state.common_settings.filename);
             }
 
             if (!state.callback_data.file_handle)
             {
                // Notify user, carry on but discarding output buffers
-               vcos_log_error("%s: Error opening output file: %s\nNo output file will be generated\n", __func__, state.filename);
+               vcos_log_error("%s: Error opening output file: %s\nNo output file will be generated\n", __func__, state.common_settings.filename);
             }
          }
 
