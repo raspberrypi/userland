@@ -12,6 +12,23 @@ include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/libs/bcm_host/
 include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/apps/raspicam/)
 include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/libs/sm)
 
+# Find the commit hash of the build and pass to the compiler
+execute_process(
+  COMMAND git log -1 --abbrev=12 --format=%h
+  OUTPUT_VARIABLE GIT_COMMIT_ID
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+add_definitions("-DGIT_COMMIT_ID=\"${GIT_COMMIT_ID}\"")
+
+# Determine if we are tainted
+execute_process(
+  COMMAND bash "-c" "git ls-files -m | wc -l"
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+  OUTPUT_VARIABLE GIT_TAINTED
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+add_definitions("-DGIT_TAINTED=${GIT_TAINTED}")
+
 set (GL_SCENE_SOURCES
    gl_scenes/models.c
    gl_scenes/mirror.c

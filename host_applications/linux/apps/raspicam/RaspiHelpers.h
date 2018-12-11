@@ -37,6 +37,6 @@ MMAL_STATUS_T connect_ports(MMAL_PORT_T *output_port, MMAL_PORT_T *input_port, M
 void check_disable_port(MMAL_PORT_T *port);
 void default_signal_handler(int signal_number);
 int mmal_status_to_int(MMAL_STATUS_T status);
-
+void print_app_details(FILE *fd);
 
 #endif
