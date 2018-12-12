@@ -80,6 +80,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiPreview.h"
 #include "RaspiCLI.h"
 #include "RaspiHelpers.h"
+#include "RaspiGPS.h"
 
 #include <semaphore.h>
 
@@ -717,6 +718,7 @@ static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buff
    // We pass our file handle and other stuff in via the userdata field.
 
    PORT_USERDATA *pData = (PORT_USERDATA *)port->userdata;
+   RASPIVIDYUV_STATE *pstate = pData->pstate;
 
    if (pData)
    {
@@ -724,7 +726,7 @@ static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buff
       int bytes_to_write = buffer->length;
       int64_t current_time = vcos_getmicrosecs64()/1000000;
 
-      if (pData->pstate->onlyLuma)
+      if (pstate->onlyLuma)
          bytes_to_write = vcos_min(buffer->length, port->format->es->video.width * port->format->es->video.height);
 
       vcos_assert(pData->file_handle);
@@ -751,8 +753,8 @@ static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buff
             if(buffer->pts != MMAL_TIME_UNKNOWN)
             {
                int64_t pts;
-               if(pData->pstate->frame==0)
-                  pData->pstate->starttime=buffer->pts;
+               if(pstate->frame==0)
+                  pstate->starttime=buffer->pts;
                pData->lasttime=buffer->pts;
                pts = buffer->pts - pData->starttime;
                fprintf(pData->pts_file_handle,"%lld.%03lld\n", pts/1000, pts%1000);
@@ -764,16 +766,30 @@ static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buff
       // See if the second count has changed and we need to update any annotation
       if (current_time != last_second)
       {
-         raspicamcontrol_set_annotate(pData->pstate->camera_component,
-                                      pData->pstate->camera_parameters.enable_annotate,
-                                      pData->pstate->camera_parameters.annotate_string,
-                                      pData->pstate->camera_parameters.annotate_text_size,
-                                      pData->pstate->camera_parameters.annotate_text_colour,
-                                      pData->pstate->camera_parameters.annotate_bg_colour,
-                                      pData->pstate->camera_parameters.annotate_justify,
-                                      pData->pstate->camera_parameters.annotate_x,
-                                      pData->pstate->camera_parameters.annotate_y
-                                      );
+         if ((pstate->camera_parameters.enable_annotate & ANNOTATE_APP_TEXT) && pstate->common_settings.gps)
+         {
+            char *text = raspi_gps_location_string();
+            raspicamcontrol_set_annotate(pstate->camera_component, pstate->camera_parameters.enable_annotate,
+                                         text,
+                                         pstate->camera_parameters.annotate_text_size,
+                                         pstate->camera_parameters.annotate_text_colour,
+                                         pstate->camera_parameters.annotate_bg_colour,
+                                         pstate->camera_parameters.annotate_justify,
+                                         pstate->camera_parameters.annotate_x,
+                                         pstate->camera_parameters.annotate_y
+                                        );
+            free(text);
+         }
+         else
+            raspicamcontrol_set_annotate(pstate->camera_component, pstate->camera_parameters.enable_annotate,
+                                         pstate->camera_parameters.annotate_string,
+                                         pstate->camera_parameters.annotate_text_size,
+                                         pstate->camera_parameters.annotate_text_colour,
+                                         pstate->camera_parameters.annotate_bg_colour,
+                                         pstate->camera_parameters.annotate_justify,
+                                         pstate->camera_parameters.annotate_x,
+                                         pstate->camera_parameters.annotate_y
+                                        );
          last_second = current_time;
       }
 
@@ -1254,6 +1270,10 @@ int main(int argc, const char **argv)
       dump_status(&state);
    }
 
+   if (state.common_settings.gps)
+      if (raspi_gps_setup(state.common_settings.verbose))
+         state.common_settings.gps = false;
+
    // OK, we have a nice set of parameters. Now set up our components
    // We have two components. Camera, Preview
 
@@ -1471,6 +1491,9 @@ error:
 
       raspipreview_destroy(&state.preview_parameters);
       destroy_camera_component(&state);
+
+      if (state.common_settings.gps)
+         raspi_gps_shutdown(state.common_settings.verbose);
 
       if (state.common_settings.verbose)
          fprintf(stderr, "Close down completed, all components disconnected, disabled and destroyed\n\n");

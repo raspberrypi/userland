@@ -25,35 +25,23 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-/**
- * \file RaspiCommonSettings.c
- *
- * Description
- *
- * Handles general settings applicable to all the camera applications
- */
+#ifndef RASPIGPS_H_
+#define RASPIGPS_H_
 
-#ifndef RASPIGENERALSETTINGS_H_
-#define RASPIGENERALSETTINGS_H_
+#include <pthread.h>
+#include <time.h>
 
-#include "interface/mmal/mmal_parameters_camera.h"
+#include "libgps_loader.h"
 
-typedef struct
-{
-   char camera_name[MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN]; // Name of the camera sensor
-   int width;                          /// Requested width of image
-   int height;                         /// requested height of image
-   char *filename;                     /// filename of output file
-   int cameraNum;                      /// Camera number
-   int sensor_mode;                    /// Sensor mode. 0=auto. Check docs/forum for modes selected by other values.
-   int verbose;                        /// !0 if want detailed run information
-   int gps;                            /// Add real-time gpsd output to output
+int raspi_gps_setup(int verbose);
+void raspi_gps_shutdown(int verbose);
 
-} RASPICOMMONSETTINGS_PARAMETERS;
+struct gps_data_t *raspi_gps_lock();
+void raspi_gps_unlock();
 
-void raspicommonsettings_set_defaults(RASPICOMMONSETTINGS_PARAMETERS *);
-void raspicommonsettings_dump_parameters(RASPICOMMONSETTINGS_PARAMETERS *);
-void raspicommonsettings_display_help();
-int raspicommonsettings_parse_cmdline(RASPICOMMONSETTINGS_PARAMETERS *state, const char *arg1, const char *arg2, void (*app_help)());
+// Return string representation of the current fix
+// The resulting pointer is allocated so will
+// need to be freed when finished with.
+char *raspi_gps_location_string();
 
-#endif
+#endif /* RASPIGPS_H_ */

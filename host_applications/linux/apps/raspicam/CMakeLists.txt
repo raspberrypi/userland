@@ -43,9 +43,11 @@ set (COMMON_SOURCES
    RaspiCLI.c
    RaspiPreview.c
    RaspiCommonSettings.c
-   RaspiHelpers.c)
+   RaspiHelpers.c
+   RaspiGPS.c
+   libgps_loader.c)
 
-add_executable(raspistill ${COMMON_SOURCES} RaspiStill.c  RaspiTex.c RaspiTexUtil.c tga.c ${GL_SCENE_SOURCES} libgps_loader.c)
+add_executable(raspistill ${COMMON_SOURCES} RaspiStill.c  RaspiTex.c RaspiTexUtil.c tga.c ${GL_SCENE_SOURCES} )
 add_executable(raspiyuv   ${COMMON_SOURCES} RaspiStillYUV.c)
 add_executable(raspivid   ${COMMON_SOURCES} RaspiVid.c)
 add_executable(raspividyuv  ${COMMON_SOURCES} RaspiVidYUV.c)
