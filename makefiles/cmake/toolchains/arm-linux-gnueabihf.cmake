@@ -14,7 +14,7 @@ add_definitions("-mcpu=arm1176jzf-s -mfpu=vfp -mfloat-abi=hard -marm")
 
 # rdynamic means the backtrace should work
 IF (CMAKE_BUILD_TYPE MATCHES "Debug")
-   add_definitions(-rdynamic)
+   add_definitions(-rdynamic -O0 -g3 -funwind-tables)
 ENDIF()
 
 # avoids annoying and pointless warnings from gcc
