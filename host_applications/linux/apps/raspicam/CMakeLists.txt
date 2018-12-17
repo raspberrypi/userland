@@ -21,6 +21,7 @@ execute_process(
 add_definitions("-DGIT_COMMIT_ID=\"${GIT_COMMIT_ID}\"")
 
 # Determine if we are tainted
+if(NOT SKIP_TAINTED_CHECK)
 execute_process(
   COMMAND bash "-c" "git ls-files -m | wc -l"
   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
@@ -28,6 +29,7 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 add_definitions("-DGIT_TAINTED=${GIT_TAINTED}")
+endif(NOT SKIP_TAINTED_CHECK)
 
 set (COMMON_SOURCES
    RaspiCamControl.c
