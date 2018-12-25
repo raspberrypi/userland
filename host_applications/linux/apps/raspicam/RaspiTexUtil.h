@@ -29,7 +29,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef RASPITEX_UTIL_H_
 #define RASPITEX_UTIL_H_
 
+#ifndef VCOS_LOG_CATEGORY
 #define VCOS_LOG_CATEGORY (&raspitex_log_category)
+#endif
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,6 +45,19 @@ extern VCOS_LOG_CAT_T raspitex_log_category;
 
 #define SHADER_MAX_ATTRIBUTES 16
 #define SHADER_MAX_UNIFORMS   16
+
+typedef struct RASPITEXUTIL_SHADER_PARAMETER_T
+{
+   // Variables for the, uh, variables
+   // stolen from puredata/gem glsl_program.h, thanks guys ;-)
+   GLint size;
+   GLenum type;
+   GLint loc;
+   GLchar *name;
+   GLfloat param[16];
+   int flag;
+} RASPITEXUTIL_SHADER_PARAMETER_T;
+
 /**
  * Container for a simple shader program. The uniform and attribute locations
  * are automatically setup by raspitex_build_shader_program.
@@ -51,7 +66,16 @@ typedef struct RASPITEXUTIL_SHADER_PROGRAM_T
 {
    const char *vertex_source;       /// Pointer to vertex shader source
    const char *fragment_source;     /// Pointer to fragment shader source
+   
+   GLint	max_length;   /// Maximum length of parameter name;
+   GLint uniform_count, attribute_count; /// Number of parameters
+   
 
+   char* fragment_shader_filename;
+   char* vertex_shader_filename;
+   /// Array of shader paramaters (uniform and attributes)
+   RASPITEXUTIL_SHADER_PARAMETER_T *uniform_array, *attribute_array;
+   
    /// Array of uniform names for raspitex_build_shader_program to process
    const char *uniform_names[SHADER_MAX_UNIFORMS];
    /// Array of attribute names for raspitex_build_shader_program to process
@@ -112,5 +136,6 @@ void raspitexutil_close(RASPITEX_STATE* raspitex_state);
 /* Utility functions */
 int raspitexutil_build_shader_program(RASPITEXUTIL_SHADER_PROGRAM_T *p);
 void raspitexutil_brga_to_rgba(uint8_t *buffer, size_t size);
+void raspitexutil_create_param_array(RASPITEXUTIL_SHADER_PROGRAM_T *p);
 
 #endif /* RASPITEX_UTIL_H_ */

@@ -50,6 +50,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "gl_scenes/teapot.h"
 #include "gl_scenes/vcsm_square.h"
 #include "gl_scenes/yuv.h"
+#include "gl_scenes/shader.h"
 
 /**
  * \file RaspiTex.c
@@ -101,7 +102,7 @@ enum
 
 static COMMAND_LIST cmdline_commands[] =
 {
-   { CommandGLScene, "-glscene",  "gs",  "GL scene square,teapot,mirror,yuv,sobel,vcsm_square", 1 },
+   { CommandGLScene, "-glscene",  "gs",  "GL scene square,teapot,mirror,yuv,sobel,vcsm_square,shader", 1 },
    { CommandGLWin,   "-glwin",    "gw",  "GL window settings <'x,y,w,h'>", 1 },
 };
 
@@ -165,6 +166,8 @@ int raspitex_parse_cmdline(RASPITEX_STATE *state,
          state->scene_id = RASPITEX_SCENE_SOBEL;
       else if (strcmp(arg2, "vcsm_square") == 0)
          state->scene_id = RASPITEX_SCENE_VCSM_SQUARE;
+      else if (strcmp(arg2, "shader") == 0)
+         state->scene_id = RASPITEX_SCENE_SHADER;
       else
          vcos_log_error("Unknown scene %s", arg2);
 
@@ -593,6 +596,9 @@ int raspitex_init(RASPITEX_STATE *state)
       break;
    case RASPITEX_SCENE_VCSM_SQUARE:
       rc = vcsm_square_open(state);
+      break;
+   case RASPITEX_SCENE_SHADER:
+      rc = shader_open(state);
       break;
    default:
       rc = -1;

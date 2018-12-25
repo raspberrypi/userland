@@ -87,6 +87,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <pthread.h>
 #include <time.h>
 
+#include "gl_scenes/shader.h"
+
+#ifdef HAVE_LIBLO
+#include <lo/lo.h>
+#endif
+
 // Standard port setting for the camera component
 #define MMAL_CAMERA_PREVIEW_PORT 0
 #define MMAL_CAMERA_VIDEO_PORT 1
@@ -158,6 +164,12 @@ typedef struct
    MMAL_POOL_T *encoder_pool; /// Pointer to the pool of buffers used by encoder output port
 
    RASPITEX_STATE raspitex_state; /// GL renderer state and parameters
+   
+   #ifdef HAVE_LIBLO
+   lo_server_thread osc_server;
+   char* osc_inport;
+   #endif
+   int useOSC;
 
 } RASPISTILL_STATE;
 
@@ -194,6 +206,9 @@ enum
    CommandTimeStamp,
    CommandFrameStart,
    CommandRestartInterval,
+   CommandOSCport,
+   CommandFragmentShader,
+   CommandVertexShader,
 };
 
 static COMMAND_LIST cmdline_commands[] =
@@ -217,6 +232,9 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandTimeStamp, "-timestamp", "ts", "Replace output pattern (%d) with unix timestamp (seconds since 1970)", 0},
    { CommandFrameStart,"-framestart","fs",  "Starting frame number in output pattern(%d)", 1},
    { CommandRestartInterval, "-restart","rs","JPEG Restart interval (default of 0 for none)", 1},
+   { CommandOSCport, "-oscport",  "oscp",  "OSC input port", 1 },
+   { CommandFragmentShader, "-fragmentshader",  "frag",  "fragment shader program file", 1 },
+   { CommandVertexShader, "-fragmentshader",  "vert",  "vertex shader program file", 1 },
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -300,6 +318,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->datetime = 0;
    state->timestamp = 0;
    state->restart_interval = 0;
+   state->useOSC = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -636,6 +655,60 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          break;
       }
 
+      case CommandOSCport: // Set OSC port (only valid with shader scene)
+      {
+#ifdef HAVE_LIBLO
+         int len = strlen(argv[i + 1]);
+         if (len)
+         {
+            state->osc_inport = malloc(len+1); // leave enough space for any timelapse generated changes to filename
+            vcos_assert(state->osc_inport);
+            if (state->osc_inport)
+               strncpy(state->osc_inport, argv[i + 1], len+1);
+            i++;
+            state->useOSC=1;
+         }
+         else
+            valid = 0;
+         break;
+#else
+         fprintf(stderr, "OSC port passed as argument put Raspistill have been build without liblo !");
+         fprintf(stderr, "OSC is disable.");
+#endif /* HAVE_LIBLO */
+      }
+
+      case CommandFragmentShader: // Set fragment shader file to load
+      {
+         int len = strlen(argv[i + 1]);
+         if (len)
+         {
+            state->raspitex_state.fragment_shader_filename = malloc(len+1); // leave enough space for any timelapse generated changes to filename
+            vcos_assert(state->raspitex_state->fragment_shader_filename);
+            if (state->raspitex_state.fragment_shader_filename)
+               strncpy(state->raspitex_state.fragment_shader_filename, argv[i + 1], len+1);
+            i++;
+         }
+         else
+            valid = 0;
+         break;
+      }
+      
+      case CommandVertexShader: // Set vertex shader file to load
+      {
+         int len = strlen(argv[i + 1]);
+         if (len)
+         {
+            state->raspitex_state.vertex_shader_filename = malloc(len+1); // leave enough space for any timelapse generated changes to filename
+            vcos_assert(state->raspitex_state->vertex_shader_filename);
+            if (state->raspitex_state.vertex_shader_filename)
+               strncpy(state->raspitex_state.vertex_shader_filename, argv[i + 1], len+1);
+            i++;
+         }
+         else
+            valid = 0;
+         break;
+      }
+      
       default:
       {
          // Try parsing for any image specific parameters
@@ -1629,6 +1702,53 @@ static void rename_file(RASPISTILL_STATE *state, FILE *output_file,
    }
 }
 
+#ifdef HAVE_LIBLO
+void osc_error(int num, const char *msg, const char *path)
+{
+    printf("liblo server error %d in path %s: %s\n", num, path, msg);
+    fflush(stdout);
+}
+
+void osc_generic_handler(const char *path, const char *types, lo_arg ** argv,
+                    int argc, void *data, void *user_data)
+{
+   int i;
+   
+   RASPISTILL_STATE *state = user_data;
+   RASPITEXUTIL_SHADER_PROGRAM_T *shader = shader_get_shader();
+    
+   if (state->verbose)
+   {
+      fprintf(stderr, "Receive OSC message : %s with %d values\n", path, argc);
+   }
+        
+   for (i=0;i<shader->uniform_count;i++){
+      if ( strcmp(shader->uniform_array[i].name, path+1) == 0 ){
+         int j;
+         for (j=0;j<argc;j++){
+            if ( types[j] == 'f') {
+               shader->uniform_array[i].param[j]= (GLfloat) argv[j]->f;
+            } else if ( types[j] == 'i' ){
+               shader->uniform_array[i].param[j]= (GLfloat) argv[j]->i;
+            } else {
+               printf("%s parameter #%d wrong type (%c)! only float or int are allowed !\n",path,j,types[j]);
+            }
+         }
+         shader->uniform_array[i].flag = 1;
+         break;
+      }
+   }
+}
+
+static void init_osc(RASPISTILL_STATE *state)
+{
+   printf("initialize OSC server on port %s\n", state->osc_inport);
+   state->osc_server = lo_server_thread_new(state->osc_inport, osc_error);
+   /* add method that will match any path and args */
+   lo_server_thread_add_method(state->osc_server , NULL, NULL, (lo_method_handler) osc_generic_handler, state);
+   lo_server_thread_start(state->osc_server);
+}
+#endif /* HAVE_LIBLO */
 
 /**
  * main
@@ -1696,6 +1816,11 @@ int main(int argc, const char **argv)
 
    if (state.useGL)
       raspitex_init(&state.raspitex_state);
+
+#ifdef HAVE_LIBLO
+   if (state.useOSC)
+      init_osc(&state);
+#endif
 
    // OK, we have a nice set of parameters. Now set up our components
    // We have three components. Camera, Preview and encoder.

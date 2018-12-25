@@ -36,6 +36,7 @@ set (GL_SCENE_SOURCES
    gl_scenes/sobel.c
    gl_scenes/square.c
    gl_scenes/teapot.c
+   gl_scenes/shader.c
    gl_scenes/vcsm_square.c)
 
 set (COMMON_SOURCES
@@ -53,6 +54,14 @@ add_executable(raspivid   ${COMMON_SOURCES} RaspiVid.c)
 add_executable(raspividyuv  ${COMMON_SOURCES} RaspiVidYUV.c)
 
 set (MMAL_LIBS mmal_core mmal_util mmal_vc_client)
+
+FIND_PACKAGE(liblo)
+if(LIBLO_FOUND)
+   message( STATUS "Building with OSC support !")
+   add_definitions(-DHAVE_LIBLO)
+   include_directories(${LIBLO_INCLUDE_DIRS})
+   target_link_libraries(raspistill ${LIBLO_LIBRARIES})
+endif()
 
 target_link_libraries(raspistill ${MMAL_LIBS} vcos bcm_host brcmGLESv2 brcmEGL m dl)
 target_link_libraries(raspiyuv   ${MMAL_LIBS} vcos bcm_host)
