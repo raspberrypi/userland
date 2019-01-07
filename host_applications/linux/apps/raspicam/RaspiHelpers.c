@@ -280,3 +280,17 @@ int mmal_status_to_int(MMAL_STATUS_T status)
       return 1;
    }
 }
+
+
+uint64_t get_microseconds64()
+{
+   struct timespec spec;
+   uint64_t ms;
+
+   clock_gettime(CLOCK_MONOTONIC_RAW, &spec);
+
+   ms = spec.tv_sec * 1000000;
+   ms += spec.tv_nsec / 1000;
+
+   return ms;
+}
