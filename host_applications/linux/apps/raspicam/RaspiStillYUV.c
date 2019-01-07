@@ -847,7 +847,7 @@ static int wait_for_next_frame(RASPISTILLYUV_STATE *state, int *frame)
    static int64_t complete_time = -1;
    int keep_running = 1;
 
-   int64_t current_time =  vcos_getmicrosecs64()/1000;
+   int64_t current_time =  get_microseconds64()/1000;
 
    if (complete_time == -1)
       complete_time =  current_time + state->timeout;
@@ -887,7 +887,7 @@ static int wait_for_next_frame(RASPISTILLYUV_STATE *state, int *frame)
          vcos_sleep(CAMERA_SETTLE_TIME);
 
          // Update our current time after the sleep
-         current_time =  vcos_getmicrosecs64()/1000;
+         current_time =  get_microseconds64()/1000;
 
          // Set our initial 'next frame time'
          next_frame_ms = current_time + state->timelapse;

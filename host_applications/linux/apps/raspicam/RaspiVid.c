@@ -1210,7 +1210,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 
    // All our segment times based on the receipt of the first encoder callback
    if (base_time == -1)
-      base_time = vcos_getmicrosecs64()/1000;
+      base_time = get_microseconds64()/1000;
 
    // We pass our file handle and other stuff in via the userdata field.
 
@@ -1219,7 +1219,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
    if (pData)
    {
       int bytes_written = buffer->length;
-      int64_t current_time = vcos_getmicrosecs64()/1000;
+      int64_t current_time = get_microseconds64()/1000;
 
       vcos_assert(pData->file_handle);
       if(pData->pstate->inlineMotionVectors) vcos_assert(pData->imv_file_handle);
@@ -2270,7 +2270,7 @@ static int wait_for_next_change(RASPIVID_STATE *state)
    static int64_t complete_time = -1;
 
    // Have we actually exceeded our timeout?
-   int64_t current_time =  vcos_getmicrosecs64()/1000;
+   int64_t current_time =  get_microseconds64()/1000;
 
    if (complete_time == -1)
       complete_time =  current_time + state->timeout;
