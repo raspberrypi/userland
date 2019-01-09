@@ -2287,10 +2287,10 @@ static int wait_for_next_change(RASPIVID_STATE *state)
 
    case WAIT_METHOD_FOREVER:
    {
-      // We never return from this. Expect a ctrl-c to exit.
-      while (1)
+      // We never return from this. Expect a ctrl-c to exit or abort.
+      while (!state->callback_data.abort)
          // Have a sleep so we don't hog the CPU.
-         vcos_sleep(10000);
+         vcos_sleep(ABORT_INTERVAL);
 
       return 0;
    }
