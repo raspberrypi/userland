@@ -390,13 +390,14 @@ static VCOS_STATUS_T help_cmd( VCOS_CMD_PARAM_T *param )
          * currently running
          */
 
-        param->cmd_entry = found_entry;
-        param->argv[0] = param->argv[1];
-        param->argv++;
-        param->argc--;
+       vcos_cmd_printf( param, "Usage: " );
+       print_argument_prefix( param );
+       vcos_cmd_printf( param, "%s %s - %s\n",
+                        param->argv[1],
+                        found_entry->args,
+                        found_entry->descr );
 
-        vcos_cmd_usage( param );
-        return VCOS_SUCCESS;
+       return VCOS_SUCCESS;
     }
 
     vcos_cmd_error( param, "- unrecognized command: '%s'", param->argv[1] );
