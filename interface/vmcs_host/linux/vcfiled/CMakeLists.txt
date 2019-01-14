@@ -21,7 +21,7 @@ configure_file (etc/init.d/vcfiled ${PROJECT_BINARY_DIR}/etc/init.d/vcfiled)
 
 # script to start up vcfiled at start of day
 install(PROGRAMS ${PROJECT_BINARY_DIR}/etc/init.d/vcfiled
-        DESTINATION /etc/init.d)
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/etc/init.d)
 # install locally to the installation directory too
 install(PROGRAMS ${PROJECT_BINARY_DIR}/etc/init.d/vcfiled
         DESTINATION ${VMCS_INSTALL_PREFIX}/share/install)
