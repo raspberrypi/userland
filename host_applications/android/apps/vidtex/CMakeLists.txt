@@ -10,7 +10,7 @@ SET( CMAKE_EXE_LINKER_FLAGS "-Wl,--no-as-needed" )
 include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/libs/bcm_host/include)
 
 set (VIDTEX_SOURCES
-   main.cpp
+   main.c
    launcher_rpi.c
    svp.c
    vidtex.c)
