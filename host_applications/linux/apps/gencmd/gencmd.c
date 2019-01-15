@@ -47,7 +47,8 @@ void show_usage()
    printf( "  commands   Display a list of commands\n\n" );
    printf( "Exit status:\n" );
    printf( "   0    command completed successfully\n" );
-   printf( "  -1    an error occurred\n" );
+   printf( "  -1    problem with VCHI\n" );
+   printf( "  -2    videcore returned error" );
 }
 
 int main( int argc, char **argv )
@@ -161,7 +162,7 @@ int main( int argc, char **argv )
              {
                 printf( "Use 'vcgencmd commands' to get a list of commands\n" );
              }
-             return -1;
+             return -2;
           }
       }
     }
