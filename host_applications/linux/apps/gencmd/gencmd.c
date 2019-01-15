@@ -50,6 +50,15 @@ int main( int argc, char **argv )
            argv++;
            argc--;
        }
+   } else {
+      // no arguments passed, so show basic usage
+      printf( "Usage: vcgencmd [-t] [COMMAND]\n" );
+      printf( "Send a command to the Videocore and print the result.\n\n" );
+      printf( "  -t         Time how long the command takes to complete\n");
+      printf( "  commands   Display a list of commands\n\n" );
+      printf( "Exit status:\n" );
+      printf( "   0    command completed successfully\n" );
+	  printf( "  -1    an error occurred\n" );
    }
 
    vcos_init();
