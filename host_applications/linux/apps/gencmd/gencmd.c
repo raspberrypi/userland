@@ -155,6 +155,14 @@ int main( int argc, char **argv )
           {
               printf("%s\n", buffer );
           }
+          if (strncmp( buffer, "error=", 5) == 0 )
+          {
+             if ( strcmp( buffer, "error=1 error_msg=\"Command not registered\"" ) == 0 )
+             {
+                printf( "Use 'vcgencmd commands' to get a list of commands\n" );
+             }
+             return -1;
+          }
       }
     }
 
