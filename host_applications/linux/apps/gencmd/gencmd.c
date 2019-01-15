@@ -36,6 +36,17 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "interface/vmcs_host/vc_vchi_gencmd.h"
 
+void show_usage()
+{
+   printf( "Usage: vcgencmd [-t] [COMMAND]\n" );
+   printf( "Send a command to the Videocore and print the result.\n\n" );
+   printf( "  -t         Time how long the command takes to complete\n");
+   printf( "  commands   Display a list of commands\n\n" );
+   printf( "Exit status:\n" );
+   printf( "   0    command completed successfully\n" );
+   printf( "  -1    an error occurred\n" );
+}
+
 int main( int argc, char **argv )
 {
    int instNum = 0;
@@ -52,13 +63,7 @@ int main( int argc, char **argv )
        }
    } else {
       // no arguments passed, so show basic usage
-      printf( "Usage: vcgencmd [-t] [COMMAND]\n" );
-      printf( "Send a command to the Videocore and print the result.\n\n" );
-      printf( "  -t         Time how long the command takes to complete\n");
-      printf( "  commands   Display a list of commands\n\n" );
-      printf( "Exit status:\n" );
-      printf( "   0    command completed successfully\n" );
-      printf( "  -1    an error occurred\n" );
+      show_usage();
    }
 
    vcos_init();
@@ -80,6 +85,16 @@ int main( int argc, char **argv )
 
     if (argc > 1)
     {
+       
+       
+       // first check if we were invoked with either -? or --help
+       // in which case show basic usage and exit
+      if( ( strcmp( argv[1], "-?" ) == 0) || strcmp( argv[1], "--help" ) == 0 )
+      {
+         show_usage();
+         return(0);
+      }
+      
       int i = 1;
       char buffer[ 1024 ];
       size_t buffer_offset = 0;
