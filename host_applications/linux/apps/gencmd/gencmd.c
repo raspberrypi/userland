@@ -2,6 +2,9 @@
 Copyright (c) 2012, Broadcom Europe Ltd
 All rights reserved.
 
+Copyright (c) 2019 Andrew Pattison
+All rights reserved.
+
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
     * Redistributions of source code must retain the above copyright
@@ -85,8 +88,6 @@ int main( int argc, char **argv )
 
     if (argc > 1)
     {
-       
-       
        // first check if we were invoked with either -? or --help
        // in which case show basic usage and exit
       if( ( strcmp( argv[1], "-?" ) == 0) || strcmp( argv[1], "--help" ) == 0 )
