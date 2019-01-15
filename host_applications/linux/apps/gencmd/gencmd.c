@@ -58,7 +58,7 @@ int main( int argc, char **argv )
       printf( "  commands   Display a list of commands\n\n" );
       printf( "Exit status:\n" );
       printf( "   0    command completed successfully\n" );
-	  printf( "  -1    an error occurred\n" );
+      printf( "  -1    an error occurred\n" );
    }
 
    vcos_init();
