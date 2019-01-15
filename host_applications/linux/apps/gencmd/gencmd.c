@@ -48,7 +48,7 @@ void show_usage()
    printf( "Exit status:\n" );
    printf( "   0    command completed successfully\n" );
    printf( "  -1    problem with VCHI\n" );
-   printf( "  -2    videcore returned error" );
+   printf( "  -2    Videocore returned error\n" );
 }
 
 int main( int argc, char **argv )
