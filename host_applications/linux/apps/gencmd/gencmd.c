@@ -86,7 +86,7 @@ int main( int argc, char **argv )
 
     if (argc > 1)
     {
-       // first check if we were invoked with either -? or --help
+       // first check if we were invoked with either -h or --help
        // in which case show basic usage and exit
       if( ( strcmp( argv[1], "-h" ) == 0) || strcmp( argv[1], "--help" ) == 0 )
       {
