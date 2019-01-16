@@ -71,14 +71,14 @@ int main( int argc, char **argv )
 
     if ( vchi_initialise( &vchi_instance ) != 0)
     {
-        printf( "VCHI initialization failed\n" );
+        fprintf( stderr, "VCHI initialization failed\n" );
         return -1;
     }
 
     //create a vchi connection
     if ( vchi_connect( NULL, 0, vchi_instance ) != 0)
     {
-        printf( "VCHI connection failed\n" );
+        fprintf( stderr, "VCHI connection failed\n" );
         return -1;
     }
 
@@ -88,7 +88,7 @@ int main( int argc, char **argv )
     {
        // first check if we were invoked with either -? or --help
        // in which case show basic usage and exit
-      if( ( strcmp( argv[1], "-?" ) == 0) || strcmp( argv[1], "--help" ) == 0 )
+      if( ( strcmp( argv[1], "-h" ) == 0) || strcmp( argv[1], "--help" ) == 0 )
       {
          show_usage();
          return 0;
@@ -140,7 +140,7 @@ int main( int argc, char **argv )
       {
          time_diff = ((double) (after - before)) / CLOCKS_PER_SEC;
 
-         printf( "Time took %f seconds (%f msecs) (%f usecs)\n", time_diff, time_diff * 1000, time_diff * 1000000 );
+         printf( "Time taken: %f seconds (%f msecs) (%f usecs)\n", time_diff, time_diff * 1000, time_diff * 1000000 );
       }
 
       if ( buffer[0] != '\0' )
@@ -151,15 +151,19 @@ int main( int argc, char **argv )
           }
           else
           {
-              printf("%s\n", buffer );
-          }
-          if (strncmp( buffer, "error=", 5) == 0 )
-          {
-             if ( strcmp( buffer, "error=1 error_msg=\"Command not registered\"" ) == 0 )
+             if (strncmp( buffer, "error=", 5) == 0 )
              {
-                printf( "Use 'vcgencmd commands' to get a list of commands\n" );
+                fprintf (stderr, "%s\n", buffer);
+                if ( strcmp( buffer, "error=1 error_msg=\"Command not registered\"" ) == 0 )
+                {
+                   fprintf( stderr, "Use 'vcgencmd commands' to get a list of commands\n" );
+                }
+                return -2;
              }
-             return -2;
+             else
+             {
+               printf("%s\n", buffer );
+             }
           }
       }
     }
@@ -169,7 +173,7 @@ int main( int argc, char **argv )
     //close the vchi connection
     if ( vchi_disconnect( vchi_instance ) != 0)
     {
-        printf( "VCHI disconnect failed\n" );
+        fprintf( stderr, "VCHI disconnect failed\n" );
         return -1;
     }
 
