@@ -17,4 +17,5 @@ include_directories( ../../../..
 add_executable(vcgencmd gencmd.c)
 target_link_libraries(vcgencmd vcos vchiq_arm vchostif)
 install(TARGETS vcgencmd RUNTIME DESTINATION bin)
+install(FILES vcgencmd.1 DESTINATION /usr/man/man1)
 
