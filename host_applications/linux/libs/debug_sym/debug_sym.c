@@ -165,8 +165,6 @@ static int vc_mem_copy(void *dst, uint32_t src, uint32_t length)
 
     if ( ioctl( memFd, FBIODMACOPY, &ioparam ) != 0 )
     {
-        ERR( "Failed to get memory size via ioctl: %s(%d)\n",
-            strerror( errno ), errno );
         close( memFd );
         return -errno;
     }
