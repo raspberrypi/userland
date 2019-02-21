@@ -158,7 +158,7 @@ typedef struct
  */
 typedef enum
 {
-   RAW_OUTPUT_FMT_YUV = 1,
+   RAW_OUTPUT_FMT_YUV = 0,
    RAW_OUTPUT_FMT_RGB,
    RAW_OUTPUT_FMT_GRAY,
 } RAW_OUTPUT_FMT;
@@ -876,7 +876,7 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
       case CommandRaw:  // output filename
       {
          state->raw_output = 1;
-         state->raw_output_fmt = RAW_OUTPUT_FMT_YUV;
+         //state->raw_output_fmt defaults to 0 / yuv
          int len = strlen(argv[i + 1]);
          if (len)
          {
