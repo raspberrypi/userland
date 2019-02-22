@@ -45,7 +45,7 @@ void show_usage()
    printf( "Exit status:\n" );
    printf( "   0    command completed successfully\n" );
    printf( "  -1    problem with VCHI\n" );
-   printf( "  -2    VideoCore returned error\n\n" );
+   printf( "  -2    VideoCore returned an error\n\n" );
    printf( "For further documentation please see\n" );
    printf( "raspberrypi.org/documentation/raspbian/applications/vcgencmd.md\n\n" );
 }
