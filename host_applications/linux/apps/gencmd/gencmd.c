@@ -38,10 +38,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 void show_usage()
 {
-   printf( "Usage: vcgencmd [-t] [COMMAND]\n" );
+   printf( "Usage: vcgencmd [-t] command\n" );
    printf( "Send a command to the VideoCore and print the result.\n\n" );
-   printf( "  -t         Time how long the command takes to complete\n");
-   printf( "  commands   Display a list of commands\n\n" );
+   printf( "  -t         Time how long the command takes to complete\n" );
+   printf( "Use the command `vcgencmd commands` to get a list of available commands\n\n" );
    printf( "Exit status:\n" );
    printf( "   0    command completed successfully\n" );
    printf( "  -1    problem with VCHI\n" );
