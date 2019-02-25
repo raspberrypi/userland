@@ -41,30 +41,22 @@ void show_usage()
    printf( "Usage: vcgencmd [-t] command\n" );
    printf( "Send a command to the VideoCore and print the result.\n\n" );
    printf( "  -t         Time how long the command takes to complete\n" );
-   printf( "Use the command `vcgencmd commands` to get a list of available commands\n\n" );
+   printf( "Use the command 'vcgencmd commands' to get a list of available commands\n\n" );
    printf( "Exit status:\n" );
    printf( "   0    command completed successfully\n" );
    printf( "  -1    problem with VCHI\n" );
    printf( "  -2    VideoCore returned an error\n\n" );
    printf( "For further documentation please see\n" );
-   printf( "raspberrypi.org/documentation/raspbian/applications/vcgencmd.md\n\n" );
+   printf( "https://raspberrypi.org/documentation/raspbian/applications/vcgencmd.md\n\n" );
 }
 
 int main( int argc, char **argv )
 {
-   int instNum = 0;
    VCHI_INSTANCE_T vchi_instance;
    VCHI_CONNECTION_T *vchi_connection = NULL;
 
-   if ( argc > 1 )
+   if ( argc = 1 )
    {
-       if (( strcmp( argv[1], "0" ) == 0 ) || ( strcmp( argv[1], "1" ) == 0 ))
-       {
-           instNum = atoi( argv[1] );
-           argv++;
-           argc--;
-       }
-   } else {
       // no arguments passed, so show basic usage
       show_usage();
    }
@@ -90,7 +82,7 @@ int main( int argc, char **argv )
     {
        // first check if we were invoked with either -h or --help
        // in which case show basic usage and exit
-      if( ( strcmp( argv[1], "-h" ) == 0) || strcmp( argv[1], "--help" ) == 0 )
+      if( strcmp( argv[1], "-h" ) == 0 || strcmp( argv[1], "--help" ) == 0 )
       {
          show_usage();
          return 0;
@@ -153,7 +145,7 @@ int main( int argc, char **argv )
           }
           else
           {
-             if (strncmp( buffer, "error=", 5) == 0 )
+             if (strncmp( buffer, "error=", 6) == 0 )
              {
                 fprintf (stderr, "%s\n", buffer);
                 if ( strcmp( buffer, "error=1 error_msg=\"Command not registered\"" ) == 0 )
