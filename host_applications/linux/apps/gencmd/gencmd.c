@@ -47,7 +47,7 @@ void show_usage()
    printf( "  -1    problem with VCHI\n" );
    printf( "  -2    VideoCore returned an error\n\n" );
    printf( "For further documentation please see\n" );
-   printf( "https://raspberrypi.org/documentation/raspbian/applications/vcgencmd.md\n\n" );
+   printf( "https://www.raspberrypi.org/documentation/raspbian/applications/vcgencmd.md\n\n" );
 }
 
 int main( int argc, char **argv )
