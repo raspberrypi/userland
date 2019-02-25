@@ -55,7 +55,7 @@ int main( int argc, char **argv )
    VCHI_INSTANCE_T vchi_instance;
    VCHI_CONNECTION_T *vchi_connection = NULL;
 
-   if ( argc = 1 )
+   if ( argc == 1 )
    {
       // no arguments passed, so show basic usage
       show_usage();
