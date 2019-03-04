@@ -1,19 +1,28 @@
 #!/bin/bash
 BUILDTYPE=Release
+ARCH=`arch`
+ARM64=OFF
+CMAKE_TOOLCHAIN_FILE=../../../makefiles/cmake/toolchains/arm-linux-gnueabihf.cmake
 
 if [ "$1" = "--debug" ]; then
 	BUILDTYPE=Debug
 	shift
 fi
 
+if [ "$1" = "--arm64" ]; then
+	ARM64=ON
+	CMAKE_TOOLCHAIN_FILE=../../../makefiles/cmake/toolchains/aarch64-linux-gnu.cmake
+	shift
+fi
+
 BUILDSUBDIR=`echo $BUILDTYPE | tr '[A-Z]' '[a-z]'`;
 
-if [ "armv6l" = `arch` ] || [ "armv7l" = `arch` ]; then
+if [ $ARCH = "armv6l" ] || [ $ARCH = "armv7l" ] || [ $ARCH = "aarch64" ]; then
 	# Native compile on the Raspberry Pi
 	mkdir -p build/raspberry/$BUILDSUBDIR
 	pushd build/raspberry/$BUILDSUBDIR
-	cmake -DCMAKE_BUILD_TYPE=$BUILDTYPE ../../..
-	if [ "armv6l" = `arch` ]; then
+	cmake -DCMAKE_BUILD_TYPE=$BUILDTYPE -DARM64=$ARM64 ../../..
+	if [ $ARCH = "armv6l" ]; then
 		make
 	else
 		make -j4
@@ -34,7 +43,7 @@ else
 	# Cross compile on a more capable machine
 	mkdir -p build/arm-linux/$BUILDSUBDIR
 	pushd build/arm-linux/$BUILDSUBDIR
-	cmake -DCMAKE_TOOLCHAIN_FILE=../../../makefiles/cmake/toolchains/arm-linux-gnueabihf.cmake -DCMAKE_BUILD_TYPE=$BUILDTYPE ../../..
+	cmake -DCMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_FILE -DCMAKE_BUILD_TYPE=$BUILDTYPE -DARM64=$ARM64 ../../..
 	make -j `nproc`
 
 	if [ "$1" != "" ]; then
