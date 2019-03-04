@@ -289,7 +289,7 @@ uint64_t get_microseconds64()
 
    clock_gettime(CLOCK_MONOTONIC_RAW, &spec);
 
-   us = spec.tv_sec * 1000000;
+   us = spec.tv_sec * 1000000ULL;
    us += spec.tv_nsec / 1000;
 
    return us;
