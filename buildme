@@ -9,7 +9,7 @@ if [ "$1" = "--debug" ]; then
 	shift
 fi
 
-if [ "$1" = "--arm64" ]; then
+if [ "$1" = "--aarch64" ]; then
 	ARM64=ON
 	CMAKE_TOOLCHAIN_FILE=../../../makefiles/cmake/toolchains/aarch64-linux-gnu.cmake
 	shift
