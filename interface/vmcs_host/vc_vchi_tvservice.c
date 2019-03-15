@@ -38,6 +38,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/vchi/common/endian.h"
 #include "interface/vchi/message_drivers/message.h"
 #include "vc_tvservice.h"
+#include "vc_dispmanx_types.h"
 
 /******************************************************************************
 Local types and defines.
@@ -107,6 +108,8 @@ static TVSERVICE_HOST_STATE_T tvservice_client;
 static VCOS_EVENT_T tvservice_message_available_event;
 static VCOS_EVENT_T tvservice_notify_available_event;
 static VCOS_THREAD_T tvservice_notify_task;
+
+static int default_display_number;
 
 #define  VCOS_LOG_CATEGORY (&tvservice_log_category)
 static VCOS_LOG_CAT_T  tvservice_log_category;
@@ -179,9 +182,9 @@ static int32_t tvservice_wait_for_reply(void *response, uint32_t max_length, uin
 
 static int32_t tvservice_wait_for_bulk_receive(void *buffer, uint32_t max_length);
 
-static int32_t tvservice_send_command( uint32_t command, void *buffer, uint32_t length, uint32_t has_reply);
+static int32_t tvservice_send_command( uint32_t command, uint32_t display_id, void *buffer, uint32_t length, uint32_t has_reply);
 
-static int32_t tvservice_send_command_reply( uint32_t command, void *buffer, uint32_t length,
+static int32_t tvservice_send_command_reply( uint32_t command, uint32_t display_id, void *buffer, uint32_t length,
                                              void *response, uint32_t max_length);
 
 static void *tvservice_notify_func(void *arg);
@@ -216,6 +219,7 @@ VCHPRE_ int VCHPOST_ vc_vchi_tv_init(VCHI_INSTANCE_T initialise_instance, VCHI_C
          VC_FALSE, 0, 0, // No horizontal bar information.
          0               // No overscan flags.
       };
+   TV_ATTACHED_DEVICES_T devices;
 
    if (tvservice_client.initialised)
      return -2;
@@ -310,6 +314,40 @@ VCHPRE_ int VCHPOST_ vc_vchi_tv_init(VCHI_INSTANCE_T initialise_instance, VCHI_C
    vcos_assert(status == VCOS_SUCCESS);
 
    tvservice_client.initialised = 1;
+
+   // Now try and find a decent default display ID for backward compatibility
+   // Priority is Main LCD, Aux LCD, HDMI0, HDMI1
+   default_display_number = DISPMANX_ID_HDMI1;
+
+   if (vc_tv_get_attached_devices(&devices) != -1 && devices.num_attached > 0)
+   {
+      // If only one, use it!
+      if (devices.num_attached == 1)
+         default_display_number = devices.display_number[0];
+      else
+      {
+         int i;
+         for (i=0;i<devices.num_attached;i++)
+         {
+            // If we find an LCD, use it straight away
+            if (devices.display_number[i] == DISPMANX_ID_MAIN_LCD)
+            {
+               default_display_number = DISPMANX_ID_MAIN_LCD;
+               break;
+            }
+            if (devices.display_number[i] == DISPMANX_ID_AUX_LCD)
+            {
+               default_display_number = DISPMANX_ID_AUX_LCD;
+            }
+            // If find HDMI0, if we haven't already selected an LCD, use it but keep searching in case main LCD turns up.
+            if (devices.display_number[i] == DISPMANX_ID_HDMI0 && default_display_number != DISPMANX_ID_AUX_LCD)
+            {
+               default_display_number = DISPMANX_ID_HDMI0;
+            }
+         }
+      }
+   }
+
    vcos_log_trace("TV service initialised");
 
    return 0;
@@ -594,9 +632,26 @@ static int32_t tvservice_wait_for_bulk_receive(void *buffer, uint32_t max_length
  *
  ***********************************************************/
 
-static int32_t tvservice_send_command(  uint32_t command, void *buffer, uint32_t length, uint32_t has_reply) {
-   VCHI_MSG_VECTOR_T vector[] = { {&command, sizeof(command)},
-                                  {buffer, length} };
+static int32_t tvservice_send_command(  uint32_t command, uint32_t display_id, void *buffer, uint32_t length, uint32_t has_reply) {
+
+   VCHI_MSG_VECTOR_T vector[3];
+   int vector_idx = 0;
+
+   vector[vector_idx].vec_base = &command;
+   vector[vector_idx].vec_len = sizeof(command);
+   vector_idx++;
+
+   if (command >= VC_TV_ID_DELIMETER)
+   {
+      vector[vector_idx].vec_base = &display_id;
+      vector[vector_idx].vec_len = sizeof(display_id);
+      vector_idx++;
+   }
+
+   vector[vector_idx].vec_base = buffer;
+   vector[vector_idx].vec_len = length;
+   vector_idx++;
+
    int32_t success = 0;
    TV_GENERAL_RESP_T response;
    response.ret = -1;
@@ -613,7 +668,7 @@ static int32_t tvservice_send_command(  uint32_t command, void *buffer, uint32_t
    if(tvservice_lock_obtain() == 0)
    {
       success = vchi_msg_queuev( tvservice_client.client_handle[0],
-                                 vector, sizeof(vector)/sizeof(vector[0]),
+                                 vector, vector_idx,
                                  VCHI_FLAGS_BLOCK_UNTIL_QUEUED, NULL );
       if(success == 0 && has_reply) {
          //otherwise only wait for a reply if we ask for one
@@ -641,10 +696,27 @@ static int32_t tvservice_send_command(  uint32_t command, void *buffer, uint32_t
  * Returns: error code, host app is responsible to do endian translation
  *
  ***********************************************************/
-static int32_t tvservice_send_command_reply(  uint32_t command, void *buffer, uint32_t length,
-                                              void *response, uint32_t max_length) {
-   VCHI_MSG_VECTOR_T vector[] = { {&command, sizeof(command)},
-                                   {buffer, length} };
+static int32_t tvservice_send_command_reply(  uint32_t command, uint32_t display_id, void *buffer, uint32_t length,
+                                              void *response, uint32_t max_length)
+{
+   VCHI_MSG_VECTOR_T vector[3];
+   int vector_idx = 0;
+
+   vector[vector_idx].vec_base = &command;
+   vector[vector_idx].vec_len = sizeof(command);
+   vector_idx++;
+
+   if (command >= VC_TV_ID_DELIMETER)
+   {
+      vector[vector_idx].vec_base = &display_id;
+      vector[vector_idx].vec_len = sizeof(display_id);
+      vector_idx++;
+   }
+
+   vector[vector_idx].vec_base = buffer;
+   vector[vector_idx].vec_len = length;
+   vector_idx++;
+
    int32_t success = 0;
    uint32_t actual_length = 0;
 
@@ -654,7 +726,7 @@ static int32_t tvservice_send_command_reply(  uint32_t command, void *buffer, ui
    if(tvservice_lock_obtain() == 0)
    {
       success = vchi_msg_queuev( tvservice_client.client_handle[0],
-                                 vector, sizeof(vector)/sizeof(vector[0]),
+                                 vector, vector_idx,
                                  VCHI_FLAGS_BLOCK_UNTIL_QUEUED, NULL );
       if(success == 0)
       {
@@ -697,7 +769,8 @@ static void *tvservice_notify_func(void *arg) {
 
    vcos_log_trace("TV service async thread started");
    /* Check starting state, and put service in use if necessary */
-   success = tvservice_send_command_reply( VC_TV_GET_DISPLAY_STATE, NULL, 0, &tvstate, sizeof(TV_DISPLAY_STATE_T));
+   // TODoO; Need to distinguish which display somehow...
+   success = tvservice_send_command_reply( VC_TV_GET_DISPLAY_STATE, default_display_number, NULL, 0, &tvstate, sizeof(TV_DISPLAY_STATE_T));
    if (success != 0)
       return 0;
    if (tvstate.state & VC_HDMI_ATTACHED)
@@ -899,13 +972,13 @@ static void *tvservice_notify_func(void *arg) {
  *          If the command fails to be sent, passed in state is unchanged
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_get_state(TV_GET_STATE_RESP_T *tvstate) {
+VCHPRE_ int VCHPOST_ vc_tv_get_state_id(uint32_t display_id, TV_GET_STATE_RESP_T *tvstate) {
    int success = -1;
 
    vcos_log_trace("[%s]", VCOS_FUNCTION);
    if(vcos_verify(tvstate)) {
-      success = tvservice_send_command_reply( VC_TV_GET_STATE, NULL, 0,
-                                              tvstate, sizeof(TV_GET_STATE_RESP_T));
+      success = tvservice_send_command_reply( VC_TV_GET_STATE_ID, display_id, NULL, 0,
+                                              tvstate, sizeof(*tvstate));
       if(success == 0) {
          tvstate->state = VC_VTOH32(tvstate->state);
          tvstate->width = VC_VTOH32(tvstate->width);
@@ -915,6 +988,11 @@ VCHPRE_ int VCHPOST_ vc_tv_get_state(TV_GET_STATE_RESP_T *tvstate) {
       }
    }
    return success;
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_get_state(TV_GET_STATE_RESP_T *tvstate)
+{
+   return vc_tv_get_state_id(default_display_number, tvstate);
 }
 
 /***********************************************************
@@ -929,15 +1007,19 @@ VCHPRE_ int VCHPOST_ vc_tv_get_state(TV_GET_STATE_RESP_T *tvstate) {
  *          If the command fails to be sent, passed in state is unchanged
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_get_display_state(TV_DISPLAY_STATE_T *tvstate) {
+VCHPRE_ int VCHPOST_ vc_tv_get_display_state_id(uint32_t display_id, TV_DISPLAY_STATE_T *tvstate) {
    int success = -1;
 
    vcos_log_trace("[%s]", VCOS_FUNCTION);
    if(vcos_verify(tvstate)) {
-      success = tvservice_send_command_reply( VC_TV_GET_DISPLAY_STATE, NULL, 0,
+      success = tvservice_send_command_reply( VC_TV_GET_DISPLAY_STATE_ID, display_id, NULL, 0,
                                               tvstate, sizeof(TV_DISPLAY_STATE_T));
    }
    return success;
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_get_display_state(TV_DISPLAY_STATE_T *tvstate) {
+   return vc_tv_get_display_state_id(default_display_number, tvstate);
 }
 
 /***********************************************************
@@ -956,25 +1038,31 @@ VCHPRE_ int VCHPOST_ vc_tv_get_display_state(TV_DISPLAY_STATE_T *tvstate) {
  *          if successful, there will be a callback when the power on is complete
  *
  ***********************************************************/
-static int vc_tv_hdmi_power_on_preferred_actual(uint32_t in_3d) {
+static int vc_tv_hdmi_power_on_preferred_actual(uint32_t display_id, uint32_t in_3d) {
    TV_HDMI_ON_PREFERRED_PARAM_T param;
    int success;
 
    vcos_log_trace("[%s]", VCOS_FUNCTION);
    param.in_3d = VC_HTOV32(in_3d);
 
-   success = tvservice_send_command( VC_TV_HDMI_ON_PREFERRED, &param, sizeof(param), 1);
+   success = tvservice_send_command( VC_TV_HDMI_ON_PREFERRED_ID, display_id, &param, sizeof(param), 1);
    return success;
 }
 
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_preferred( void ) {
-   vcos_log_trace("[%s]", VCOS_FUNCTION);
-   return vc_tv_hdmi_power_on_preferred_actual(0);
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_preferred_id(uint32_t display_id) {
+   return vc_tv_hdmi_power_on_preferred_actual(display_id, 0);
 }
 
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_preferred_3d( void ) {
-   vcos_log_trace("[%s]", VCOS_FUNCTION);
-   return vc_tv_hdmi_power_on_preferred_actual(1);
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_preferred_3d_id(uint32_t display_id) {
+   return vc_tv_hdmi_power_on_preferred_actual(display_id, 1);
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_preferred() {
+   return vc_tv_hdmi_power_on_preferred_actual(default_display_number, 0);
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_preferred_3d() {
+   return vc_tv_hdmi_power_on_preferred_actual(default_display_number, 1);
 }
 
 /***********************************************************
@@ -991,7 +1079,8 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_preferred_3d( void ) {
  *          if successful, there will be a callback when the power on is complete
  *
  ***********************************************************/
-static int vc_tv_hdmi_power_on_best_actual(uint32_t width, uint32_t height, uint32_t frame_rate,
+static int vc_tv_hdmi_power_on_best_actual(uint32_t display_id,
+                                           uint32_t width, uint32_t height, uint32_t frame_rate,
                                            HDMI_INTERLACED_T scan_mode, EDID_MODE_MATCH_FLAG_T match_flags,
                                            uint32_t in_3d) {
    TV_HDMI_ON_BEST_PARAM_T param;
@@ -1005,20 +1094,34 @@ static int vc_tv_hdmi_power_on_best_actual(uint32_t width, uint32_t height, uint
    param.match_flags = VC_HTOV32(match_flags);
    param.in_3d = VC_HTOV32(in_3d);
 
-   success = tvservice_send_command( VC_TV_HDMI_ON_BEST, &param, sizeof(TV_HDMI_ON_BEST_PARAM_T), 1);
+   success = tvservice_send_command( VC_TV_HDMI_ON_BEST_ID, display_id, &param, sizeof(TV_HDMI_ON_BEST_PARAM_T), 1);
    return success;
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_best_id(uint32_t display_id,
+                                              uint32_t width, uint32_t height, uint32_t frame_rate,
+                                              HDMI_INTERLACED_T scan_mode, EDID_MODE_MATCH_FLAG_T match_flags) {
+   vcos_log_trace("[%s]", VCOS_FUNCTION);
+   return vc_tv_hdmi_power_on_best_actual(display_id, width, height, frame_rate, scan_mode, match_flags, 0);
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_best_3d_id(uint32_t display_id,
+                                                    uint32_t width, uint32_t height, uint32_t frame_rate,
+                                                    HDMI_INTERLACED_T scan_mode, EDID_MODE_MATCH_FLAG_T match_flags) {
+   vcos_log_trace("[%s]", VCOS_FUNCTION);
+   return vc_tv_hdmi_power_on_best_actual(display_id, width, height, frame_rate, scan_mode, match_flags, 1);
 }
 
 VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_best(uint32_t width, uint32_t height, uint32_t frame_rate,
                                               HDMI_INTERLACED_T scan_mode, EDID_MODE_MATCH_FLAG_T match_flags) {
    vcos_log_trace("[%s]", VCOS_FUNCTION);
-   return vc_tv_hdmi_power_on_best_actual(width, height, frame_rate, scan_mode, match_flags, 0);
+   return vc_tv_hdmi_power_on_best_actual(default_display_number, width, height, frame_rate, scan_mode, match_flags, 0);
 }
 
 VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_best_3d(uint32_t width, uint32_t height, uint32_t frame_rate,
                                               HDMI_INTERLACED_T scan_mode, EDID_MODE_MATCH_FLAG_T match_flags) {
    vcos_log_trace("[%s]", VCOS_FUNCTION);
-   return vc_tv_hdmi_power_on_best_actual(width, height, frame_rate, scan_mode, match_flags, 1);
+   return vc_tv_hdmi_power_on_best_actual(default_display_number, width, height, frame_rate, scan_mode, match_flags, 1);
 }
 
 /***********************************************************
@@ -1038,7 +1141,7 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_best_3d(uint32_t width, uint32_t height
  *          if successful, there will be a callback when the power on is complete
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_explicit_new(HDMI_MODE_T mode, HDMI_RES_GROUP_T group, uint32_t code) {
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_explicit_new_id(uint32_t display_id, HDMI_MODE_T mode, HDMI_RES_GROUP_T group, uint32_t code) {
    TV_HDMI_ON_EXPLICIT_PARAM_T param;
    int success;
 
@@ -1048,8 +1151,12 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_explicit_new(HDMI_MODE_T mode, HDMI_RES
    param.group = group;
    param.mode = code;
 
-   success = tvservice_send_command( VC_TV_HDMI_ON_EXPLICIT, &param, sizeof(TV_HDMI_ON_EXPLICIT_PARAM_T), 1);
+   success = tvservice_send_command( VC_TV_HDMI_ON_EXPLICIT_ID, display_id, &param, sizeof(TV_HDMI_ON_EXPLICIT_PARAM_T), 1);
    return success;
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_explicit_new(HDMI_MODE_T mode, HDMI_RES_GROUP_T group, uint32_t code) {
+   return vc_tv_hdmi_power_on_explicit_new_id(default_display_number, mode, group, code);
 }
 
 /***********************************************************
@@ -1065,7 +1172,7 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_explicit_new(HDMI_MODE_T mode, HDMI_RES
  *          if successful, there will be a callback when the power on is complete
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_sdtv_power_on(SDTV_MODE_T mode, SDTV_OPTIONS_T *options) {
+VCHPRE_ int VCHPOST_ vc_tv_sdtv_power_on_id(uint32_t display_id, SDTV_MODE_T mode, SDTV_OPTIONS_T *options) {
    TV_SDTV_ON_PARAM_T param;
    int success;
 
@@ -1073,10 +1180,13 @@ VCHPRE_ int VCHPOST_ vc_tv_sdtv_power_on(SDTV_MODE_T mode, SDTV_OPTIONS_T *optio
    param.mode = VC_HTOV32(mode);
    param.aspect = (options)? VC_HTOV32(options->aspect) : VC_HTOV32(SDTV_ASPECT_4_3);
 
-   success = tvservice_send_command( VC_TV_SDTV_ON, &param, sizeof(TV_SDTV_ON_PARAM_T), 1);
+   success = tvservice_send_command( VC_TV_SDTV_ON_ID, display_id, &param, sizeof(TV_SDTV_ON_PARAM_T), 1);
    return success;
 }
 
+VCHPRE_ int VCHPOST_ vc_tv_sdtv_power_on(SDTV_MODE_T mode, SDTV_OPTIONS_T *options) {
+   return vc_tv_sdtv_power_on_id(default_display_number, mode, options);
+}
 
 /***********************************************************
  * Name: vc_tv_power_off
@@ -1089,9 +1199,13 @@ VCHPRE_ int VCHPOST_ vc_tv_sdtv_power_on(SDTV_MODE_T mode, SDTV_OPTIONS_T *optio
  * Returns: whether command is successfully sent (and callback for HDMI)
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_power_off( void ) {
+VCHPRE_ int VCHPOST_ vc_tv_power_off_id(uint32_t display_id) {
    vcos_log_trace("[%s]", VCOS_FUNCTION);
-   return tvservice_send_command( VC_TV_OFF, NULL, 0, 0);
+   return tvservice_send_command( VC_TV_OFF_ID, display_id, NULL, 0, 0);
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_power_off( void ) {
+   return vc_tv_power_off_id(default_display_number);
 }
 
 /***********************************************************
@@ -1114,7 +1228,8 @@ VCHPRE_ int VCHPOST_ vc_tv_power_off( void ) {
  *          Returns < 0 for error.
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes_new(HDMI_RES_GROUP_T group,
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes_new_id(uint32_t display_id,
+                                                    HDMI_RES_GROUP_T group,
                                                     TV_SUPPORTED_MODE_NEW_T *supported_modes,
                                                     uint32_t max_supported_modes,
                                                     HDMI_RES_GROUP_T *preferred_group,
@@ -1144,7 +1259,7 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes_new(HDMI_RES_GROUP_T group,
    memset(&response, 0, sizeof(response));
    if(!cache->is_valid) {
       vchi_service_use(tvservice_client.client_handle[0]);
-      if((error = tvservice_send_command_reply(VC_TV_QUERY_SUPPORTED_MODES, &param[0], sizeof(uint32_t),
+      if((error = tvservice_send_command_reply(VC_TV_QUERY_SUPPORTED_MODES_ID, display_id, &param[0], sizeof(uint32_t),
                                                &response, sizeof(response))) == VC_HDMI_SUCCESS) {
          //First ask how many modes there are, if the current table is big enough to hold
          //all the modes, just copy over, otherwise allocate a new table
@@ -1166,7 +1281,7 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes_new(HDMI_RES_GROUP_T group,
                //If we have successfully allocated the table, send
                //another request to actually download the modes from Videocore
                param[1] = response.num_supported_modes;
-               if((error = tvservice_send_command_reply(VC_TV_QUERY_SUPPORTED_MODES_ACTUAL, param, sizeof(param),
+               if((error = tvservice_send_command_reply(VC_TV_QUERY_SUPPORTED_MODES_ACTUAL_ID, display_id, param, sizeof(param),
                                                         &response, sizeof(response))) == VC_HDMI_SUCCESS) {
                   //The response comes back may indicate a different number of modes to param[1].
                   //This happens if a new EDID was read in between the two requests (should be rare),
@@ -1223,6 +1338,19 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes_new(HDMI_RES_GROUP_T group,
    return modes_copied; //If there was an error, this will be zero
 }
 
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes_new(HDMI_RES_GROUP_T group,
+                                                    TV_SUPPORTED_MODE_NEW_T *supported_modes,
+                                                    uint32_t max_supported_modes,
+                                                    HDMI_RES_GROUP_T *preferred_group,
+                                                    uint32_t *preferred_mode) {
+   return vc_tv_hdmi_get_supported_modes_new_id(default_display_number,
+                                                group,
+                                                supported_modes,
+                                                max_supported_modes,
+                                                preferred_group,
+                                                preferred_mode);
+}
+
 /***********************************************************
  * Name: vc_tv_hdmi_mode_supported
  *
@@ -1234,12 +1362,17 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes_new(HDMI_RES_GROUP_T group,
  * Returns: single value return > 0 means supported, 0 means unsupported, < 0 means error
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_mode_supported(HDMI_RES_GROUP_T group,
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_mode_supported_id(uint32_t display_id, HDMI_RES_GROUP_T group,
                                                uint32_t mode) {
    TV_QUERY_MODE_SUPPORT_PARAM_T param = {group, mode};
    vcos_log_trace("[%s]", VCOS_FUNCTION);
 
-   return tvservice_send_command( VC_TV_QUERY_MODE_SUPPORT, &param, sizeof(TV_QUERY_MODE_SUPPORT_PARAM_T), 1);
+   return tvservice_send_command( VC_TV_QUERY_MODE_SUPPORT, display_id, &param, sizeof(TV_QUERY_MODE_SUPPORT_PARAM_T), 1);
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_mode_supported(HDMI_RES_GROUP_T group,
+                                               uint32_t mode) {
+   return vc_tv_hdmi_mode_supported_id(default_display_number, group, mode);
 }
 
 /***********************************************************
@@ -1258,8 +1391,9 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_mode_supported(HDMI_RES_GROUP_T group,
  *          zero means everything is supported, < 0 means error
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_audio_supported(uint32_t audio_format, uint32_t num_channels,
-                                                EDID_AudioSampleRate fs, uint32_t bitrate) {
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_audio_supported_id(uint32_t display_id,
+                                                   uint32_t audio_format, uint32_t num_channels,
+                                                   EDID_AudioSampleRate fs, uint32_t bitrate) {
    TV_QUERY_AUDIO_SUPPORT_PARAM_T param = { VC_HTOV32(audio_format),
                                             VC_HTOV32(num_channels),
                                             VC_HTOV32(fs),
@@ -1268,7 +1402,14 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_audio_supported(uint32_t audio_format, uint32_t 
    if(!vcos_verify(num_channels > 0 && num_channels <= 8 && fs != EDID_AudioSampleRate_eReferToHeader))
       return -1;
 
-   return tvservice_send_command( VC_TV_QUERY_AUDIO_SUPPORT, &param, sizeof(TV_QUERY_AUDIO_SUPPORT_PARAM_T), 1);
+   return tvservice_send_command( VC_TV_QUERY_AUDIO_SUPPORT_ID, display_id, &param, sizeof(TV_QUERY_AUDIO_SUPPORT_PARAM_T), 1);
+}
+
+
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_audio_supported(uint32_t audio_format, uint32_t num_channels,
+                                                EDID_AudioSampleRate fs, uint32_t bitrate) {
+   return vc_tv_hdmi_audio_supported_id(default_display_number, audio_format, num_channels,
+                                     fs, bitrate);
 }
 
 /***********************************************************
@@ -1282,10 +1423,14 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_audio_supported(uint32_t audio_format, uint32_t 
  * Returns: single value return 0 means success, additional result via callback
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_enable_copyprotect(uint32_t cp_mode, uint32_t timeout) {
+VCHPRE_ int VCHPOST_ vc_tv_enable_copyprotect_id(uint32_t display_id, uint32_t cp_mode, uint32_t timeout) {
    TV_ENABLE_COPY_PROTECT_PARAM_T param = {VC_HTOV32(cp_mode), VC_HTOV32(timeout)};
    vcos_log_trace("[%s]", VCOS_FUNCTION);
-   return tvservice_send_command( VC_TV_ENABLE_COPY_PROTECT, &param, sizeof(TV_ENABLE_COPY_PROTECT_PARAM_T), 1);
+   return tvservice_send_command( VC_TV_ENABLE_COPY_PROTECT_ID, display_id, &param, sizeof(TV_ENABLE_COPY_PROTECT_PARAM_T), 1);
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_enable_copyprotect(uint32_t cp_mode, uint32_t timeout) {
+   return vc_tv_enable_copyprotect_id(default_display_number, cp_mode, timeout);
 }
 
 /***********************************************************
@@ -1299,9 +1444,13 @@ VCHPRE_ int VCHPOST_ vc_tv_enable_copyprotect(uint32_t cp_mode, uint32_t timeout
  * Returns: single value return 0 means success, additional result via callback
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_disable_copyprotect( void ) {
+VCHPRE_ int VCHPOST_ vc_tv_disable_copyprotect_id(uint32_t display_id) {
    vcos_log_trace("[%s]", VCOS_FUNCTION);
-   return tvservice_send_command( VC_TV_DISABLE_COPY_PROTECT, NULL, 0, 1);
+   return tvservice_send_command( VC_TV_DISABLE_COPY_PROTECT_ID, display_id, NULL, 0, 1);
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_disable_copyprotect( void ) {
+   return vc_tv_disable_copyprotect_id(default_display_number);
 }
 
 /***********************************************************
@@ -1315,10 +1464,14 @@ VCHPRE_ int VCHPOST_ vc_tv_disable_copyprotect( void ) {
  * Returns: zero if command is successfully sent
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_show_info(uint32_t show) {
+VCHPRE_ int VCHPOST_ vc_tv_show_info_id(uint32_t display_id, uint32_t show) {
    TV_SHOW_INFO_PARAM_T param = {VC_HTOV32(show)};
    vcos_log_trace("[%s]", VCOS_FUNCTION);
-   return tvservice_send_command( VC_TV_SHOW_INFO, &param, sizeof(TV_SHOW_INFO_PARAM_T), 0);
+   return tvservice_send_command( VC_TV_SHOW_INFO_ID, display_id, &param, sizeof(TV_SHOW_INFO_PARAM_T), 0);
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_show_info(uint32_t show) {
+   return vc_tv_show_info_id(default_display_number, show);
 }
 
 /***********************************************************
@@ -1333,10 +1486,14 @@ VCHPRE_ int VCHPOST_ vc_tv_show_info(uint32_t show) {
  * Returns: latency (zero if error or latency is not defined), < 0 if failed to send command)
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_av_latency( void ) {
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_av_latency_id(uint32_t display_id) {
 
    vcos_log_trace("[%s]", VCOS_FUNCTION);
-   return tvservice_send_command( VC_TV_GET_AV_LATENCY, NULL, 0, 1);
+   return tvservice_send_command( VC_TV_GET_AV_LATENCY_ID, display_id, NULL, 0, 1);
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_av_latency( void ) {
+   return vc_tv_hdmi_get_av_latency_id(default_display_number);
 }
 
 /***********************************************************
@@ -1352,14 +1509,18 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_av_latency( void ) {
  *          Callback indicates the validity of key
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_hdcp_key(const uint8_t *key) {
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_hdcp_key_id(uint32_t display_id, const uint8_t *key) {
    TV_HDCP_SET_KEY_PARAM_T param;
 
    vcos_log_trace("[%s]", VCOS_FUNCTION);
    if(!vcos_verify(key))
       return -1;
    memcpy(param.key, key, HDCP_KEY_BLOCK_SIZE);
-   return tvservice_send_command( VC_TV_HDCP_SET_KEY, &param, sizeof(param), 0);
+   return tvservice_send_command( VC_TV_HDCP_SET_KEY_ID, display_id, &param, sizeof(param), 0);
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_hdcp_key(const uint8_t *key) {
+   return vc_tv_hdmi_set_hdcp_key_id(default_display_number, key);
 }
 
 /***********************************************************
@@ -1375,9 +1536,9 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_hdcp_key(const uint8_t *key) {
  *          Callback indicates the number of keys set (zero if failed, unless you are clearing the list)
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_hdcp_revoked_list(const uint8_t *list, uint32_t num_keys) {
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_hdcp_revoked_list_id(uint32_t display_id, const uint8_t *list, uint32_t num_keys) {
    TV_HDCP_SET_SRM_PARAM_T param = {VC_HTOV32(num_keys)};
-   int success = tvservice_send_command( VC_TV_HDCP_SET_SRM, &param, sizeof(TV_HDCP_SET_SRM_PARAM_T), 0);
+   int success = tvservice_send_command( VC_TV_HDCP_SET_SRM_ID, display_id, &param, sizeof(TV_HDCP_SET_SRM_PARAM_T), 0);
 
    vcos_log_trace("[%s]", VCOS_FUNCTION);
    if(success == 0 && num_keys && list) { //Set num_keys to zero if we are clearing the list
@@ -1397,6 +1558,10 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_hdcp_revoked_list(const uint8_t *list, uint3
    return success;
 }
 
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_hdcp_revoked_list(const uint8_t *list, uint32_t num_keys) {
+   return vc_tv_hdmi_set_hdcp_revoked_list_id(default_display_number, list, num_keys);
+}
+
 /***********************************************************
  * Name: vc_tv_hdmi_set_spd
  *
@@ -1408,7 +1573,7 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_hdcp_revoked_list(const uint8_t *list, uint3
  * Returns: whether command was sent successfully (zero means success)
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_spd(const char *manufacturer, const char *description, HDMI_SPD_TYPE_CODE_T type) {
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_spd_id(uint32_t display_id, const char *manufacturer, const char *description, HDMI_SPD_TYPE_CODE_T type) {
    TV_SET_SPD_PARAM_T param;
    vcos_log_trace("[%s]", VCOS_FUNCTION);
 
@@ -1418,7 +1583,11 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_spd(const char *manufacturer, const char *de
    memcpy(param.manufacturer, manufacturer, TV_SPD_NAME_LEN);
    memcpy(param.description, description, TV_SPD_DESC_LEN);
    param.type = VC_HTOV32(type);
-   return tvservice_send_command( VC_TV_SET_SPD, &param, sizeof(TV_SET_SPD_PARAM_T), 0);
+   return tvservice_send_command( VC_TV_SET_SPD_ID, display_id, &param, sizeof(TV_SET_SPD_PARAM_T), 0);
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_spd(const char *manufacturer, const char *description, HDMI_SPD_TYPE_CODE_T type) {
+   return vc_tv_hdmi_set_spd_id(default_display_number, manufacturer, description, type);
 }
 
 /***********************************************************
@@ -1432,7 +1601,8 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_spd(const char *manufacturer, const char *de
  * Returns: whether command was sent successfully (zero means success)
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_display_options(HDMI_ASPECT_T aspect,
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_display_options_id(uint32_t display_id,
+                                                    HDMI_ASPECT_T aspect,
                                                     uint32_t left_bar_width, uint32_t right_bar_width,
                                                     uint32_t top_bar_height, uint32_t bottom_bar_height,
                                                     uint32_t overscan_flags) {
@@ -1447,7 +1617,17 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_display_options(HDMI_ASPECT_T aspect,
    param.top_bar_height = VC_HTOV32(top_bar_height);
    param.bottom_bar_height = VC_HTOV32(bottom_bar_height);
    param.overscan_flags = VC_HTOV32(overscan_flags);
-   return tvservice_send_command( VC_TV_SET_DISPLAY_OPTIONS, &param, sizeof(TV_SET_DISPLAY_OPTIONS_PARAM_T), 0);
+   return tvservice_send_command( VC_TV_SET_DISPLAY_OPTIONS_ID, display_id, &param, sizeof(TV_SET_DISPLAY_OPTIONS_PARAM_T), 0);
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_display_options(HDMI_ASPECT_T aspect,
+                                                    uint32_t left_bar_width, uint32_t right_bar_width,
+                                                    uint32_t top_bar_height, uint32_t bottom_bar_height,
+                                                    uint32_t overscan_flags) {
+      return vc_tv_hdmi_set_display_options_id(default_display_number, aspect,
+                                            left_bar_width, right_bar_width,
+                                            top_bar_height, bottom_bar_height,
+                                            overscan_flags);
 }
 
 /***********************************************************
@@ -1461,11 +1641,15 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_display_options(HDMI_ASPECT_T aspect,
  * Returns: whether command was sent successfully (zero means success)
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_test_mode_start(uint32_t colour, TV_TEST_MODE_T test_mode) {
+VCHPRE_ int VCHPOST_ vc_tv_test_mode_start_id(uint32_t display_id, uint32_t colour, TV_TEST_MODE_T test_mode) {
    TV_TEST_MODE_START_PARAM_T param = {VC_HTOV32(colour), VC_HTOV32(test_mode)};
 
    vcos_log_trace("[%s]", VCOS_FUNCTION);
-   return tvservice_send_command( VC_TV_TEST_MODE_START, &param, sizeof(TV_TEST_MODE_START_PARAM_T), 0);
+   return tvservice_send_command( VC_TV_TEST_MODE_START_ID, display_id, &param, sizeof(TV_TEST_MODE_START_PARAM_T), 0);
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_test_mode_start(uint32_t colour, TV_TEST_MODE_T test_mode) {
+   return vc_tv_test_mode_start_id(default_display_number, colour, test_mode);
 }
 
 /***********************************************************
@@ -1479,9 +1663,13 @@ VCHPRE_ int VCHPOST_ vc_tv_test_mode_start(uint32_t colour, TV_TEST_MODE_T test_
  * Returns: whether command was sent successfully (zero means success)
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_test_mode_stop( void ) {
+VCHPRE_ int VCHPOST_ vc_tv_test_mode_stop_id(uint32_t display_id) {
    vcos_log_trace("[%s]", VCOS_FUNCTION);
-   return tvservice_send_command( VC_TV_TEST_MODE_STOP, NULL, 0, 0);
+   return tvservice_send_command( VC_TV_TEST_MODE_STOP_ID, display_id, NULL, 0, 0);
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_test_mode_stop( void ) {
+   return vc_tv_test_mode_stop_id(default_display_number);
 }
 
 /***********************************************************
@@ -1496,7 +1684,7 @@ VCHPRE_ int VCHPOST_ vc_tv_test_mode_stop( void ) {
  *          only if no error
  *
  ***********************************************************/
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_ddc_read(uint32_t offset, uint32_t length, uint8_t *buffer) {
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_ddc_read_id(uint32_t display_id, uint32_t offset, uint32_t length, uint8_t *buffer) {
    int success;
    TV_DDC_READ_PARAM_T param = {VC_HTOV32(offset), VC_HTOV32(length)};
 
@@ -1506,7 +1694,7 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_ddc_read(uint32_t offset, uint32_t length, uint8
       return -1;*/
 
    vchi_service_use(tvservice_client.client_handle[0]);
-   success = tvservice_send_command( VC_TV_DDC_READ, &param, sizeof(TV_DDC_READ_PARAM_T), 1);
+   success = tvservice_send_command( VC_TV_DDC_READ_ID, display_id, &param, sizeof(TV_DDC_READ_PARAM_T), 1);
 
    if(success == 0) {
       success = tvservice_wait_for_bulk_receive(buffer, length);
@@ -1515,46 +1703,62 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_ddc_read(uint32_t offset, uint32_t length, uint8
    return (success == 0)? length : 0; //Either return the whole block or nothing
 }
 
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_ddc_read(uint32_t offset, uint32_t length, uint8_t *buffer) {
+   return vc_tv_hdmi_ddc_read_id(default_display_number, offset, length, buffer);
+}
+
 /**
  * Sets whether the TV is attached or unplugged.
  * Required when hotplug interrupt is not handled by VideoCore.
  */
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_attached(uint32_t attached)
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_attached_id(uint32_t display_id, uint32_t attached)
 {
    vcos_log_trace("[%s] attached %d", VCOS_FUNCTION, attached);
-   return tvservice_send_command(VC_TV_SET_ATTACHED, &attached, sizeof(uint32_t), 0);
+   return tvservice_send_command(VC_TV_SET_ATTACHED_ID, display_id, &attached, sizeof(uint32_t), 0);
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_attached(uint32_t attached) {
+   return vc_tv_hdmi_set_attached_id(default_display_number, attached);
 }
 
 /**
  * Sets a property in HDMI output
  */
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_property(const HDMI_PROPERTY_PARAM_T *property) {
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_property_id(uint32_t display_id, const HDMI_PROPERTY_PARAM_T *property) {
    HDMI_PROPERTY_PARAM_T _property;
    if(vcos_verify(property)) {
       memcpy(&_property, property, sizeof(_property));
       vcos_log_trace("[%s] property:%d values:%d,%d", VCOS_FUNCTION, property->property, property->param1, property->param2);
-      return tvservice_send_command(VC_TV_SET_PROP, &_property, sizeof(_property), 1);
+      return tvservice_send_command(VC_TV_SET_PROP_ID, display_id, &_property, sizeof(_property), 1);
    }
    return -1;
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_set_property(const HDMI_PROPERTY_PARAM_T *property) {
+   return vc_tv_hdmi_set_property_id(default_display_number, property);
 }
 
 /**
  * Gets a property from HDMI
  */
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_property(HDMI_PROPERTY_PARAM_T *property) {
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_property_id(uint32_t display_id, HDMI_PROPERTY_PARAM_T *property) {
    int ret = -1;
    if(vcos_verify(property)) {
       TV_GET_PROP_PARAM_T param = {0, {HDMI_PROPERTY_MAX, 0, 0}};
       uint32_t prop = (uint32_t) property->property;
       property->param1 = property->param2 = 0;
       vcos_log_trace("[%s] property:%d", VCOS_FUNCTION, property->property);
-      if((ret = tvservice_send_command_reply( VC_TV_GET_PROP, &prop, sizeof(prop),
+      if((ret = tvservice_send_command_reply( VC_TV_GET_PROP_ID, display_id, &prop, sizeof(prop),
                                               &param, sizeof(param))) == VC_HDMI_SUCCESS) {
          property->param1 = param.property.param1;
          property->param2 = param.property.param2;
       }
    }
    return ret;
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_property(HDMI_PROPERTY_PARAM_T *property) {
+   return vc_tv_hdmi_get_property_id(default_display_number, property);
 }
 
 /**
@@ -1591,13 +1795,13 @@ VCHPRE_ const char* vc_tv_notification_name(VC_HDMI_NOTIFY_T reason)
 }
 
 // temporary: maintain backwards compatibility
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes(HDMI_RES_GROUP_T group,
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes_id(uint32_t display_id, HDMI_RES_GROUP_T group,
                                                     TV_SUPPORTED_MODE_T *supported_modes_deprecated,
                                                     uint32_t max_supported_modes,
                                                     HDMI_RES_GROUP_T *preferred_group,
                                                     uint32_t *preferred_mode) {
    TV_SUPPORTED_MODE_NEW_T *supported_modes_new = malloc(max_supported_modes * sizeof *supported_modes_new);
-   int modes_copied = vc_tv_hdmi_get_supported_modes_new(group==3 ? HDMI_RES_GROUP_CEA:group, supported_modes_new, max_supported_modes, preferred_group, preferred_mode);
+   int modes_copied = vc_tv_hdmi_get_supported_modes_new_id(display_id, group==3 ? HDMI_RES_GROUP_CEA:group, supported_modes_new, max_supported_modes, preferred_group, preferred_mode);
    int i, j=0;
 
    for (i=0; i<modes_copied; i++) {
@@ -1618,17 +1822,29 @@ VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes(HDMI_RES_GROUP_T group,
    return 0;
 }
 
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_get_supported_modes(HDMI_RES_GROUP_T group,
+                                                    TV_SUPPORTED_MODE_T *supported_modes_deprecated,
+                                                    uint32_t max_supported_modes,
+                                                    HDMI_RES_GROUP_T *preferred_group,
+                                                    uint32_t *preferred_mode) {
+      return vc_tv_hdmi_get_supported_modes_id(default_display_number, group,
+                                               supported_modes_deprecated,
+                                               max_supported_modes,
+                                               preferred_group,
+                                               preferred_mode);
+}
+
 /**
  * Get the unique device ID from the EDID
  * @param pointer to device ID struct
  * @return zero if successful, non-zero if failed.
  */
-VCHPRE_ int VCHPOST_  vc_tv_get_device_id(TV_DEVICE_ID_T *id) {
+VCHPRE_ int VCHPOST_  vc_tv_get_device_id_id(uint32_t display_id, TV_DEVICE_ID_T *id) {
    int ret = -1;
    TV_DEVICE_ID_T param;
    memset(&param, 0, sizeof(TV_DEVICE_ID_T));
    if(vcos_verify(id)) {
-      if((ret = tvservice_send_command_reply( VC_TV_GET_DEVICE_ID, NULL, 0,
+      if((ret = tvservice_send_command_reply( VC_TV_GET_DEVICE_ID_ID, display_id, NULL, 0,
                                               &param, sizeof(param))) == VC_HDMI_SUCCESS) {
          memcpy(id, &param, sizeof(TV_DEVICE_ID_T));
       } else {
@@ -1640,16 +1856,31 @@ VCHPRE_ int VCHPOST_  vc_tv_get_device_id(TV_DEVICE_ID_T *id) {
    return ret;
 }
 
+VCHPRE_ int VCHPOST_  vc_tv_get_device_id(TV_DEVICE_ID_T *id) {
+   return vc_tv_get_device_id_id(default_display_number, id);
+}
+
 // temporary: maintain backwards compatibility
-VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_explicit(HDMI_MODE_T mode, HDMI_RES_GROUP_T group, uint32_t code) {
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_explicit_id(uint32_t display_id, HDMI_MODE_T mode, HDMI_RES_GROUP_T group, uint32_t code) {
    if (group == HDMI_RES_GROUP_CEA_3D) {
       HDMI_PROPERTY_PARAM_T property;
       property.property = HDMI_PROPERTY_3D_STRUCTURE;
       property.param1 = HDMI_RES_GROUP_CEA;
       property.param2 = 0;
-      vc_tv_hdmi_set_property(&property);
+      vc_tv_hdmi_set_property_id(display_id, &property);
       group = HDMI_RES_GROUP_CEA;
    }
-   return vc_tv_hdmi_power_on_explicit_new(mode, group, code);
+   return vc_tv_hdmi_power_on_explicit_new_id(display_id, mode, group, code);
 }
 
+VCHPRE_ int VCHPOST_ vc_tv_hdmi_power_on_explicit(HDMI_MODE_T mode, HDMI_RES_GROUP_T group, uint32_t code) {
+   return vc_tv_hdmi_power_on_explicit_id(default_display_number, mode, group, code);
+}
+
+VCHPRE_ int VCHPOST_ vc_tv_get_attached_devices(TV_ATTACHED_DEVICES_T *devices)
+{
+   memset(devices, 0, sizeof(*devices));
+
+   return tvservice_send_command_reply(VC_TV_GET_ATTACHED_DEVICES, 0, NULL, 0,
+                                       devices, sizeof(*devices));
+}

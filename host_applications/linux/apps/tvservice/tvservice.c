@@ -83,6 +83,8 @@ enum
    OPT_JSON      = 'j',
    OPT_HELP      = 'h',
    OPT_NAME      = 'n',
+   OPT_DEVICE    = 'v',
+   OPT_LIST      = 'l',
    // Options from this point onwards don't have any short option equivalents
    OPT_FIRST_LONG_OPT = 0x80,
 };
@@ -105,6 +107,8 @@ static struct option long_opts[] =
    { "info",               required_argument,   NULL,    OPT_SHOWINFO},
    { "help",               no_argument,         NULL,    OPT_HELP },
    { "name",               no_argument,         NULL,    OPT_NAME },
+   { "device",             required_argument,   NULL,    OPT_DEVICE },
+   { "list",               no_argument,         NULL,    OPT_LIST },
    { 0,                    0,                   0,       0 }
 };
 
@@ -128,6 +132,8 @@ static void show_usage( void )
    LOG_STD( "  -d, --dumpedid <filename>         Dump EDID information to file" );
    LOG_STD( "  -j, --json                        Use JSON format for --modes output" );
    LOG_STD( "  -n, --name                        Print the device ID from EDID" );
+   LOG_STD( "  -l, --list                        List all attached devices" );
+   LOG_STD( "  -v, --device                      Specify the device to use (see --list)");
    LOG_STD( "  -h, --help                        Print this information" );
 }
 
@@ -244,7 +250,7 @@ static const char* threed_str(uint32_t struct_3d_mask, int json_output) {
    return struct_desc;
 }
 
-static int get_modes( HDMI_RES_GROUP_T group, int json_output)
+static int get_modes( uint32_t display_id, HDMI_RES_GROUP_T group, int json_output)
 {
    static TV_SUPPORTED_MODE_T supported_modes[MAX_MODE_ID];
    HDMI_RES_GROUP_T preferred_group;
@@ -257,10 +263,19 @@ static int get_modes( HDMI_RES_GROUP_T group, int json_output)
 
    memset(supported_modes, 0, sizeof(supported_modes));
 
-   num_modes = vc_tv_hdmi_get_supported_modes( group, supported_modes,
-                                               vcos_countof(supported_modes),
-                                               &preferred_group,
-                                               &preferred_mode );
+   if (display_id != -1)
+      num_modes = vc_tv_hdmi_get_supported_modes_new_id(display_id,
+                                                 group, supported_modes,
+                                                 vcos_countof(supported_modes),
+                                                 &preferred_group,
+                                                 &preferred_mode );
+   else
+      num_modes = vc_tv_hdmi_get_supported_modes_new(group, supported_modes,
+                                                 vcos_countof(supported_modes),
+                                                 &preferred_group,
+                                                 &preferred_mode );
+
+
    if ( num_modes < 0 )
    {
       LOG_ERR( "Failed to get modes" );
@@ -432,15 +447,24 @@ static const char *status_mode( TV_DISPLAY_STATE_T *tvstate ) {
    return mode_str;
 }
 
-static int get_status( void )
+
+static int get_status(int display_id)
 {
    TV_DISPLAY_STATE_T tvstate;
-   if( vc_tv_get_display_state( &tvstate ) == 0) {
+
+   int ok = display_id != -1 ? vc_tv_get_display_state_id( display_id, &tvstate) : vc_tv_get_display_state(&tvstate);
+
+   if(ok == 0) {
       //The width/height parameters are in the same position in the union
       //for HDMI and SDTV
       HDMI_PROPERTY_PARAM_T property;
       property.property = HDMI_PROPERTY_PIXEL_CLOCK_TYPE;
-      vc_tv_hdmi_get_property(&property);
+
+      if (display_id != -1)
+         vc_tv_hdmi_get_property_id(display_id, &property);
+      else
+         vc_tv_hdmi_get_property(&property);
+
       float frame_rate = property.param1 == HDMI_PIXEL_CLOCK_TYPE_NTSC ? tvstate.display.hdmi.frame_rate * (1000.0f/1001.0f) : tvstate.display.hdmi.frame_rate;
 
       if(tvstate.display.hdmi.width && tvstate.display.hdmi.height) {
@@ -458,7 +482,7 @@ static int get_status( void )
   return 0;
 }
 
-static int get_audiosup( void )
+static int get_audiosup(int display_id)
 {
   uint8_t sample_rates[] = {32, 44, 48, 88, 96, 176, 192};
   uint8_t sample_sizes[] = {16, 20, 24};
@@ -467,23 +491,27 @@ static int get_audiosup( void )
   for (k=EDID_AudioFormat_ePCM; k<EDID_AudioFormat_eMaxCount; k++) {
     int num_channels = 0, max_sample_rate = 0, max_sample_size = 0;
     for (i=1; i<=8; i++) {
-      if (vc_tv_hdmi_audio_supported(k, i, EDID_AudioSampleRate_e44KHz, EDID_AudioSampleSize_16bit ) == 0)
+      if ((display_id != -1 ? vc_tv_hdmi_audio_supported_id(display_id, k, i, EDID_AudioSampleRate_e44KHz, EDID_AudioSampleSize_16bit ) :
+                              vc_tv_hdmi_audio_supported(k, i, EDID_AudioSampleRate_e44KHz, EDID_AudioSampleSize_16bit )) == 0)
         num_channels = i;
     }
     for (i=0, j=EDID_AudioSampleRate_e32KHz; j<=EDID_AudioSampleRate_e192KHz; i++, j<<=1) {
-      if (vc_tv_hdmi_audio_supported(k, 1, j, EDID_AudioSampleSize_16bit ) == 0)
+      if ((display_id != -1 ? vc_tv_hdmi_audio_supported_id(display_id, k, 1, j, EDID_AudioSampleSize_16bit ) :
+                              vc_tv_hdmi_audio_supported(k, 1, j, EDID_AudioSampleSize_16bit )) == 0)
         max_sample_rate = i;
     }
     if (k==EDID_AudioFormat_ePCM) {
       for (i=0, j=EDID_AudioSampleSize_16bit; j<=EDID_AudioSampleSize_24bit; i++, j<<=1) {
-        if (vc_tv_hdmi_audio_supported(k, 1, EDID_AudioSampleRate_e44KHz, j ) == 0)
+        if (display_id != -1 ? vc_tv_hdmi_audio_supported_id(display_id, k, 1, EDID_AudioSampleRate_e44KHz, j ) :
+                               vc_tv_hdmi_audio_supported(k, 1, EDID_AudioSampleRate_e44KHz, j ) == 0)
           max_sample_size = i;
       }
       if (num_channels>0)
         LOG_STD("%8s supported: Max channels: %d, Max samplerate:%4dkHz, Max samplesize %2d bits.", formats[k], num_channels, sample_rates[max_sample_rate], sample_sizes[max_sample_size]);
     } else {
       for (i=0; i<256; i++) {
-        if (vc_tv_hdmi_audio_supported(k, 1, EDID_AudioSampleRate_e44KHz, i ) == 0)
+        if (display_id != -1 ? vc_tv_hdmi_audio_supported_id(display_id, k, 1, EDID_AudioSampleRate_e44KHz, i ) :
+                                vc_tv_hdmi_audio_supported(k, 1, EDID_AudioSampleRate_e44KHz, i ) == 0)
           max_sample_size = i;
       }
       if (num_channels>0)
@@ -493,20 +521,20 @@ static int get_audiosup( void )
   return 0;
 }
 
-static int dump_edid( const char *filename )
+static int dump_edid( int display_id, const char *filename )
 {
    uint8_t buffer[128];
    size_t written = 0, offset = 0;
    int i, extensions = 0;
    FILE *fp = NULL;
-   int siz = vc_tv_hdmi_ddc_read(offset, sizeof (buffer), buffer);
+   int siz = display_id != -1 ? vc_tv_hdmi_ddc_read_id(display_id, offset, sizeof (buffer), buffer) : vc_tv_hdmi_ddc_read(offset, sizeof (buffer), buffer);;
    offset += sizeof( buffer);
    /* First block always exist */
    if (siz == sizeof(buffer) && (fp = fopen(filename, "wb")) != NULL) {
       written += fwrite(buffer, 1, sizeof buffer, fp);
       extensions = buffer[0x7e]; /* This tells you how many more blocks to read */
       for(i = 0; i < extensions; i++, offset += sizeof( buffer)) {
-         siz = vc_tv_hdmi_ddc_read(offset, sizeof( buffer), buffer);
+         siz = display_id != -1 ? vc_tv_hdmi_ddc_read_id(display_id, offset, sizeof( buffer), buffer) : vc_tv_hdmi_ddc_read(offset, sizeof( buffer), buffer);
          if(siz == sizeof(buffer)) {
             written += fwrite(buffer, 1, sizeof (buffer), fp);
          } else {
@@ -524,9 +552,9 @@ static int dump_edid( const char *filename )
    return written < sizeof(buffer);
 }
 
-static int show_info( int on )
+static int show_info(int display_id,  int on )
 {
-   return vc_tv_show_info(on);
+   return display_id != -1 ? vc_tv_show_info_id(display_id, on) : vc_tv_show_info(on);
 }
 
 static void control_c( int signum )
@@ -551,7 +579,7 @@ static void tvservice_callback( void *callback_data,
    {
       case VC_HDMI_UNPLUGGED:
       {
-         LOG_INFO( "HDMI cable is unplugged" );
+         LOG_INFO( "HDMI cable is unplugged. Display %d", param1 );
          break;
       }
       case VC_HDMI_ATTACHED:
@@ -616,13 +644,13 @@ static int start_monitor( void )
    return 0;
 }
 
-static int power_on_preferred( void )
+static int power_on_preferred(int display_id)
 {
    int ret;
 
    LOG_STD( "Powering on HDMI with preferred settings" );
 
-   ret = vc_tv_hdmi_power_on_preferred();
+   ret = display_id != -1 ? vc_tv_hdmi_power_on_preferred_id(display_id) : vc_tv_hdmi_power_on_preferred();
    if ( ret != 0 )
    {
       LOG_ERR( "Failed to power on HDMI with preferred settings" );
@@ -631,7 +659,7 @@ static int power_on_preferred( void )
    return ret;
 }
 
-static int power_on_explicit( HDMI_RES_GROUP_T group,
+static int power_on_explicit( int display_id, HDMI_RES_GROUP_T group,
                               uint32_t mode, uint32_t drive )
 {
    int ret;
@@ -639,7 +667,7 @@ static int power_on_explicit( HDMI_RES_GROUP_T group,
    LOG_STD( "Powering on HDMI with explicit settings (%s mode %u)",
             group == HDMI_RES_GROUP_CEA ? "CEA" : group == HDMI_RES_GROUP_DMT ? "DMT" : "CUSTOM", mode );
 
-   ret = vc_tv_hdmi_power_on_explicit( drive, group, mode );
+   ret = display_id != -1 ?  vc_tv_hdmi_power_on_explicit_id(display_id, drive, group, mode ) : vc_tv_hdmi_power_on_explicit( drive, group, mode );
    if ( ret != 0 )
    {
       LOG_ERR( "Failed to power on HDMI with explicit settings (%s mode %u)",
@@ -649,7 +677,7 @@ static int power_on_explicit( HDMI_RES_GROUP_T group,
    return ret;
 }
 
-static int set_property(HDMI_PROPERTY_T prop, uint32_t param1, uint32_t param2)
+static int set_property(int display_id, HDMI_PROPERTY_T prop, uint32_t param1, uint32_t param2)
 {
    int ret;
    HDMI_PROPERTY_PARAM_T property;
@@ -657,7 +685,7 @@ static int set_property(HDMI_PROPERTY_T prop, uint32_t param1, uint32_t param2)
    property.param1 = param1;
    property.param2 = param2;
    //LOG_DBG( "Setting property %d with params %d, %d", prop, param1, param2);
-   ret = vc_tv_hdmi_set_property(&property);
+   ret = display_id != -1 ? vc_tv_hdmi_set_property_id(display_id, &property) : vc_tv_hdmi_set_property(&property);
    if(ret != 0)
    {
       LOG_ERR( "Failed to set property %d", prop);
@@ -665,8 +693,8 @@ static int set_property(HDMI_PROPERTY_T prop, uint32_t param1, uint32_t param2)
    return ret;
 }
 
-static int power_on_sdtv( SDTV_MODE_T mode,
-                              SDTV_ASPECT_T aspect, int sdtv_progressive )
+static int power_on_sdtv(int display_id, SDTV_MODE_T mode,
+                         SDTV_ASPECT_T aspect, int sdtv_progressive )
 {
    int ret;
    SDTV_OPTIONS_T options;
@@ -677,7 +705,8 @@ static int power_on_sdtv( SDTV_MODE_T mode,
    LOG_STD( "Powering on SDTV with explicit settings (mode:%d aspect:%d)",
             mode, aspect );
 
-   ret = vc_tv_sdtv_power_on(mode, &options);
+   ret = display_id != -1 ? vc_tv_sdtv_power_on_id(display_id, mode, &options) : vc_tv_sdtv_power_on(mode, &options);
+
    if ( ret != 0 )
    {
       LOG_ERR( "Failed to power on SDTV with explicit settings (mode:%d aspect:%d)",
@@ -687,19 +716,58 @@ static int power_on_sdtv( SDTV_MODE_T mode,
    return ret;
 }
 
-static int power_off( void )
+static int power_off(int display_id)
 {
    int ret;
 
    LOG_STD( "Powering off HDMI");
 
-   ret = vc_tv_power_off();
+   ret = display_id ? vc_tv_power_off_id(display_id) : vc_tv_power_off();
    if ( ret != 0 )
    {
       LOG_ERR( "Failed to power off HDMI" );
    }
 
    return ret;
+}
+
+static int list_attached_devices()
+{
+   char *display_to_text[] =
+   {
+      "Main LCD",
+      "Auxiliary LCD",
+      "HDMI 0",
+      "Composite",
+      "Forced LCD",
+      "Forced TV",
+      "Forced Other",
+      "HDMI 1",
+      "Forced TV2"
+   };
+
+   const int display_to_text_size = sizeof(display_to_text)/sizeof(display_to_text[0]);
+
+   TV_ATTACHED_DEVICES_T devices;
+   int i;
+
+   if (vc_tv_get_attached_devices(&devices) == -1)
+   {
+      LOG_ERR("No multi display support in firmware!");
+      return -1;
+   }
+
+   LOG_STD("%d attached device(s), display ID's are : ", devices.num_attached);
+
+   for (i=0;i<devices.num_attached;i++)
+   {
+      if (devices.display_number[i] <= display_to_text_size)
+         LOG_STD("Display Number %d, type %s", devices.display_number[i], display_to_text[devices.display_number[i]]);
+      else
+         LOG_STD("Display Number %d, out of range", devices.display_number[i]);
+   }
+
+   return 0;
 }
 
 // ---- Public Functions -----------------------------------------------------
@@ -723,6 +791,8 @@ int main( int argc, char **argv )
    int  opt_3d = 0;
    int  opt_json = 0;
    int  opt_name = 0;
+   int  opt_list = 0;
+   int  opt_device = -1;
 
    char *dumpedid_filename = NULL;
    VCHI_INSTANCE_T    vchi_instance;
@@ -734,6 +804,7 @@ int main( int argc, char **argv )
    SDTV_MODE_T sdtvon_mode = SDTV_MODE_NTSC;
    SDTV_ASPECT_T sdtvon_aspect = SDTV_ASPECT_UNKNOWN;
    int sdtvon_progressive = 0;
+   TV_ATTACHED_DEVICES_T devices;
 
    // Initialize VCOS
    vcos_init();
@@ -948,6 +1019,19 @@ int main( int argc, char **argv )
             opt_name = 1;
             break;
          }
+
+         case OPT_LIST:
+         {
+            opt_list = 1;
+            break;
+         }
+
+         case OPT_DEVICE:
+         {
+            opt_device = atoi(optarg);
+            break;
+         }
+
          default:
          {
             LOG_ERR( "Unrecognized option '%d'\n", opt );
@@ -1001,10 +1085,35 @@ int main( int argc, char **argv )
       goto err_out;
    }
 
-//   LOG_INFO( "Starting tvservice" );
-
    // Initialize the tvservice
    vc_vchi_tv_init( vchi_instance, &vchi_connection, 1 );
+
+   // Make a call that will determine whether we have multi display support
+   if (vc_tv_get_attached_devices(&devices) != -1)
+   {
+      // Check any device_id specified
+      if (opt_device != -1)
+      {
+         int i;
+
+            // Check against the connected devices
+         for (i=0;i<devices.num_attached;i++)
+         {
+            if (devices.display_number[i] == opt_device)
+            {
+               break;
+            }
+         }
+
+         if (i == devices.num_attached)
+         {
+            LOG_ERR( "Invalid device/display ID");
+            goto err_stop_service;
+         }
+      }
+   }
+   else
+      opt_device = -1;
 
    if ( opt_monitor == 1 )
    {
@@ -1018,7 +1127,7 @@ int main( int argc, char **argv )
 
    if ( opt_modes == 1 )
    {
-      if ( get_modes( get_modes_group, opt_json ) != 0 )
+      if ( get_modes( opt_device, get_modes_group, opt_json ) != 0 )
       {
          goto err_stop_service;
       }
@@ -1026,11 +1135,11 @@ int main( int argc, char **argv )
 
    if ( opt_preferred == 1 )
    {
-      if(set_property( HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_NONE, 0) != 0)
+      if(set_property( opt_device, HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_NONE, 0) != 0)
       {
          goto err_stop_service;
       }
-      if ( power_on_preferred() != 0 )
+      if ( power_on_preferred(opt_device) != 0 )
       {
          goto err_stop_service;
       }
@@ -1038,31 +1147,32 @@ int main( int argc, char **argv )
    else if ( opt_explicit == 1 )
    {
       //Distinguish between turning on 3D side by side and 3D top/bottom
-      if(opt_3d == 0 && set_property( HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_NONE, 0) != 0)
+      if(opt_3d == 0 && set_property(opt_device, HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_NONE, 0) != 0)
       {
          goto err_stop_service;
       }
-      else if(opt_3d == 1 && set_property( HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_SBS_HALF, 0) != 0)
+      else if(opt_3d == 1 && set_property(opt_device, HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_SBS_HALF, 0) != 0)
       {
          goto err_stop_service;
       }
-      else if(opt_3d == 2 && set_property( HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_TB_HALF, 0) != 0)
+      else if(opt_3d == 2 && set_property(opt_device, HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_TB_HALF, 0) != 0)
       {
          goto err_stop_service;
       }
-      else if(opt_3d == 3 && set_property( HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_FRAME_PACKING, 0) != 0)
+      else if(opt_3d == 3 && set_property(opt_device, HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_FRAME_PACKING, 0) != 0)
       {
          goto err_stop_service;
       }
-      else if(opt_3d == 4 && set_property( HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_FRAME_SEQUENTIAL, 0) != 0)
+      else if(opt_3d == 4 && set_property(opt_device, HDMI_PROPERTY_3D_STRUCTURE, HDMI_3D_FORMAT_FRAME_SEQUENTIAL, 0) != 0)
       {
          goto err_stop_service;
       }
-      if (set_property( HDMI_PROPERTY_PIXEL_CLOCK_TYPE, opt_ntsc ? HDMI_PIXEL_CLOCK_TYPE_NTSC : HDMI_PIXEL_CLOCK_TYPE_PAL, 0) != 0)
+      if (set_property(opt_device, HDMI_PROPERTY_PIXEL_CLOCK_TYPE, opt_ntsc ? HDMI_PIXEL_CLOCK_TYPE_NTSC : HDMI_PIXEL_CLOCK_TYPE_PAL, 0) != 0)
       {
          goto err_stop_service;
       }
-      if ( power_on_explicit( power_on_explicit_group,
+      if ( power_on_explicit( opt_device,
+                              power_on_explicit_group,
                               power_on_explicit_mode, power_on_explicit_drive ) != 0 )
       {
          goto err_stop_service;
@@ -1070,15 +1180,15 @@ int main( int argc, char **argv )
    }
    else if ( opt_sdtvon == 1 )
    {
-      if ( power_on_sdtv( sdtvon_mode,
-                              sdtvon_aspect, sdtvon_progressive ) != 0 )
+      if ( power_on_sdtv( opt_device, sdtvon_mode,
+                          sdtvon_aspect, sdtvon_progressive ) != 0 )
       {
          goto err_stop_service;
       }
    }
    else if (opt_off == 1 )
    {
-      if ( power_off() != 0 )
+      if ( power_off(opt_device) != 0 )
       {
          goto err_stop_service;
       }
@@ -1086,7 +1196,7 @@ int main( int argc, char **argv )
 
    if ( opt_status == 1 )
    {
-      if ( get_status() != 0 )
+      if ( get_status(opt_device) != 0 )
       {
          goto err_stop_service;
       }
@@ -1094,7 +1204,7 @@ int main( int argc, char **argv )
    
    if ( opt_audiosup == 1 )
    {
-      if ( get_audiosup() != 0 )
+      if ( get_audiosup(opt_device) != 0 )
       {
          goto err_stop_service;
       }
@@ -1102,7 +1212,7 @@ int main( int argc, char **argv )
    
    if ( opt_dumpedid == 1 )
    {
-      if ( dump_edid(dumpedid_filename) != 0 )
+      if ( dump_edid(opt_device, dumpedid_filename) != 0 )
       {
          goto err_stop_service;
       }
@@ -1110,7 +1220,7 @@ int main( int argc, char **argv )
 
    if ( opt_showinfo )
    {
-      if ( show_info(opt_showinfo-1) != 0 )
+      if ( show_info(opt_device, opt_showinfo-1) != 0 )
       {
          goto err_stop_service;
       }
@@ -1120,7 +1230,7 @@ int main( int argc, char **argv )
    {
       TV_DEVICE_ID_T id;
       memset(&id, 0, sizeof(id));
-      if(vc_tv_get_device_id(&id) == 0) {
+      if( (opt_device != -1 ? vc_tv_get_device_id_id(opt_device, &id) : vc_tv_get_device_id(&id) )== 0) {
          if(id.vendor[0] == '\0' || id.monitor_name[0] == '\0') {
             LOG_ERR( "No device present" );
          } else {
@@ -1138,6 +1248,16 @@ int main( int argc, char **argv )
 
       vcos_event_delete( &quit_event );
    }
+
+   if ( opt_list == 1 )
+   {
+      if (list_attached_devices() != 0)
+      {
+         goto err_stop_service;
+      }
+   }
+
+
 
 err_stop_service:
 //   LOG_INFO( "Stopping tvservice" );
