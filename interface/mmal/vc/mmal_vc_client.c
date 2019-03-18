@@ -344,7 +344,8 @@ static VCHIQ_STATUS_T mmal_vc_vchiq_callback(VCHIQ_REASON_T reason,
                LOG_TRACE("buffer too small (%i, %i)",
                          msg->buffer_header.offset + msg->buffer_header.length,
                          msg->drvbuf.client_context->buffer->alloc_size);
-               msg->buffer_header.length = 0; /* FIXME: set a buffer flag to signal error */
+               msg->buffer_header.length = 0;
+               msg->buffer_header.flags |= MMAL_BUFFER_HEADER_FLAG_TRANSMISSION_FAILED;
                msg->drvbuf.client_context->callback(msg);
                vchiq_release_message(service, vchiq_header);
                break;
@@ -375,7 +376,8 @@ static VCHIQ_STATUS_T mmal_vc_vchiq_callback(VCHIQ_REASON_T reason,
                   if (vst != VCHIQ_SUCCESS)
                   {
                      LOG_TRACE("queue bulk rx len %d failed to start", msg->buffer_header.length);
-                     msg->buffer_header.length = 0; /* FIXME: set a buffer flag to signal error */
+                     msg->buffer_header.length = 0;
+                     msg->buffer_header.flags |= MMAL_BUFFER_HEADER_FLAG_TRANSMISSION_FAILED;
                      msg->drvbuf.client_context->callback(msg);
                      vchiq_release_message(service, vchiq_header);
                   }
