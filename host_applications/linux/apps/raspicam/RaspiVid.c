@@ -1631,8 +1631,8 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
    format->es->video.crop.y = 0;
    format->es->video.crop.width = state->common_settings.width;
    format->es->video.crop.height = state->common_settings.height;
-   format->es->video.frame_rate.num = PREVIEW_FRAME_RATE_NUM;
-   format->es->video.frame_rate.den = PREVIEW_FRAME_RATE_DEN;
+   format->es->video.frame_rate.num = state->framerate;
+   format->es->video.frame_rate.den = VIDEO_FRAME_RATE_DEN;
 
    status = mmal_port_format_commit(preview_port);
 
