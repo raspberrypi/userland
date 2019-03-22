@@ -353,7 +353,7 @@ out:
 ** only for the duration it needs to access the memory data associated with
 ** the opaque handle.
 */
-unsigned int vcsm_malloc_cache( unsigned int size, VCSM_CACHE_TYPE_T cache, char *name )
+unsigned int vcsm_malloc_cache( unsigned int size, VCSM_CACHE_TYPE_T cache, const char *name )
 {
    unsigned int size_aligned = size;
    void *usr_ptr = NULL;
@@ -525,7 +525,7 @@ unsigned int vcsm_malloc_cache( unsigned int size, VCSM_CACHE_TYPE_T cache, char
 ** only for the duration it needs to access the memory data associated with
 ** the opaque handle.
 */
-unsigned int vcsm_malloc( unsigned int size, char *name )
+unsigned int vcsm_malloc( unsigned int size, const char *name )
 {
    return vcsm_malloc_cache( size, VCSM_CACHE_TYPE_NONE, name );
 }
@@ -2147,7 +2147,7 @@ int vcsm_clean_invalid2( struct vcsm_user_clean_invalid2_s *s )
 ** a reference to the buffer until it has finished with the buffer).
 **
 */
-unsigned int vcsm_import_dmabuf( int dmabuf, char *name )
+unsigned int vcsm_import_dmabuf( int dmabuf, const char *name )
 {
    int rc;
    unsigned int handle = 0;
