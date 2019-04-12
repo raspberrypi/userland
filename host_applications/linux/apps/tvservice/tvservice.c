@@ -328,6 +328,8 @@ static const char *status_mode( TV_DISPLAY_STATE_T *tvstate ) {
             tmp = status_sprintf(mode_str, MAX_STATUS_STR_LENGTH, &offset, " CEA (%d)", tvstate->display.hdmi.mode); break;
          case HDMI_RES_GROUP_DMT:
             tmp = status_sprintf(mode_str, MAX_STATUS_STR_LENGTH, &offset, " DMT (%d)", tvstate->display.hdmi.mode); break;
+         case HDMI_RES_GROUP_CUSTOM:
+            tmp = status_sprintf(mode_str, MAX_STATUS_STR_LENGTH, &offset, " CUSTOM"); break;
          default: break;
          }
       }
