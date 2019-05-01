@@ -38,17 +38,17 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 void show_usage()
 {
-   printf( "Usage: vcgencmd [-t] command\n" );
-   printf( "Send a command to the VideoCore and print the result.\n\n" );
-   printf( "  -t          Time how long the command takes to complete\n" );
-   printf( "  -h, --help  Show this information" );
-   printf( "Use the command 'vcgencmd commands' to get a list of available commands\n\n" );
-   printf( "Exit status:\n" );
-   printf( "   0    command completed successfully\n" );
-   printf( "  -1    problem with VCHI\n" );
-   printf( "  -2    VideoCore returned an error\n\n" );
-   printf( "For further documentation please see\n" );
-   printf( "https://www.raspberrypi.org/documentation/raspbian/applications/vcgencmd.md\n\n" );
+   puts( "Usage: vcgencmd [-t] command" );
+   puts( "Send a command to the VideoCore and print the result.\n" );
+   puts( "  -t          Time how long the command takes to complete" );
+   puts( "  -h, --help  Show this information" );
+   puts( "Use the command 'vcgencmd commands' to get a list of available commands\n" );
+   puts( "Exit status:" );
+   puts( "   0    command completed successfully" );
+   puts( "  -1    problem with VCHI" );
+   puts( "  -2    VideoCore returned an error\n" );
+   puts( "For further documentation please see" );
+   puts( "https://www.raspberrypi.org/documentation/raspbian/applications/vcgencmd.md\n" );
 }
 
 int main( int argc, char **argv )
