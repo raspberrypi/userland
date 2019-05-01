@@ -62,24 +62,24 @@ int main( int argc, char **argv )
       show_usage();
       return 0;
    }
-   
+
    vcos_init();
-   
+
    if ( vchi_initialise( &vchi_instance ) != 0)
    {
       fprintf( stderr, "VCHI initialization failed\n" );
       return -1;
    }
-   
+
    //create a vchi connection
    if ( vchi_connect( NULL, 0, vchi_instance ) != 0)
    {
       fprintf( stderr, "VCHI connection failed\n" );
       return -1;
    }
-   
+
    vc_vchi_gencmd_init(vchi_instance, &vchi_connection, 1 );
-   
+
    if (argc > 1)
    {
       // first check if we were invoked with either -h or --help
@@ -97,45 +97,45 @@ int main( int argc, char **argv )
       double time_diff;
       uint32_t show_time = 0;
       int ret;
-      
+
       //reset the string
       buffer[0] = '\0';
-      
+
       //first, strip out a potential leading -t
       if( strcmp( argv[1], "-t" ) == 0 )
       {
          show_time = 1;
          i++;
       }
-      
+
       for (; i <= argc-1; i++)
       {
          buffer_offset = vcos_safe_strcpy( buffer, argv[i], sizeof(buffer), buffer_offset );
          buffer_offset = vcos_safe_strcpy( buffer, " ", sizeof(buffer), buffer_offset );
       }
-      
+
       if( show_time )
          before = clock();
-      
+
       //send the gencmd for the argument
       if (( ret = vc_gencmd_send( "%s", buffer )) != 0 )
       {
          printf( "vc_gencmd_send returned %d\n", ret );
       }
-      
+
       //get + print out the response!
       if (( ret = vc_gencmd_read_response( buffer, sizeof( buffer ) )) != 0 )
       {
          printf( "vc_gencmd_read_response returned %d\n", ret );
       }
-      
+
       if( show_time )
       {
          after = clock();
          time_diff = ((double) (after - before)) / CLOCKS_PER_SEC;
          printf( "Time taken: %f seconds (%f msecs) (%f usecs)\n", time_diff, time_diff * 1000, time_diff * 1000000 );
       }
-      
+
       if ( buffer[0] != '\0' )
       {
          if ( buffer[ strlen( buffer) - 1] == '\n' )
@@ -160,9 +160,9 @@ int main( int argc, char **argv )
          }
       }
    }
-   
+
    vc_gencmd_stop();
-   
+
    //close the vchi connection
    if ( vchi_disconnect( vchi_instance ) != 0)
    {
