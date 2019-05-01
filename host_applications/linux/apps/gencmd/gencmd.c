@@ -1,6 +1,7 @@
 /*
 Copyright (c) 2012, Broadcom Europe Ltd
 All rights reserved.
+
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
     * Redistributions of source code must retain the above copyright
@@ -38,7 +39,8 @@ void show_usage()
 {
    printf( "Usage: vcgencmd [-t] command\n" );
    printf( "Send a command to the VideoCore and print the result.\n\n" );
-   printf( "  -t         Time how long the command takes to complete\n" );
+   printf( "  -t          Time how long the command takes to complete\n" );
+   printf( "  -h, --help  Show this information" );
    printf( "Use the command 'vcgencmd commands' to get a list of available commands\n\n" );
    printf( "Exit status:\n" );
    printf( "   0    command completed successfully\n" );
@@ -154,7 +156,7 @@ int main( int argc, char **argv )
              }
              else
              {
-               printf("%s\n", buffer );
+               puts(buffer);
              }
           }
       }
