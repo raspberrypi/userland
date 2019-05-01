@@ -41,7 +41,7 @@ void show_usage()
 	puts( "Usage: vcgencmd [-t] command" );
 	puts( "Send a command to the VideoCore and print the result.\n" );
 	puts( "  -t          Time how long the command takes to complete" );
-	puts( "  -h, --help  Show this information" );
+	puts( "  -h, --help  Show this information\n" );
 	puts( "Use the command 'vcgencmd commands' to get a list of available commands\n" );
 	puts( "Exit status:" );
 	puts( "   0    command completed successfully" );
