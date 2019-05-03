@@ -134,6 +134,7 @@ static struct {
    /* {MMAL_ENCODING_YUVUV128, 1, 1}, That's a special case which must not be included */
    /* {MMAL_ENCODING_YUVUV64_16, 1, 1}, That's a special case which must not be included */
    /* {MMAL_ENCODING_YUVUV64_10, 1, 1}, That's a special case which must not be included */
+   /* {MMAL_ENCODING_YUV10_COL, 1, 1}, That's a special case which must not be included */
    {MMAL_ENCODING_UNKNOWN, 0, 0}
 };
 
