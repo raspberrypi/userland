@@ -160,10 +160,7 @@ int vcsm_init_ex( int want_export );
 **
 ** Returns 0 on success, -1 on error.
 */
-inline int vcsm_init( void )
-{
-  return vcsm_init_ex(0);
-}
+int vcsm_init( void );
 
 /* Terminates the vcsm processing.
 **

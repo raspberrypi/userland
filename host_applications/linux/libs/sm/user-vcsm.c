@@ -302,6 +302,16 @@ out:
    return result;
 }
 
+/* Initialize the vcsm processing.
+**
+** Must be called once before attempting to do anything else.
+**
+** Returns 0 on success, -1 on error.
+*/
+int vcsm_init( void )
+{
+  return vcsm_init_ex(0);
+}
 
 /* Terminates the vcsm processing.
 **
