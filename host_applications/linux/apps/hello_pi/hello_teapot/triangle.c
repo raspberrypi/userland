@@ -48,6 +48,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <signal.h>
 
+#include "revision.h"
 
 #define PATH "./"
 
@@ -454,6 +455,13 @@ void sig_handler(int signo) {
 int main ()
 {
    bcm_host_init();
+
+   if (get_processor_id() == PROCESSOR_BCM2838)
+   {
+      puts("This demo application is not available on the Pi4\n\n");
+      exit(0);
+   }
+
    printf("Note: ensure you have sufficient gpu_mem configured\n");
    
    signal(SIGINT, sig_handler);

@@ -4,11 +4,15 @@ include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/libs/bcm_host/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libs/ilclient)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libs/vgfont)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libs/revision)
 
 set(ILCLIENT_SRCS libs/ilclient/ilclient.c libs/ilclient/ilcore.c)
 add_library(ilclient ${ILCLIENT_SRCS})
 
-set(HELLO_PI_LIBS ilclient openmaxil bcm_host vcos vchiq_arm)
+set(REVISION_SRCS libs/revision/revision.c )
+add_library(revision ${REVISION_SRCS})
+
+set(HELLO_PI_LIBS ilclient openmaxil bcm_host vcos vchiq_arm revision)
 
 add_subdirectory(hello_world)
 add_subdirectory(hello_video)
