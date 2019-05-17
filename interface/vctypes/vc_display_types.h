@@ -81,6 +81,9 @@ typedef enum {
    DISPLAY_DITHER_MAX
 } DISPLAY_DITHER_T;
 
+struct PIXELVALVE_PERIPH_SETUP_S;
+typedef struct PIXELVALVE_PERIPH_SETUP_S PIXELVALVE_PERIPH_SETUP_T;
+
 //info struct
 typedef struct
 {
@@ -109,6 +112,8 @@ typedef struct
    uint32_t hvs_channel;
    // transform required to get the display correctly oriented landscape
    uint32_t transform;
+   // pixel valve setup for detailed timings
+   PIXELVALVE_PERIPH_SETUP_T *pv_setup;
 } DISPLAY_INFO_T;
 
 #endif /* __VC_INCLUDE_IMAGE_TYPES_H__ */
