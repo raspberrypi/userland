@@ -175,7 +175,7 @@ static void tvservice_notify_callback( void *callback_param,
                                       VCHI_CALLBACK_REASON_T reason,
                                       void *msg_handle );
 
-static int32_t tvservice_wait_for_reply(void *response, uint32_t max_length);
+static int32_t tvservice_wait_for_reply(void *response, uint32_t max_length, uint32_t *actual_length);
 
 static int32_t tvservice_wait_for_bulk_receive(void *buffer, uint32_t max_length);
 
@@ -534,7 +534,7 @@ static void tvservice_notify_callback( void *callback_param,
  * Returns error code of vchi
  *
  ***********************************************************/
-static int32_t tvservice_wait_for_reply(void *response, uint32_t max_length) {
+static int32_t tvservice_wait_for_reply(void *response, uint32_t max_length, uint32_t *actual_length) {
    int32_t success = 0;
    uint32_t length_read = 0;
    vcos_log_trace("[%s]", VCOS_FUNCTION);
@@ -550,6 +550,10 @@ static int32_t tvservice_wait_for_reply(void *response, uint32_t max_length) {
    } else {
       vcos_log_warn("TV service wait for reply failed");
    }
+
+   if (actual_length)
+      *actual_length = length_read;
+
    return success;
 }
 
@@ -613,7 +617,7 @@ static int32_t tvservice_send_command(  uint32_t command, void *buffer, uint32_t
                                  VCHI_FLAGS_BLOCK_UNTIL_QUEUED, NULL );
       if(success == 0 && has_reply) {
          //otherwise only wait for a reply if we ask for one
-         success = tvservice_wait_for_reply(&response, sizeof(response));
+         success = tvservice_wait_for_reply(&response, sizeof(response), NULL);
          response.ret = VC_VTOH32(response.ret);
       } else {
          if(success != 0)
@@ -642,6 +646,7 @@ static int32_t tvservice_send_command_reply(  uint32_t command, void *buffer, ui
    VCHI_MSG_VECTOR_T vector[] = { {&command, sizeof(command)},
                                    {buffer, length} };
    int32_t success = 0;
+   uint32_t actual_length = 0;
 
    vcos_log_trace("[%s] sending command (with reply) %s param length %d", VCOS_FUNCTION,
                   tvservice_command_strings[command], length);
@@ -652,7 +657,18 @@ static int32_t tvservice_send_command_reply(  uint32_t command, void *buffer, ui
                                  vector, sizeof(vector)/sizeof(vector[0]),
                                  VCHI_FLAGS_BLOCK_UNTIL_QUEUED, NULL );
       if(success == 0)
-         success = tvservice_wait_for_reply(response, max_length);
+      {
+         success = tvservice_wait_for_reply(response, max_length, &actual_length);
+
+         // Need to determine if we were returned an error code as a single response
+         // So, if we were expecting more than an int32_t but only got int32_t, AND
+         // its value is < 0 then assume its an error code and return that.
+         if (max_length != sizeof(int32_t) && actual_length == sizeof(int32_t))
+         {
+             if (*(int32_t*)response < 0)
+                success = *(int32_t*)response;
+         }
+      }
       else
          vcos_log_error("TV service failed to send command %s param length %d, error code %d",
                         tvservice_command_strings[command], length, success);
