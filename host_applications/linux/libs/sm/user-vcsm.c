@@ -250,7 +250,7 @@ static void vcsm_init_once(void)
 **
 ** Returns 0 on success, -1 on error.
 */
-int vcsm_init_ex( int want_export )
+int vcsm_init_ex( int want_export, int fd )
 {
    int result  = VCSM_INVALID_HANDLE;
    vcos_once(&vcsm_once, vcsm_init_once);
@@ -260,6 +260,8 @@ int vcsm_init_ex( int want_export )
    vcos_mutex_lock( &vcsm_mutex );
    if ( vcsm_refcount != 0 )
    {
+      // Note that in this case the external fd is ignored.
+
       if (want_export && !using_vc_sm_cma)
       {
          vcos_log_trace( "[%s]: fail as already open and export not available",
@@ -272,20 +274,30 @@ int vcsm_init_ex( int want_export )
 
    if (want_export)
    {
-     vcsm_handle = open( VCSM_CMA_DEVICE_NAME, O_RDWR, 0 );
-     if (vcsm_handle >= 0)
-     {
-        using_vc_sm_cma = 1;
-        vcos_log_trace( "[%s]: Using vc-sm-cma, handle %d",
+      if (fd == -1)
+         vcsm_handle = open( VCSM_CMA_DEVICE_NAME, O_RDWR, 0 );
+      else
+         // FIXME: Sanity check that the fd really is to vcsm-cma.
+         vcsm_handle = dup(fd);
+
+      if (vcsm_handle >= 0)
+      {
+         using_vc_sm_cma = 1;
+         vcos_log_trace( "[%s]: Using vc-sm-cma, handle %d",
                         __func__, vcsm_handle);
-     }
+      }
    }
 
    if (vcsm_handle < 0)
    {
       vcos_log_trace( "[%s]: NOT using vc-sm-cma as handle was %d",
                       __func__, vcsm_handle);
-      vcsm_handle = open( VCSM_DEVICE_NAME, O_RDWR, 0 );
+      if (fd == -1)
+         vcsm_handle = open( VCSM_DEVICE_NAME, O_RDWR, 0 );
+      else
+         // FIXME: Sanity check that the fd really is to vcsm.
+         vcsm_handle = dup(fd);
+
       vcos_log_trace( "[%s]: NOT using vc-sm-cma, handle %d",
                       __func__, vcsm_handle);
    }
@@ -317,7 +329,7 @@ out:
 */
 int vcsm_init( void )
 {
-  return vcsm_init_ex(0);
+  return vcsm_init_ex(0, -1);
 }
 
 /* Terminates the vcsm processing.
