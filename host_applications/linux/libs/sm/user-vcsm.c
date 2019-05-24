@@ -260,6 +260,13 @@ int vcsm_init_ex( int want_export )
    vcos_mutex_lock( &vcsm_mutex );
    if ( vcsm_refcount != 0 )
    {
+      if (want_export && !using_vc_sm_cma)
+      {
+         vcos_log_trace( "[%s]: fail as already open and export not available",
+                        __func__);
+         vcos_mutex_unlock( &vcsm_mutex );
+         return -1;
+      }
       goto out; /* VCSM already opened. Nothing to do. */
    }
 
