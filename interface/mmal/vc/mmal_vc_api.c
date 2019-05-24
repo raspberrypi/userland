@@ -802,6 +802,7 @@ static MMAL_STATUS_T mmal_vc_component_destroy(MMAL_COMPONENT_T *component)
 fail:
    // no longer require videocore
    mmal_vc_release();
+   mmal_vc_shm_exit();
    mmal_vc_deinit();
    return status;
 }
@@ -1341,6 +1342,15 @@ static MMAL_STATUS_T mmal_vc_component_create(const char *name, MMAL_COMPONENT_T
                 name, status, mmal_status_to_string(status));
       return status;
    }
+   status = mmal_vc_shm_init();
+   if (status != MMAL_SUCCESS)
+   {
+      LOG_ERROR("failed to initialise shm for '%s' (%i:%s)",
+                name, status, mmal_status_to_string(status));
+      mmal_vc_deinit();
+      return status;
+   }
+
    // claim VC for entire duration of component.
    status = mmal_vc_use();
 
@@ -1361,6 +1371,7 @@ static MMAL_STATUS_T mmal_vc_component_create(const char *name, MMAL_COMPONENT_T
       LOG_ERROR("failed to create component '%s' (%i:%s)", name, status,
                 mmal_status_to_string(status));
       mmal_vc_release();
+      mmal_vc_shm_exit();
       mmal_vc_deinit();
       return status;
    }
@@ -1380,6 +1391,7 @@ static MMAL_STATUS_T mmal_vc_component_create(const char *name, MMAL_COMPONENT_T
                                MMAL_WORKER_COMPONENT_DESTROY, &reply, &replylen, MMAL_FALSE);
       vcos_assert(destroy_status == MMAL_SUCCESS);
       mmal_vc_release();
+      mmal_vc_shm_exit();
       mmal_vc_deinit();
       return status;
    }
@@ -1499,7 +1511,6 @@ fail:
 MMAL_CONSTRUCTOR(mmal_register_component_videocore);
 void mmal_register_component_videocore(void)
 {
-   mmal_vc_shm_init();
    mmal_component_supplier_register(VIDEOCORE_PREFIX, mmal_vc_component_create);
 }
 
