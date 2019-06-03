@@ -50,6 +50,9 @@ Local types and defines.
 #define _max(x,y) (((x) >= (y))? (x) : (y))
 #endif
 
+// Pick a number way outside normal range
+#define INVALID_DISPLAY_ID 65536
+
 typedef struct
 {
    TVSERVICE_CALLBACK_T  notify_fn;
@@ -140,8 +143,25 @@ static char* tvservice_command_strings[] = {
    "set_property",
    "get_property",
    "get_display_state",
+   "get_supported_modes",
+   "get_device_id",
+   "get_attached_devices",
    "end_of_list"
 };
+
+// We have two sets of commands, one older set that does not takes a display ID, and new set that does.
+// They have the same action, so are named the same, so only one table.
+// This fn ensures that whichever set of commands is being referenced we get the right name.
+static char *get_command_string(int command)
+{
+   if (command >= VC_TV_ID_DELIMETER)
+     command -= VC_TV_ID_DELIMETER;
+
+   if (command >= sizeof(tvservice_command_strings)/sizeof(tvservice_command_strings[0]))
+     return ("Unknown command");
+
+   return tvservice_command_strings[command];
+}
 
 /******************************************************************************
 Static functions.
@@ -317,10 +337,16 @@ VCHPRE_ int VCHPOST_ vc_vchi_tv_init(VCHI_INSTANCE_T initialise_instance, VCHI_C
 
    // Now try and find a decent default display ID for backward compatibility
    // Priority is Main LCD, Aux LCD, HDMI0, HDMI1
-   default_display_number = DISPMANX_ID_HDMI1;
+   // Forcing to INVALID by default is for backward compatibility and is used to
+   // flag to the system that we should use old non display id commands even if a
+   // newer command is requested. ie new linux app on older firmware that does not
+   // support display ID based commands
+   default_display_number = INVALID_DISPLAY_ID;
 
    if (vc_tv_get_attached_devices(&devices) != -1 && devices.num_attached > 0)
    {
+      default_display_number = DISPMANX_ID_HDMI1;
+
       // If only one, use it!
       if (devices.num_attached == 1)
          default_display_number = devices.display_number[0];
@@ -641,11 +667,21 @@ static int32_t tvservice_send_command(  uint32_t command, uint32_t display_id, v
    vector[vector_idx].vec_len = sizeof(command);
    vector_idx++;
 
+   // For backward compatibility, even if sent a command ID requiring a display_id, if the id is invalid we revert to
+   // the old non-id based command
    if (command >= VC_TV_ID_DELIMETER)
    {
-      vector[vector_idx].vec_base = &display_id;
-      vector[vector_idx].vec_len = sizeof(display_id);
-      vector_idx++;
+      if (display_id != INVALID_DISPLAY_ID)
+      {
+         vector[vector_idx].vec_base = &display_id;
+         vector[vector_idx].vec_len = sizeof(display_id);
+         vector_idx++;
+      }
+      else
+      {
+         // Revert to the non-id command
+         command -= VC_TV_ID_DELIMETER;
+      }
    }
 
    vector[vector_idx].vec_base = buffer;
@@ -658,7 +694,7 @@ static int32_t tvservice_send_command(  uint32_t command, uint32_t display_id, v
 
    if(vcos_verify(command < VC_TV_END_OF_LIST)) {
       vcos_log_trace("[%s] command:%s param length %d %s", VCOS_FUNCTION,
-                     tvservice_command_strings[command], length, 
+                     get_command_string(command), length,
                      (has_reply)? "has reply" : " no reply");
    } else {
       vcos_log_error("[%s] not sending invalid command %d", VCOS_FUNCTION, command);
@@ -677,7 +713,7 @@ static int32_t tvservice_send_command(  uint32_t command, uint32_t display_id, v
       } else {
          if(success != 0)
             vcos_log_error("TV service failed to send command %s length %d, error code %d",
-                           tvservice_command_strings[command], length, success);
+                           get_command_string(command), length, success);
          //No reply expected or failed to send, send the success code back instead
          response.ret = success;
       }
@@ -706,11 +742,21 @@ static int32_t tvservice_send_command_reply(  uint32_t command, uint32_t display
    vector[vector_idx].vec_len = sizeof(command);
    vector_idx++;
 
+   // For backward compatibility, even if sent a command ID requiring a display_id, if the id is invalid we revert to
+   // the old non-id based command
    if (command >= VC_TV_ID_DELIMETER)
    {
-      vector[vector_idx].vec_base = &display_id;
-      vector[vector_idx].vec_len = sizeof(display_id);
-      vector_idx++;
+      if (display_id != INVALID_DISPLAY_ID)
+      {
+         vector[vector_idx].vec_base = &display_id;
+         vector[vector_idx].vec_len = sizeof(display_id);
+         vector_idx++;
+      }
+      else
+      {
+         // Revert to the non-id command
+         command -= VC_TV_ID_DELIMETER;
+      }
    }
 
    vector[vector_idx].vec_base = buffer;
@@ -721,7 +767,7 @@ static int32_t tvservice_send_command_reply(  uint32_t command, uint32_t display
    uint32_t actual_length = 0;
 
    vcos_log_trace("[%s] sending command (with reply) %s param length %d", VCOS_FUNCTION,
-                  tvservice_command_strings[command], length);
+                  get_command_string(command), length);
 
    if(tvservice_lock_obtain() == 0)
    {
@@ -743,7 +789,7 @@ static int32_t tvservice_send_command_reply(  uint32_t command, uint32_t display
       }
       else
          vcos_log_error("TV service failed to send command %s param length %d, error code %d",
-                        tvservice_command_strings[command], length, success);
+                        get_command_string(command), length, success);
       
       tvservice_lock_release();
    }
