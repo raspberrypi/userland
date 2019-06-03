@@ -1376,7 +1376,11 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
             else
             {
                bytes_written = fwrite(buffer->data, 1, buffer->length, pData->file_handle);
-               if(pData->flush_buffers) fflush(pData->file_handle);
+               if(pData->flush_buffers)
+               {
+                   fflush(pData->file_handle);
+                   fdatasync(fileno(pData->file_handle));
+               }
 
                if (pData->pstate->save_pts &&
                   !(buffer->flags & MMAL_BUFFER_HEADER_FLAG_CONFIG) &&
