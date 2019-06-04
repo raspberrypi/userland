@@ -74,43 +74,13 @@ typedef enum {
    VC_TV_GET_DEVICE_ID,
 
    VC_TV_GET_ATTACHED_DEVICES,
-
-   // At this point we move from command that do not have a display ID to ones that
-   // do. The commands are identical apart from the extra display id.
-   // So when adding new commands, add both, but ensure that this next enum
-   // is the delimeter between the ranges, so is always the first one in the next range
-   VC_TV_ID_DELIMETER,
-
-   VC_TV_GET_STATE_ID = VC_TV_ID_DELIMETER,
-   VC_TV_HDMI_ON_PREFERRED_ID,
-   VC_TV_HDMI_ON_BEST_ID,
-   VC_TV_HDMI_ON_EXPLICIT_ID,
-   VC_TV_SDTV_ON_ID,
-   VC_TV_OFF_ID,
-   VC_TV_QUERY_SUPPORTED_MODES_ID,
-   VC_TV_QUERY_MODE_SUPPORT_ID,
-   VC_TV_QUERY_AUDIO_SUPPORT_ID,
-   VC_TV_ENABLE_COPY_PROTECT_ID,
-   VC_TV_DISABLE_COPY_PROTECT_ID,
-   VC_TV_SHOW_INFO_ID,
-   VC_TV_GET_AV_LATENCY_ID,
-   VC_TV_HDCP_SET_KEY_ID,
-   VC_TV_HDCP_SET_SRM_ID,
-   VC_TV_SET_SPD_ID,
-   VC_TV_SET_DISPLAY_OPTIONS_ID,
-   VC_TV_TEST_MODE_START_ID,
-   VC_TV_TEST_MODE_STOP_ID,
-   VC_TV_DDC_READ_ID,
-   VC_TV_SET_ATTACHED_ID,
-   VC_TV_SET_PROP_ID,
-   VC_TV_GET_PROP_ID,
-   VC_TV_GET_DISPLAY_STATE_ID,
-   VC_TV_QUERY_SUPPORTED_MODES_ACTUAL_ID,
-   VC_TV_GET_DEVICE_ID_ID,
-
 //Add more commands here
+
    VC_TV_END_OF_LIST
 } VC_TV_CMD_CODE_T;
+
+// Define a bit in the command that sets whether command contains a display ID
+#define TVSERVICE_COMMAND_HAS_DISPLAY_ID (1 << 31)
 
 //Parameters for each command (padded to multiple of 16 bytes)
 //See vc_hdmi.h and vc_sdtv.h for details
