@@ -226,9 +226,9 @@ void *video_decode_test(void* arg)
          }
          if(!data_len)
             break;
-            
-		 if (!thread_run)
-			break;
+
+         if(!thread_run)
+            break;
 
          buf->nFilledLen = data_len;
          data_len = 0;
