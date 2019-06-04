@@ -40,13 +40,24 @@ static COMPONENT_T* egl_render = NULL;
 
 static void* eglImage = 0;
 
+int thread_run;
+
 void my_fill_buffer_done(void* data, COMPONENT_T* comp)
 {
+	
+  OMX_STATETYPE state;
+  
+  if (OMX_GetState(ILC_GET_HANDLE(egl_render), &state) != OMX_ErrorNone) {
+	  printf("OMX_FillThisBuffer failed while getting egl_render component state\n");
+	  return;
+  }	
+	
+  if (state != OMX_StateExecuting)
+	return;
+	
   if (OMX_FillThisBuffer(ilclient_get_handle(egl_render), eglBuffer) != OMX_ErrorNone)
-   {
       printf("OMX_FillThisBuffer failed in callback\n");
-      exit(1);
-   }
+
 }
 
 
@@ -61,7 +72,10 @@ void *video_decode_test(void* arg)
       printf("eglImage is null.\n");
       exit(1);
    }
+   
+   thread_run = 1;
 
+   OMX_ERRORTYPE omx_err;
    OMX_VIDEO_PARAM_PORTFORMATTYPE format;
    OMX_TIME_CONFIG_CLOCKSTATETYPE cstate;
    COMPONENT_T *video_decode = NULL, *video_scheduler = NULL, *clock = NULL;
@@ -214,6 +228,9 @@ void *video_decode_test(void* arg)
          }
          if(!data_len)
             break;
+            
+		 if (!thread_run)
+			break;
 
          buf->nFilledLen = data_len;
          data_len = 0;
@@ -254,13 +271,47 @@ void *video_decode_test(void* arg)
    ilclient_teardown_tunnels(tunnel);
 
    ilclient_state_transition(list, OMX_StateIdle);
-   ilclient_state_transition(list, OMX_StateLoaded);
 
+   /*
+    * Cleanup note: egl_render does not generate the event when the
+    * transition from Idle to Loaded state is completed, so we deviate
+    * from the usual scheme: we issue the transition request manually
+    * with OMX_SendCommand() (which does not wait) and immediately
+    * free the buffer.
+    * 
+    * Here we overwrite the position of egl_render OMX component in the list
+    * so ilclient_state_transition() will not make the transition to Loaded 
+    * for egl_render
+    */
+   list[1] = list[3];
+   list[3] = NULL;
+   
+   ilclient_state_transition(list, OMX_StateLoaded);
+   
+   /*
+     Let's do the transition to Loaded state for the egl_render and
+     free the buffer
+   */
+   omx_err = OMX_SendCommand(ILC_GET_HANDLE(egl_render), OMX_CommandStateSet, OMX_StateLoaded, 0);
+   
+   if (omx_err != OMX_ErrorNone && omx_err != OMX_ErrorSameState)
+        printf("Could not do OMX_CommandStateSet to OMX_StateLoaded for egl_render, omx_err(0x%x)\n", omx_err);
+
+   omx_err = OMX_FreeBuffer(ILC_GET_HANDLE(egl_render), 221, eglBuffer);
+   if (omx_err != OMX_ErrorNone)
+		printf("OMX_FreeBuffer failed, omx_err(0x%x)\n", omx_err);
+        
+   /*
+    * Put the egl_render back into the list for the proper components release
+    */
+   list[3] = egl_render;
+   
    ilclient_cleanup_components(list);
 
    OMX_Deinit();
 
    ilclient_destroy(client);
+   
    return (void *)status;
 }
 
