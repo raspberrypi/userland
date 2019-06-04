@@ -44,20 +44,18 @@ int thread_run;
 
 void my_fill_buffer_done(void* data, COMPONENT_T* comp)
 {
-	
-  OMX_STATETYPE state;
-  
-  if (OMX_GetState(ILC_GET_HANDLE(egl_render), &state) != OMX_ErrorNone) {
-	  printf("OMX_FillThisBuffer failed while getting egl_render component state\n");
-	  return;
-  }	
-	
-  if (state != OMX_StateExecuting)
-	return;
-	
-  if (OMX_FillThisBuffer(ilclient_get_handle(egl_render), eglBuffer) != OMX_ErrorNone)
-      printf("OMX_FillThisBuffer failed in callback\n");
+   OMX_STATETYPE state;
 
+   if (OMX_GetState(ILC_GET_HANDLE(egl_render), &state) != OMX_ErrorNone) {
+      printf("OMX_FillThisBuffer failed while getting egl_render component state\n");
+      return;
+   }
+
+   if (state != OMX_StateExecuting)
+      return;
+
+   if (OMX_FillThisBuffer(ilclient_get_handle(egl_render), eglBuffer) != OMX_ErrorNone)
+      printf("OMX_FillThisBuffer failed in callback\n");
 }
 
 
@@ -295,12 +293,12 @@ void *video_decode_test(void* arg)
    omx_err = OMX_SendCommand(ILC_GET_HANDLE(egl_render), OMX_CommandStateSet, OMX_StateLoaded, 0);
    
    if (omx_err != OMX_ErrorNone && omx_err != OMX_ErrorSameState)
-        printf("Could not do OMX_CommandStateSet to OMX_StateLoaded for egl_render, omx_err(0x%x)\n", omx_err);
+      printf("Could not do OMX_CommandStateSet to OMX_StateLoaded for egl_render, omx_err(0x%x)\n", omx_err);
 
    omx_err = OMX_FreeBuffer(ILC_GET_HANDLE(egl_render), 221, eglBuffer);
    if (omx_err != OMX_ErrorNone)
-		printf("OMX_FreeBuffer failed, omx_err(0x%x)\n", omx_err);
-        
+      printf("OMX_FreeBuffer failed, omx_err(0x%x)\n", omx_err);
+
    /*
     * Put the egl_render back into the list for the proper components release
     */

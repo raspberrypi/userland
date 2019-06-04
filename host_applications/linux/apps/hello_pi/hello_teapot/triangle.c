@@ -444,9 +444,9 @@ static void exit_func(void)
 } // exit_func()
 
 void sig_handler(int signo) {
-	
-	terminate = 1;
-	
+
+   terminate = 1;
+
 }
 
 //==============================================================================
