@@ -678,7 +678,6 @@ void vcsm_free( unsigned int handle )
                       rc
                         );
 
-      vcos_log_error("[%s]: Free fd %d", __func__, elem->fd);
       close(elem->fd);
 
       vcsm_payload_list_release(elem);
