@@ -662,6 +662,18 @@ static int32_t tvservice_send_command(uint32_t command, uint32_t display_id, voi
    vector[vector_idx].vec_len = sizeof(command);
    vector_idx++;
 
+   if(vcos_verify(command < VC_TV_END_OF_LIST))
+   {
+      vcos_log_trace("[%s] command:%s param length %d %s", VCOS_FUNCTION,
+                     get_command_string(command), length,
+                     (has_reply)? "has reply" : " no reply");
+   }
+   else
+   {
+      vcos_log_error("[%s] not sending invalid command %d", VCOS_FUNCTION, command);
+      return -1;
+   }
+
    if (display_id != INVALID_DISPLAY_ID)
    {
       vector[vector_idx].vec_base = &display_id;
@@ -678,15 +690,6 @@ static int32_t tvservice_send_command(uint32_t command, uint32_t display_id, voi
    int32_t success = 0;
    TV_GENERAL_RESP_T response;
    response.ret = -1;
-
-   if(vcos_verify(command < VC_TV_END_OF_LIST)) {
-      vcos_log_trace("[%s] command:%s param length %d %s", VCOS_FUNCTION,
-                     get_command_string(command), length,
-                     (has_reply)? "has reply" : " no reply");
-   } else {
-      vcos_log_error("[%s] not sending invalid command %d", VCOS_FUNCTION, command);
-      return -1;
-   }
 
    if(tvservice_lock_obtain() == 0)
    {
