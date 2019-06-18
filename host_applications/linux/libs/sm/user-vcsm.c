@@ -2150,13 +2150,14 @@ int vcsm_clean_invalid2( struct vcsm_user_clean_invalid2_s *s )
 /*    FIXME: What's the best way of doing this?
       rc = ioctl( vcsm_handle,
                    VC_SM_CMA_IOCTL_MEM_CLEAN_INVALID2,
-                   &s ); */
+                   s ); */
+      rc = -1;
    }
    else
    {
       rc = ioctl( vcsm_handle,
                    VMCS_SM_IOCTL_MEM_CLEAN_INVALID2,
-                   &s );
+                   s );
    }
 
    return rc;
