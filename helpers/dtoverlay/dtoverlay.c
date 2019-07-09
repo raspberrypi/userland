@@ -1251,12 +1251,13 @@ int dtoverlay_override_one_target(int override_type,
 	     break;
 	 }
 
-	 if (prop_buf && (strcmp(prop_name, "reg") != 0)) // Don't create or extend "reg" - it must be a pseudo-property
-	 {
-	     /* Add/extend the property by setting it */
-             err = fdt_setprop(dtb->fdt, node_off, prop_name, prop_buf, new_prop_len);
-	     free(prop_buf);
-	 }
+         if (prop_buf)
+         {
+            /* Add/extend the property by setting it */
+            if (strcmp(prop_name, "reg") != 0) // Don't create or extend "reg" - it must be a pseudo-property
+               err = fdt_setprop(dtb->fdt, node_off, prop_name, prop_buf, new_prop_len);
+            free(prop_buf);
+         }
 
          if (strcmp(prop_name, "reg") == 0 && target_off == 0)
          {
