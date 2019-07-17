@@ -35,6 +35,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <time.h>
 
 #include "interface/vmcs_host/vc_vchi_gencmd.h"
+#include "interface/vmcs_host/vc_gencmd_defs.h"
 
 void show_usage()
 {
@@ -91,7 +92,7 @@ int main( int argc, char **argv )
       }
 
       int i = 1;
-      char buffer[ 1024 ];
+      char buffer[ GENCMDSERVICE_MSGFIFO_SIZE ];
       size_t buffer_offset = 0;
       clock_t before=0, after=0;
       double time_diff;
@@ -128,6 +129,7 @@ int main( int argc, char **argv )
       {
          printf( "vc_gencmd_read_response returned %d\n", ret );
       }
+      buffer[ sizeof(buffer) - 1 ] = 0;
 
       if( show_time )
       {
