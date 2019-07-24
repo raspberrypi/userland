@@ -40,7 +40,7 @@ static const MMALOMX_PARAM_ENUM_TRANSLATE_T mmalomx_param_enum_awb_mode[] = {
    {MMAL_PARAM_AWBMODE_INCANDESCENT,OMX_WhiteBalControlIncandescent},
    {MMAL_PARAM_AWBMODE_FLASH,       OMX_WhiteBalControlFlash},
    {MMAL_PARAM_AWBMODE_HORIZON,     OMX_WhiteBalControlHorizon},
-   {MMAL_PARAM_AWBMODE_GREYWORLD,   OMX_WhiteBalControlGreyWorld}
+   {MMAL_PARAM_AWBMODE_GREYWORLD,   OMX_WhiteBalControlGreyWorld},
 };
 
 static const MMALOMX_PARAM_ENUM_TRANSLATE_T mmalomx_param_enum_image_effect[] = {
