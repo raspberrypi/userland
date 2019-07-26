@@ -18,6 +18,10 @@
 #include <string.h>
 #include <limits.h>
 
+#ifdef __bitwise
+#undef __bitwise
+#endif
+
 #ifdef __CHECKER__
 #define FDT_FORCE __attribute__((force))
 #define FDT_BITWISE __attribute__((bitwise))
