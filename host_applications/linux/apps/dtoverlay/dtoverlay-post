@@ -8,9 +8,6 @@ CMD="lxpanelctl command volumealsabt start > /dev/null"
 
 for PID in $(pgrep -x lxpanel); do
 	eval "$(grep -z "DISPLAY=" "/proc/$PID/environ" | tr -d '\0')"
-	if [ "$EUID" -ne 0 ]; then
-		exec $CMD
-	fi
 	user="$(ps -p "$PID" -o uname=)"
 	su "$user" -c "$CMD"
 done
