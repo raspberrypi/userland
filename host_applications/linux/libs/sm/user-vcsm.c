@@ -75,6 +75,7 @@ typedef struct VCSM_PAYLOAD_ELEM_T
    uint32_t vc_handle;     // VPU reloc heap handle
    uint8_t *mem;           // mmap'ed address
    unsigned int size;      // size of mmap
+   uint32_t dma_addr;      // VPU address for the buffer
    int in_use;
 } VCSM_PAYLOAD_ELEM_T;
 
@@ -474,6 +475,13 @@ unsigned int vcsm_malloc_cache( unsigned int size, VCSM_CACHE_TYPE_T cache, cons
       payload->vc_handle = alloc.vc_handle;
       payload->mem = usr_ptr;
       payload->size = size_aligned;
+      if (alloc.dma_addr & 0xFFFFFFFF00000000ULL)
+      {
+         vcos_log_error("[%s]: dma address returned > 32bit 0x%llx", __func__, alloc.dma_addr);
+         payload->dma_addr = 0;
+      }
+      else
+         payload->dma_addr = (uint32_t)alloc.dma_addr;
    }
    else
    {
@@ -1021,7 +1029,17 @@ unsigned int vcsm_vc_addr_from_hdl( unsigned int handle )
       // Admittedly VideoCore is only 32-bit, so there could be an
       // implementation returning a VPU bus address which would fit in an
       // unsigned int. TODO.
-      return 0;
+      VCSM_PAYLOAD_ELEM_T *elem;
+
+      elem = vcsm_payload_list_find_handle(handle);
+
+      if (!elem)
+      {
+         vcos_log_trace( "[%s]: handle %u not tracked, or not mapped. \n",
+                      __func__, handle);
+         return 0;
+      }
+      return elem->dma_addr;
    }
    else
    {
@@ -2264,6 +2282,13 @@ unsigned int vcsm_import_dmabuf( int dmabuf, const char *name )
          payload->vc_handle = import.vc_handle;
          payload->mem = usr_ptr;
          payload->size = import.size;
+         if (import.dma_addr & 0xFFFFFFFF00000000ULL)
+         {
+            vcos_log_error("[%s]: dma address returned > 32bit 0x%llx", __func__, import.dma_addr);
+            payload->dma_addr = 0;
+         }
+         else
+            payload->dma_addr = (uint32_t)import.dma_addr;
       }
    }
    else
