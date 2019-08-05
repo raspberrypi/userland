@@ -2165,11 +2165,27 @@ int vcsm_clean_invalid2( struct vcsm_user_clean_invalid2_s *s )
 
    if (using_vc_sm_cma)
    {
-/*    FIXME: What's the best way of doing this?
+      struct vmcs_sm_ioctl_clean_invalid2 *vcsm_s;
+      int i;
+
+      vcsm_s = (struct vmcs_sm_ioctl_clean_invalid2 *)malloc(sizeof(*vcsm_s) + sizeof(struct vc_sm_cma_ioctl_clean_invalid_block)*s->op_count);
+      if (!vcsm_s)
+         return -1;
+
+      vcsm_s->op_count = s->op_count;
+      for (i = 0; i < vcsm_s->op_count; i++)
+      {
+         vcsm_s->s[i].invalidate_mode = s->s[i].invalidate_mode;
+         vcsm_s->s[i].block_count = s->s[i].block_count;
+         vcsm_s->s[i].start_address = s->s[i].start_address;
+         vcsm_s->s[i].block_size = s->s[i].block_size;
+         vcsm_s->s[i].inter_block_stride = s->s[i].inter_block_stride;
+      }
+
       rc = ioctl( vcsm_handle,
                    VC_SM_CMA_IOCTL_MEM_CLEAN_INVALID2,
-                   s ); */
-      rc = -1;
+                   vcsm_s );
+      free(vcsm_s);
    }
    else
    {
