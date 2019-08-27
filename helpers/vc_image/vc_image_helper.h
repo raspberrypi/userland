@@ -161,7 +161,7 @@ int calculate_pitch(VC_IMAGE_TYPE_T type, int width, int height, uint8_t num_cha
 
 /* Check if an image will use an alternate memory layout, in order to cope with
  * codec limitation. Applies to YUV_UV images taller than 1344 lines. */
-int vc_image_is_tall_yuv_uv(VC_IMAGE_TYPE_T type, int height);
+int vc_image_is_tall_yuv_uv(VC_IMAGE_T *image);
 
 /******************************************************************************
 Data member access.
