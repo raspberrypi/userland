@@ -49,7 +49,8 @@ enum
    CommandPreview,
    CommandFullScreen,
    CommandOpacity,
-   CommandDisablePreview
+   CommandDisablePreview,
+   CommandDisplayNum,
 };
 
 static COMMAND_LIST cmdline_commands[] =
@@ -58,6 +59,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandFullScreen,    "-fullscreen", "f",  "Fullscreen preview mode", 0 },
    { CommandOpacity,       "-opacity",    "op", "Preview window opacity (0-255)", 1},
    { CommandDisablePreview,"-nopreview",  "n",  "Do not display a preview window", 0},
+   { CommandDisplayNum,    "-dispnum",    "dn", "Display on which to display the preview window (dispmanx/tvservice numbering)", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -129,6 +131,12 @@ MMAL_STATUS_T raspipreview_create(RASPIPREVIEW_PARAMETERS *state)
          param.dest_rect = state->previewWindow;
       }
 
+      if (state->display_num >= 0)
+      {
+         param.set |= MMAL_DISPLAY_SET_NUM;
+         param.display_num = state->display_num;
+      }
+
       status = mmal_port_parameter_set(preview_port, &param.hdr);
 
       if (status != MMAL_SUCCESS && status != MMAL_ENOSYS)
@@ -191,6 +199,7 @@ void raspipreview_set_defaults(RASPIPREVIEW_PARAMETERS *state)
    state->previewWindow.width = 1024;
    state->previewWindow.height = 768;
    state->preview_component = NULL;
+   state->display_num = -1;
 }
 
 /**
@@ -268,6 +277,13 @@ int raspipreview_parse_cmdline(RASPIPREVIEW_PARAMETERS *params, const char *arg1
    case CommandDisablePreview: // Turn off preview output
       params->wantPreview = 0;
       used = 1;
+      break;
+
+   case CommandDisplayNum:
+      if (sscanf(arg2, "%d", &params->display_num) != 1)
+         params->display_num = -1;
+      else
+         used = 2;
       break;
    }
 
