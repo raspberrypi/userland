@@ -26,6 +26,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <stdio.h>
+#include "include/bcm_host.h"
 #include "interface/vmcs_host/vc_dispmanx.h"
 #include "interface/vmcs_host/vc_vchi_gencmd.h"
 #include "interface/vmcs_host/vc_vchi_bufman.h"
@@ -168,4 +169,148 @@ unsigned bcm_host_get_sdram_address(void)
    return address == ~0 ? 0x40000000 : address;
 }
 
+static int read_string_from_file(const char *filename, const char *format, unsigned int *value)
+{
+   FILE *fin;
+   char str[256];
+   int found = 0;
 
+   fin = fopen(filename, "rt");
+
+   if (fin == NULL)
+      return 0;
+
+   while (fgets(str, sizeof(str), fin) != NULL)
+   {
+      if (value)
+      {
+         if (sscanf(str, format, value) == 1)
+         {
+            found = 1;
+            break;
+         }
+      }
+      else
+      {
+         if (!strcmp(str, format))
+         {
+            found = 1;
+            break;
+         }
+      }
+   }
+
+   fclose(fin);
+
+   return found;
+}
+
+static unsigned int get_revision_code()
+{
+   static unsigned int revision_num = -1;
+   unsigned int num;
+   if (revision_num == -1 && read_string_from_file("/proc/cpuinfo", "Revision : %x", &num))
+      revision_num = num;
+   return revision_num;
+}
+
+/* Returns the type of the Pi being used
+*/
+int bcm_host_get_model_type(void)
+{
+   static int model_type = -1;
+   if (model_type != -1)
+      return model_type;
+   unsigned int revision_num = get_revision_code();
+
+   if (!revision_num)
+      model_type = 0;
+
+   // Check for old/new style revision code. Bit 23 will be guaranteed one for new style
+   else if (revision_num & 0x800000)
+      model_type = (revision_num & 0xff0) >> 4;
+   else
+   {
+      // Mask off warrantee and overclock bits.
+      revision_num &= 0xffffff;
+
+      // Map old style to new Type code
+      if (revision_num < 2 || revision_num > 21)
+         return 0;
+
+      static const unsigned char type_map[] =
+      {
+         1,   // B rev 1.0  2
+         1,   // B rev 1.0  3
+         1,   // B rev 2.0  4
+         1,   // B rev 2.0  5
+         1,   // B rev 2.0  6
+         0,   // A rev 2    7
+         0,   // A rev 2    8
+         0,   // A rev 2    9
+         0, 0, 0,  // unused  a,b,c
+         1,   // B  rev 2.0  d
+         1,   // B rev 2.0  e
+         1,   // B rev 2.0  f
+         3,   // B+ rev 1.2 10
+         6,   // CM1        11
+         2,   // A+ rev1.1  12
+         3,   // B+ rev 1.2 13
+         6,   // CM1        14
+         2    // A+         15
+      };
+      model_type = type_map[revision_num-2];
+   }
+
+   return model_type;
+}
+
+/* Returns the type of the Pi being used
+*/
+int bcm_host_is_model_pi4(void)
+{
+   return bcm_host_get_model_type() == 0x11 ? 1 : 0;
+}
+
+/* returns the processor ID
+*/
+int bcm_host_get_processor_id(void)
+{
+   unsigned int revision_num = get_revision_code();
+
+   if (revision_num & 0x800000)
+   {
+      return (revision_num & 0xf000) >> 12;
+   }
+   else
+   {
+      // Old style number only used 2835
+      return BCM_HOST_PROCESSOR_BCM2835;
+   }
+}
+
+
+static int bcm_host_is_fkms_or_kms_active(int kms)
+{
+   if (!read_string_from_file("/proc/device-tree/soc/v3d@7ec00000/status", "okay", NULL) &&
+       !read_string_from_file("/proc/device-tree/v3dbus/v3d@7ec04000/status", "okay", NULL))
+      return 0;
+   else
+      return read_string_from_file("/proc/device-tree/soc/firmwarekms@7e600000/status", "okay", NULL) ^ kms;
+}
+
+int bcm_host_is_fkms_active(void)
+{
+   static int active = -1;
+   if (active == -1)
+      active = bcm_host_is_fkms_or_kms_active(0);
+   return active;
+}
+
+int bcm_host_is_kms_active(void)
+{
+   static int active = -1;
+   if (active == -1)
+      active = bcm_host_is_fkms_or_kms_active(1);
+   return active;
+}
