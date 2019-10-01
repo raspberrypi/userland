@@ -71,6 +71,20 @@ typedef struct dtblob_struct
    int trailer_len;
 } DTBLOB_T;
 
+typedef struct pin_iter_struct
+{
+   DTBLOB_T *dtb;
+   const void *pinctrl;
+   int pinctrl_len;
+   int pinctrl_off;
+   const void *pins;
+   const void *funcs;
+   const void *pulls;
+   int pins_len;
+   int pin_off;
+   int funcs_len;
+   int pulls_len;
+} PIN_ITER_T;
 
 typedef void DTOVERLAY_LOGGING_FUNC(dtoverlay_logging_type_t type,
                                     const char *fmt, va_list args);
@@ -177,6 +191,11 @@ static inline void dtoverlay_dtb_set_trailer(DTBLOB_T *dtb,
     dtb->trailer_len = trailer_len;
     dtb->trailer_is_malloced = 0;
 }
+
+int dtoverlay_find_pins_for_device(DTBLOB_T *dtb, const char *symbol,
+                                   PIN_ITER_T *iter);
+
+int dtoverlay_next_pin(PIN_ITER_T *iter, int *pin, int *func, int *pull);
 
 int dtoverlay_find_phandle(DTBLOB_T *dtb, int phandle);
 

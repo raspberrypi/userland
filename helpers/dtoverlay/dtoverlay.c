@@ -1599,6 +1599,64 @@ int dtoverlay_dup_property(DTBLOB_T *dtb, const char *node_name,
    return err;
 }
 
+int dtoverlay_find_pins_for_device(DTBLOB_T *dtb, const char *symbol,
+                                   PIN_ITER_T *iter)
+{
+   int pos = dtoverlay_find_symbol(dtb, symbol);
+
+   memset(iter, 0, sizeof(*iter));
+
+   if (pos < 0)
+      return pos;
+
+   iter->dtb = dtb;
+
+   if (dtoverlay_node_is_enabled(dtb, pos))
+      iter->pinctrl = dtoverlay_get_property(dtb, pos, "pinctrl-0", &iter->pinctrl_len);
+
+   return 0;
+}
+
+int dtoverlay_next_pin(PIN_ITER_T *iter, int *pin, int *func, int *pull)
+{
+   if (pin)
+      *pin = -1;
+   if (func)
+      *func = -1;
+   if (pull)
+      *pull = -1;
+
+   while (1)
+   {
+      int phandle, pos;
+
+      if ((iter->pin_off) + 4 <= iter->pins_len)
+      {
+         int off = iter->pin_off;
+         *pin = GETBE4(iter->pins, off);
+         if (func && iter->funcs_len)
+            *func = GETBE4(iter->funcs, (iter->funcs_len > 4) ? off : 0);
+         if (pull && iter->pulls_len)
+            *pull = GETBE4(iter->pulls, (iter->pulls_len > 4) ? off : 0);
+         iter->pin_off = off + 4;
+         return 1;
+      }
+
+      if ((iter->pinctrl_off + 4) > iter->pinctrl_len)
+         break;
+
+      phandle = GETBE4(iter->pinctrl, iter->pinctrl_off);
+      iter->pinctrl_off += 4;
+      pos = dtoverlay_find_phandle(iter->dtb, phandle);
+      iter->pins = dtoverlay_get_property(iter->dtb, pos, "brcm,pins", &iter->pins_len);
+      iter->funcs = dtoverlay_get_property(iter->dtb, pos, "brcm,function", &iter->funcs_len);
+      iter->pulls = dtoverlay_get_property(iter->dtb, pos, "brcm,pull", &iter->pulls_len);
+      iter->pin_off = 0;
+   }
+
+   return 0;
+}
+
 DTBLOB_T *dtoverlay_create_dtb(int max_size)
 {
    DTBLOB_T *dtb = NULL;
