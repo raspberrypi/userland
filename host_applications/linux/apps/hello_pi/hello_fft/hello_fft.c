@@ -92,7 +92,7 @@ int main(int argc, char *argv[]) {
         tsq[0]=tsq[1]=0;
         for (j=0; j<jobs; j++) {
             base = fft->out + j*fft->step; // output buffer
-            freq = j+1 & (N/2-1);
+            freq = (j+1) & (N/2-1);
             for (i=0; i<N; i++) {
                 double re = cos(2*GPU_FFT_PI*freq*i/N);
                 tsq[0] += pow(re, 2);
