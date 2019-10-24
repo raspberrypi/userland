@@ -379,13 +379,13 @@ static int do_eventlog(int argc, const char **argv)
    }
    if (log.size != sizeof(log))
    {
-      fprintf(stderr,"MMAL Log size mismatch (got %d, expected %d)\n",
+      fprintf(stderr,"MMAL Log size mismatch (got %d, expected %zu)\n",
               log.size, sizeof(log));
       goto fail;
    }
    if (log.elemsize != sizeof(MMAL_DBG_ENTRY_T))
    {
-      fprintf(stderr,"MMAL log element size mismatch (got %d, expected %d)\n",
+      fprintf(stderr,"MMAL log element size mismatch (got %d, expected %zu)\n",
               log.elemsize, sizeof(MMAL_DBG_ENTRY_T));
       goto fail;
    }

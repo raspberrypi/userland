@@ -136,7 +136,7 @@ static void *test_mmal_camcorder(void *id)
    value = test_mmal_start_camcorder(&stop, behaviour);
 
    LOG_TRACE("Thread terminating, result %d", value);
-   return (void *)value;
+   return (void *)(uintptr_t)value;
 }
 
 /*****************************************************************************/
