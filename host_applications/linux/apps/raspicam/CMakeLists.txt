@@ -29,15 +29,6 @@ execute_process(
 )
 add_definitions("-DGIT_TAINTED=${GIT_TAINTED}")
 
-set (GL_SCENE_SOURCES
-   gl_scenes/models.c
-   gl_scenes/mirror.c
-   gl_scenes/yuv.c
-   gl_scenes/sobel.c
-   gl_scenes/square.c
-   gl_scenes/teapot.c
-   gl_scenes/vcsm_square.c)
-
 set (COMMON_SOURCES
    RaspiCamControl.c
    RaspiCLI.c
@@ -47,14 +38,28 @@ set (COMMON_SOURCES
    RaspiGPS.c
    libgps_loader.c)
 
-add_executable(raspistill ${COMMON_SOURCES} RaspiStill.c  RaspiTex.c RaspiTexUtil.c tga.c ${GL_SCENE_SOURCES} )
+if(NOT ARM64)
+  set (EGL_LIBS brcmGLESv2 brcmEGL)
+  set (EGL_SOURCES RaspiTex.c RaspiTexUtil.c tga.c)
+  set (GL_SCENE_SOURCES
+     gl_scenes/models.c
+     gl_scenes/mirror.c
+     gl_scenes/yuv.c
+     gl_scenes/sobel.c
+     gl_scenes/square.c
+     gl_scenes/teapot.c
+     gl_scenes/vcsm_square.c)
+else()
+  set (EGL_SOURCES RaspiTexStub.c)
+endif()
+
+add_executable(raspistill ${COMMON_SOURCES} RaspiStill.c  ${EGL_SOURCES} ${GL_SCENE_SOURCES} )
 add_executable(raspiyuv   ${COMMON_SOURCES} RaspiStillYUV.c)
 add_executable(raspivid   ${COMMON_SOURCES} RaspiVid.c)
 add_executable(raspividyuv  ${COMMON_SOURCES} RaspiVidYUV.c)
 
 set (MMAL_LIBS mmal_core mmal_util mmal_vc_client)
-
-target_link_libraries(raspistill ${MMAL_LIBS} vcos bcm_host brcmGLESv2 brcmEGL m dl)
+target_link_libraries(raspistill ${MMAL_LIBS} vcos bcm_host ${EGL_LIBS} m dl)
 target_link_libraries(raspiyuv   ${MMAL_LIBS} vcos bcm_host)
 target_link_libraries(raspivid   ${MMAL_LIBS} vcos bcm_host)
 target_link_libraries(raspividyuv   ${MMAL_LIBS} vcos bcm_host)
