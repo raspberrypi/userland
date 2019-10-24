@@ -189,7 +189,7 @@ static MMAL_BOOL_T spdif_do_processing(MMAL_COMPONENT_T *component)
       goto end;
    }
 
-   LOG_DEBUG("frame: %lld, size %i", in->pts, in->length);
+   LOG_DEBUG("frame: %" PRId64 ", size %i", in->pts, in->length);
    mmal_buffer_header_mem_lock(out);
    mmal_buffer_header_mem_lock(in);
    in_data = in->data + in->offset;

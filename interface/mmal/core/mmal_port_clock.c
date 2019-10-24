@@ -102,7 +102,7 @@ static MMAL_STATUS_T mmal_port_clock_process_buffer(MMAL_PORT_T *port, MMAL_BUFF
 
    if (buffer->length != sizeof(MMAL_CLOCK_EVENT_T))
    {
-      LOG_ERROR("invalid buffer length %d expected %d",
+      LOG_ERROR("invalid buffer length %d expected %zu",
                 buffer->length, sizeof(MMAL_CLOCK_EVENT_T));
       return MMAL_EINVAL;
    }

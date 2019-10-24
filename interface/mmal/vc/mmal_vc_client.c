@@ -854,7 +854,7 @@ MMAL_STATUS_T mmal_vc_send_message(MMAL_CLIENT_T *client,
    VCHIQ_ELEMENT_T elems[] = {{msg_header, size}};
    MMAL_BOOL_T using_bulk_transfer = (data_size != 0);
 
-   LOG_TRACE("len %d", data_size);
+   LOG_TRACE("len %zu", data_size);
    vcos_assert(size >= sizeof(mmal_worker_msg_header));
 
    if (!client->inited)
@@ -882,7 +882,7 @@ MMAL_STATUS_T mmal_vc_send_message(MMAL_CLIENT_T *client,
 
    if (using_bulk_transfer)
    {
-      LOG_TRACE("bulk transmit: %p, %i", data, data_size);
+      LOG_TRACE("bulk transmit: %p, %zu", data, data_size);
 
       data_size = (data_size + 3) & ~3;
       vst = vchiq_queue_bulk_transmit(client->service, data, data_size, msg_header);

@@ -1145,7 +1145,7 @@ static MMAL_STATUS_T mmal_vc_port_parameter_set(MMAL_PORT_T *port, const MMAL_PA
 
    if(param->size > MMAL_WORKER_PORT_PARAMETER_SET_MAX)
    {
-      LOG_ERROR("parameter too large (%u > %u)", param->size, MMAL_WORKER_PORT_PARAMETER_SET_MAX);
+      LOG_ERROR("parameter too large (%u > %zu)", param->size, MMAL_WORKER_PORT_PARAMETER_SET_MAX);
       return MMAL_ENOSPC;
    }
 
@@ -1204,7 +1204,7 @@ static MMAL_STATUS_T mmal_vc_port_parameter_get(MMAL_PORT_T *port, MMAL_PARAMETE
 
    if(param->size > MMAL_WORKER_PORT_PARAMETER_GET_MAX)
    {
-      LOG_ERROR("parameter too large (%u > %u) id %u", param->size,
+      LOG_ERROR("parameter too large (%u > %zu) id %u", param->size,
             MMAL_WORKER_PORT_PARAMETER_GET_MAX, param->id);
       return MMAL_ENOMEM;
    }
@@ -1275,7 +1275,7 @@ static uint8_t *mmal_vc_port_payload_alloc(MMAL_PORT_T *port, uint32_t payload_s
    {
       MMAL_OPAQUE_IMAGE_HANDLE_T h = mmal_vc_opaque_alloc_desc(port->name);
       can_deref = MMAL_FALSE;
-      ret = (void*)h;
+      ret = (void*)(uintptr_t)h;
       if (!ret)
       {
          LOG_ERROR("%s: failed to allocate %d bytes opaque memory",
@@ -1324,7 +1324,7 @@ static void mmal_vc_port_payload_free(MMAL_PORT_T *port, uint8_t *payload)
    if (module->opaque_allocs)
    {
       module->opaque_allocs--;
-      mmal_vc_opaque_release((MMAL_OPAQUE_IMAGE_HANDLE_T)payload);
+      mmal_vc_opaque_release((MMAL_OPAQUE_IMAGE_HANDLE_T)(uintptr_t)payload);
       return;
    }
 

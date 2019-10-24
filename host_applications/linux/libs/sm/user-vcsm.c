@@ -906,7 +906,7 @@ unsigned int vcsm_vc_hdl_from_ptr( void *usr_ptr )
       memset( &map, 0, sizeof(map) );
 
       map.pid  = getpid();
-      map.addr = (unsigned int) usr_ptr;
+      map.addr = (uintptr_t) usr_ptr;
 
       rc = ioctl( vcsm_handle,
                   VMCS_SM_IOCTL_MAP_VC_HDL_FR_ADDR,
@@ -1163,7 +1163,7 @@ void *vcsm_usr_address( unsigned int handle )
                          map.handle,
                          map.addr );
 
-         return (void*)map.addr;
+         return (void*)(uintptr_t)map.addr;
       }
    }
 }
@@ -1211,7 +1211,7 @@ unsigned int vcsm_usr_handle( void *usr_ptr )
       memset( &map, 0, sizeof(map) );
 
       map.pid = getpid();
-      map.addr = (unsigned int) usr_ptr;
+      map.addr = (uintptr_t) usr_ptr;
 
       rc = ioctl( vcsm_handle,
                   VMCS_SM_IOCTL_MAP_USR_HDL,
@@ -1360,14 +1360,14 @@ void *vcsm_lock( unsigned int handle )
          goto out;
       }
 
-      usr_ptr = (void *) lock_unlock.addr;
+      usr_ptr = (void *) (uintptr_t)lock_unlock.addr;
 
       /* If applicable, invalidate the cache now.
       */
       if ( usr_ptr && sz.size )
       {
          cache.handle = sz.handle;
-         cache.addr   = (unsigned int) usr_ptr;
+         cache.addr   = (uintptr_t) usr_ptr;
          cache.size   = sz.size;
 
          rc = ioctl( vcsm_handle,
@@ -1527,7 +1527,7 @@ void *vcsm_lock_cache( unsigned int handle,
       */
       if ( chk.addr && chk.size )
       {
-         munmap( (void *)chk.addr, chk.size );
+         munmap( (void *)(uintptr_t)chk.addr, chk.size );
 
          vcos_log_trace( "[%s]: [%d]: ioctl unmap hdl: %x",
                          __func__,
@@ -1608,7 +1608,7 @@ void *vcsm_lock_cache( unsigned int handle,
       if ( usr_ptr && cache.size )
       {
          cache.handle = chk.handle;
-         cache.addr   = (unsigned int) usr_ptr;
+         cache.addr   = (uintptr_t) usr_ptr;
 
          rc = ioctl( vcsm_handle,
                      VMCS_SM_IOCTL_MEM_INVALID,
@@ -1728,7 +1728,7 @@ int vcsm_unlock_ptr_sp( void *usr_ptr, int cache_no_flush )
       /* Retrieve the handle of the memory we want to unlock.
       */
       map.pid = getpid();
-      map.addr = (unsigned int) usr_ptr;
+      map.addr = (uintptr_t) usr_ptr;
 
       rc = ioctl( vcsm_handle,
                   VMCS_SM_IOCTL_MAP_USR_HDL,
