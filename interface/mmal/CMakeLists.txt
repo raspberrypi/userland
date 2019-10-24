@@ -11,8 +11,10 @@ add_subdirectory(core)
 add_subdirectory(util)
 add_subdirectory(vc)
 add_subdirectory(components)
-add_subdirectory(openmaxil)
-add_subdirectory(client)
+if(NOT ARM64)
+   add_subdirectory(openmaxil)
+   add_subdirectory(client)
+endif()
 
 target_link_libraries(mmal mmal_core mmal_util mmal_vc_client vcos mmal_components)
 
