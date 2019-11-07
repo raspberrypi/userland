@@ -1,6 +1,6 @@
 #!/bin/bash
 BUILDTYPE=Release
-ARCH=`arch`
+ARCH=$(uname -m)
 ARM64=OFF
 CMAKE_TOOLCHAIN_FILE=../../../makefiles/cmake/toolchains/arm-linux-gnueabihf.cmake
 
