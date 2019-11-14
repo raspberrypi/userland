@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "gps.h"
 
 // IMPORTANT: Remember to copy gps.h from gpsd when upgrading libgps version.
-#define LIBGPS_SO_VERSION     "libgps.so.22"
+#define LIBGPS_SO_VERSION     "libgps.so.23"
 
 /** Structure containing all libgps information
  */

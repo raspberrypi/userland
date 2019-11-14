@@ -1,48 +1,7 @@
 /* gps.h -- interface of the libgps library */
 /*
  * This file is Copyright (c) 2010 by the GPSD project
- *
- * 			COPYRIGHTS
- *
- * Compilation copyright is held by the GPSD project.  All rights reserved.
- *
- * GPSD project copyrights are assigned to the project lead, currently
- * Eric S. Raymond. Other portions of the GPSD code are Copyright (c)
- * 1997, 1998, 1999, 2000, 2001, 2002 by Remco Treffkorn, and others
- * Copyright (c) 2005 by Eric S. Raymond.  For other copyrights, see
- * individual files.
- *
- * 			BSD LICENSE
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:<P>
- *
- * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.<P>
- *
- * Redistributions in binary form must reproduce the above copyright
- * notice, this list of conditions and the following disclaimer in the
- * documentation and/or other materials provided with the distribution.<P>
- *
- * Neither name of the GPSD project nor the names of its contributors
- * may be used to endorse or promote products derived from this software
- * without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR
- * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
- * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
- * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-/*
- * This file originated from GPSD version 3.11.
+ * BSD terms apply: see the file COPYING in the distribution root for details.
  */
 #ifndef _GPSD_GPS_H_
 #define _GPSD_GPS_H_
@@ -103,6 +62,17 @@ extern "C" {
  * UNIX time to nanoSec precision after 2038 is 63 bits
  * timestamp_t is only microSec precision
  * timestamp_t and PPS do not play well together
+ */
+
+/* we want cm accuracy and 0.0000001 degrees is 1.11 cm at the equator
+ * the equator is best case for longitude. At 45lat cut that in half.
+ * at 85lat make it 0.00000001
+ *
+ * this easily fits in a C double which has 15.95 digits of precision
+ * printf() format %f defaults to %.6f, which will truncate the result.
+ * so print with %.7f if you have a survey grade GPS.
+ *
+ * ref: https://en.wikipedia.org/wiki/Decimal_degrees
  */
 typedef double timestamp_t;	/* Unix time in seconds with fractional part */
 
@@ -312,7 +282,7 @@ struct rtcm3_basic_rtk {
     unsigned int channel;	/* Satellite Frequency Channel Number
 				   (GLONASS only) */
     double pseudorange;		/* Pseudorange */
-    double rangediff;		/* PhaseRange – Pseudorange in meters */
+    double rangediff;		/* PhaseRange - Pseudorange in meters */
     unsigned char locktime;	/* Lock time Indicator */
 };
 
@@ -321,7 +291,7 @@ struct rtcm3_extended_rtk {
     unsigned int channel;	/* Satellite Frequency Channel Number
 				   (GLONASS only) */
     double pseudorange;		/* Pseudorange */
-    double rangediff;		/* PhaseRange – L1 Pseudorange */
+    double rangediff;		/* PhaseRange - L1 Pseudorange */
     unsigned char locktime;	/* Lock time Indicator */
     unsigned char ambiguity;	/* Integer Pseudorange
 					   Modulus Ambiguity */
@@ -563,7 +533,7 @@ struct rtcm3_t {
 	    char receiver[RTCM3_MAX_DESCRIPTOR+1];	/* Receiver string */
 	    char firmware[RTCM3_MAX_DESCRIPTOR+1];	/* Firmware string */
 	} rtcm3_1033;
-	char data[1024];		/* Max RTCM3 msg length is 1023 bytes */
+	unsigned char data[1024];	/* Max RTCM3 msg length is 1023 bytes */
     } rtcmtypes;
 };
 
@@ -970,8 +940,10 @@ struct ais_t
 	struct {
 	    unsigned int ais_version;	/* AIS version level */
 	    unsigned int imo;		/* IMO identification */
+	    // cppcheck-suppress arrayIndexOutOfBounds
 	    char callsign[7+1];		/* callsign */
 #define AIS_SHIPNAME_MAXLEN	20
+	    // cppcheck-suppress arrayIndexOutOfBounds
 	    char shipname[AIS_SHIPNAME_MAXLEN+1];	/* vessel name */
 	    unsigned int shiptype;	/* ship type code */
 	    unsigned int to_bow;	/* dimension to bow */
@@ -1000,6 +972,7 @@ struct ais_t
 #define AIS_TYPE6_BINARY_MAX	920	/* 920 bits */
 	    size_t bitcount;		/* bit count of the data */
 	    union {
+		// cppcheck-suppress arrayIndexOutOfBounds
 		char bitdata[(AIS_TYPE6_BINARY_MAX + 7) / 8];
 		/* Inland AIS - ETA at lock/bridge/terminal */
 		struct {
@@ -1270,6 +1243,7 @@ struct ais_t
 	    size_t bitcount;		/* bit count of the data */
 	    bool structured;		/* True match for DAC/FID? */
 	    union {
+		// cppcheck-suppress arrayIndexOutOfBounds
 		char bitdata[(AIS_TYPE8_BINARY_MAX + 7) / 8];
 		/* Inland static ship and voyage-related data */
 		struct {
@@ -1452,6 +1426,7 @@ struct ais_t
 			    unsigned int mmsi;
 			    unsigned int imo;
 #define DAC1FID17_ID_LENGTH		7
+			    // cppcheck-suppress arrayIndexOutOfBounds
 			    char callsign[DAC1FID17_ID_LENGTH+1];
 			    char other[DAC1FID17_ID_LENGTH+1];
 			} id;
@@ -1672,6 +1647,7 @@ struct ais_t
 	    unsigned int heading;	/* true heading */
 	    unsigned int second;	/* seconds of UTC timestamp */
 	    unsigned int regional;	/* regional reserved */
+	    // cppcheck-suppress arrayIndexOutOfBounds
 	    char shipname[AIS_SHIPNAME_MAXLEN+1];		/* ship name */
 	    unsigned int shiptype;	/* ship type code */
 	    unsigned int to_bow;	/* dimension to bow */
@@ -1827,10 +1803,11 @@ struct ais_t
     };
 };
 
+/* basic data, per PRN, from GPGSA and GPGSV */
 struct satellite_t {
     double ss;		/* signal-to-noise ratio (dB) */
-    bool used;		/* PRNs of satellites used in solution */
-    short PRN;		/* PRNs of satellite */
+    bool used;		/* this satellite used in solution */
+    short PRN;		/* PRN of this satellite */
     short elevation;	/* elevation of satellite */
     short azimuth;	/* azimuth */
 };
@@ -1948,6 +1925,13 @@ struct timedelta_t {
 };
 #endif /* TIMEDELTA_DEFINED */
 
+struct oscillator_t {
+    bool running;			/* oscillator is running */
+    bool reference;			/* PPS reference is available */
+    bool disciplined;			/* oscillator is GPS-disciplined */
+    int delta;				/* last observed PPS delta */
+};
+
 /*
  * Someday we may support Windows, under which socket_t is a separate type.
  * In the meantime, having a typedef for this semantic kind is no bad thing,
@@ -2012,7 +1996,8 @@ struct gps_data_t {
 #define TOFF_SET	(1llu<<32)	/* not yet used */
 #define PPS_SET 	(1llu<<33)
 #define NAVDATA_SET     (1llu<<34)
-#define SET_HIGH_BIT	35
+#define OSCILLATOR_SET	(1llu<<35)
+#define SET_HIGH_BIT	36
     timestamp_t online;		/* NZ if GPS is on line, 0 if not.
 				 *
 				 * Note: gpsd clears this time when sentences
@@ -2036,7 +2021,8 @@ struct gps_data_t {
     /* GPS status -- always valid */
     int    status;		/* Do we have a fix? */
 #define STATUS_NO_FIX	0	/* no */
-#define STATUS_FIX	1	/* yes */
+#define STATUS_FIX	1	/* yes, without DGPS */
+#define STATUS_DGPS_FIX	2	/* yes, with DGPS */
 
     /* precision of fix -- valid if satellites_used > 0 */
     int satellites_used;	/* Number of satellites used in solution */
@@ -2061,7 +2047,7 @@ struct gps_data_t {
     } devices;
 
     /* pack things never reported together to reduce structure size */
-#define UNION_SET	(RTCM2_SET|RTCM3_SET|SUBFRAME_SET|AIS_SET|ATTITUDE_SET|GST_SET|VERSION_SET|LOGMESSAGE_SET|ERROR_SET|TOFF_SET|PPS_SET)
+#define UNION_SET	(RTCM2_SET|RTCM3_SET|SUBFRAME_SET|AIS_SET|ATTITUDE_SET|GST_SET|OSCILLATOR_SET|VERSION_SET|LOGMESSAGE_SET|ERROR_SET|TOFF_SET|PPS_SET)
     union {
 	/* unusual forms of sensor data that might come up the pipe */
 	struct rtcm2_t	rtcm2;
@@ -2072,6 +2058,7 @@ struct gps_data_t {
         struct navdata_t navdata;
 	struct rawdata_t raw;
 	struct gst_t gst;
+	struct oscillator_t osc;
 	/* "artificial" structures for various protocol responses */
 	struct version_t version;
 	char error[256];
@@ -2101,6 +2088,8 @@ int json_toff_read(const char *buf, struct gps_data_t *,
 		  const char **);
 int json_pps_read(const char *buf, struct gps_data_t *,
 		  const char **);
+int json_oscillator_read(const char *buf, struct gps_data_t *,
+			 const char **);
 
 /* dependencies on struct gpsdata_t end here */
 
