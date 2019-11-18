@@ -2180,10 +2180,10 @@ int vcsm_clean_invalid2( struct vcsm_user_clean_invalid2_s *s )
 
    if (using_vc_sm_cma)
    {
-      struct vmcs_sm_ioctl_clean_invalid2 *vcsm_s;
+      struct vc_sm_cma_ioctl_clean_invalid2 *vcsm_s;
       int i;
 
-      vcsm_s = (struct vmcs_sm_ioctl_clean_invalid2 *)malloc(sizeof(*vcsm_s) + sizeof(struct vc_sm_cma_ioctl_clean_invalid_block)*s->op_count);
+      vcsm_s = (struct vc_sm_cma_ioctl_clean_invalid2 *)malloc(sizeof(*vcsm_s) + sizeof(struct vc_sm_cma_ioctl_clean_invalid_block)*s->op_count);
       if (!vcsm_s)
          return -1;
 
