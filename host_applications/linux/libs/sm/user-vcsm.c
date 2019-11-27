@@ -834,7 +834,7 @@ void vcsm_status( VCSM_STATUS_T status, int pid )
       case VCSM_STATUS_HOST_WALK_PID_MAP:
       {
          ioctl( vcsm_handle,
-                VMCS_SM_IOCTL_HOST_WALK_PID_ALLOC,
+                VMCS_SM_IOCTL_HOST_WALK_PID_MAP,
                 &walk );
       }
       break;
@@ -842,7 +842,7 @@ void vcsm_status( VCSM_STATUS_T status, int pid )
       case VCSM_STATUS_HOST_WALK_PID_ALLOC:
       {
          ioctl( vcsm_handle,
-                VMCS_SM_IOCTL_HOST_WALK_PID_MAP,
+                VMCS_SM_IOCTL_HOST_WALK_PID_ALLOC,
                 &walk );
       }
       break;
