@@ -328,35 +328,30 @@ orderly_exit:
     return ret;
 }
 
-struct dtparam_state
-{
-    STRING_VEC_T *used_props;
-    const char *override_value;
-};
-
-int dtparam_callback(int override_type,
+int dtparam_callback(int override_type, const char *override_value,
 		     DTBLOB_T *dtb, int node_off,
 		     const char *prop_name, int target_phandle,
 		     int target_off, int target_size,
-		     void *callback_value)
+		     void *callback_state)
 {
-    struct dtparam_state *state = callback_value;
+    STRING_VEC_T *used_props = callback_state;
     char prop_id[80];
     int err;
 
     err = dtoverlay_override_one_target(override_type,
+					override_value,
 					dtb, node_off,
 					prop_name, target_phandle,
 					target_off, target_size,
-					(void *)state->override_value);
+					callback_state);
 
     if ((err == 0) && (target_phandle != 0))
     {
 	if (snprintf(prop_id, sizeof(prop_id), "%08x%s", target_phandle,
 		     prop_name) < 0)
 	    err = FDT_ERR_INTERNAL;
-	else if (string_vec_find(state->used_props, prop_id, 0) < 0)
-	    string_vec_add(state->used_props, prop_id, 0);
+	else if (string_vec_find(used_props, prop_id, 0) < 0)
+	    string_vec_add(used_props, prop_id, 0);
     }
 
     return err;
@@ -367,12 +362,8 @@ int dtparam_apply(DTBLOB_T *dtb, const char *override_name,
 		  const char *override_data, int data_len,
 		  const char *override_value, STRING_VEC_T *used_props)
 {
-    struct dtparam_state state;
     void *data;
     int err;
-
-    state.used_props = used_props;
-    state.override_value = override_value;
 
     /* Copy the override data in case it moves */
     data = malloc(data_len);
@@ -381,8 +372,9 @@ int dtparam_apply(DTBLOB_T *dtb, const char *override_name,
 	memcpy(data, override_data, data_len);
 	err = dtoverlay_foreach_override_target(dtb, override_name,
 						data, data_len,
+						override_value,
 						dtparam_callback,
-						(void *)&state);
+						used_props);
 	free(data);
     }
     else
