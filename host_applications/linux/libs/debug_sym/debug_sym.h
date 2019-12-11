@@ -85,6 +85,17 @@ int OpenVideoCoreMemoryFileWithOffset( const char *filename,
                                        size_t loadOffset );
 
 /*
+ * Get access to the videocore space from a file, explicitly giving the
+ * offset of the load address (the start of the VC binary) relative to the
+ * start of the file, and size of the file.
+ * This allows the use of /dev/mem (which doesn't allow lseek(SEEK_END))
+ */
+int OpenVideoCoreMemoryFileWithOffsetAndSize( const char *filename,
+                                              VC_MEM_ACCESS_HANDLE_T *vcHandlePtr,
+                                              size_t loadOffset,
+                                              size_t loadSize );
+
+/*
  * Returns the number of symbols which were detected.
  */
 unsigned NumVideoCoreSymbols( VC_MEM_ACCESS_HANDLE_T handle );
