@@ -177,7 +177,7 @@ int OpenVideoCoreMemoryFile( const char *filename, VC_MEM_ACCESS_HANDLE_T *vcHan
     return OpenVideoCoreMemoryFileWithOffset( filename, vcHandlePtr, 0 );
 }
 
-int OpenVideoCoreMemoryFileWithOffset( const char *filename, VC_MEM_ACCESS_HANDLE_T *vcHandlePtr, size_t loadOffset )
+int OpenVideoCoreMemoryFileWithOffsetAndSize( const char *filename, VC_MEM_ACCESS_HANDLE_T *vcHandlePtr, size_t loadOffset, size_t loadSize )
 {
     int                     rc = 0;
     VC_MEM_ACCESS_HANDLE_T  newHandle;
@@ -202,15 +202,59 @@ int OpenVideoCoreMemoryFileWithOffset( const char *filename, VC_MEM_ACCESS_HANDL
 
     if ( filename == NULL )
     {
-        newHandle->use_vc_mem = 1;
         filename = "/dev/vc-mem";
+        newHandle->memFd = open( filename, O_RDWR | O_SYNC );
+
+        if ( newHandle->memFd >= 0 )
+        {
+            newHandle->use_vc_mem = 1;
+        }
+        else
+        {
+
+            if (!loadOffset && !loadSize)
+            {
+                //Search /proc/cmdline for the vc_mem base and size params
+                int cmdlineFd;
+
+                cmdlineFd = open( "/proc/cmdline", O_RDONLY );
+                if ( cmdlineFd >= 0 )
+                {
+                    char cmdline[1024];  //Should be sufficient for most use cases
+                    char *vc_mem_ptr = cmdline;
+                    size_t size;
+
+                    size = read(cmdlineFd, cmdline, sizeof(cmdline));
+
+                    while ( (vc_mem_ptr = strstr(vc_mem_ptr, "vc_mem.")) != NULL)
+                    {
+                        if ( !strncmp(&vc_mem_ptr[7], "mem_base=", 9) )
+                        {
+                            loadOffset = ( size_t )strtoul( &vc_mem_ptr[7+9], NULL, 0);
+                        }
+                        else if ( !strncmp(&vc_mem_ptr[7], "mem_size=", 9) )
+                        {
+                            loadSize = ( size_t )strtoul( &vc_mem_ptr[7+9], NULL, 0);
+                            DBG("loadSize %x\n", loadSize);
+                        }
+                        vc_mem_ptr++;
+                    }
+                    close( cmdlineFd );
+                }
+            }
+
+            // Try /dev/mem
+            filename = "/dev/mem";
+            newHandle->memFd = open( filename, O_RDWR | O_SYNC );
+        }
     }
     else
     {
         newHandle->use_vc_mem = 0;
+        newHandle->memFd = open( filename, O_RDONLY | O_SYNC );
     }
 
-    if (( newHandle->memFd = open( filename, ( newHandle->use_vc_mem ? O_RDWR : O_RDONLY ) | O_SYNC )) < 0 )
+    if ( newHandle->memFd < 0 )
     {
         ERR( "Unable to open '%s': %s(%d)\n", filename, strerror( errno ), errno );
         free(newHandle);
@@ -261,13 +305,20 @@ int OpenVideoCoreMemoryFileWithOffset( const char *filename, VC_MEM_ACCESS_HANDL
     }
     else
     {
-        off_t len = lseek( newHandle->memFd, 0, SEEK_END );
-        if ( len < 0 )
+        off_t len;
+        if (!loadSize)
         {
-            ERR( "Failed to seek to end of file: %s(%d)\n", strerror( errno ), errno );
-            free(newHandle);
-            return -errno;
+            len = lseek( newHandle->memFd, 0, SEEK_END );
+            if ( len < 0 )
+            {
+                ERR( "Failed to seek to end of file: %s(%d)\n", strerror( errno ), errno );
+                free(newHandle);
+                return -errno;
+            }
         }
+        else
+            len = loadSize;
+
         newHandle->vcMemPhys = 0;
         newHandle->vcMemSize = len;
         newHandle->vcMemBase = 0;
@@ -436,6 +487,11 @@ err_exit:
     free( newHandle );
 
     return rc;
+}
+
+int OpenVideoCoreMemoryFileWithOffset( const char *filename, VC_MEM_ACCESS_HANDLE_T *vcHandlePtr, size_t loadOffset)
+{
+    return OpenVideoCoreMemoryFileWithOffsetAndSize(filename, vcHandlePtr, loadOffset, 0);
 }
 
 /****************************************************************************
