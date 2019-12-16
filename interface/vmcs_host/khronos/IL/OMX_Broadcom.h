@@ -2765,6 +2765,20 @@ typedef struct OMX_PARAM_DENOISETYPE {
    OMX_U32 nStrength;         /**< Strength of denoising, Q16 format with 0 = off */
 } OMX_PARAM_DENOISETYPE;
 
+/* OMX_IndexParamSharpen: Manual sharpen parameters. */
+/*
+Configures the sharpening block within the ISP pipeline.
+*/
+typedef struct OMX_PARAM_SHARPENTYPE {
+   OMX_U32 nSize;
+   OMX_VERSIONTYPE nVersion;
+
+   OMX_BOOL bEnabled;         /**< Enable sharpening */
+   OMX_U32 nThreshold;        /**< Threshold factor at which sharpening starts, 8p8 */
+   OMX_U32 nStrength;         /**< Strength factor controlling the rate at which it ramps, 8p8 */
+   OMX_U32 nLimit;            /**< Maxmimum amount of sharpening, use 0 to disable, 8p8 */
+} OMX_PARAM_SHARPENTYPE;
+
 /* OMX_IndexParamGreenEq: Manual Green Equalisation parameters. */
 /*
 Configures the Green Equalisation block within the ISP pipeline.

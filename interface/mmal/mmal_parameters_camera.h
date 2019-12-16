@@ -150,6 +150,7 @@ enum {
    MMAL_PARAMETER_ANALOG_GAIN,               /**< Takes a @ref MMAL_PARAMETER_RATIONAL_T */
    MMAL_PARAMETER_DIGITAL_GAIN,              /**< Takes a @ref MMAL_PARAMETER_RATIONAL_T */
    MMAL_PARAMETER_DENOISE,                   /**< Takes a @ref MMAL_PARAMETER_DENOISE_T */
+   MMAL_PARAMETER_SHARPEN,                   /**< Takes a @ref MMAL_PARAMETER_SHARPEN_T */
    MMAL_PARAMETER_GREEN_EQ,                  /**< Takes a @ref MMAL_PARAMETER_GREEN_EQ_T */
 };
 
@@ -1013,6 +1014,15 @@ typedef struct MMAL_PARAMETER_DENOISE_T {
    MMAL_RATIONAL_T slope;               /**< Slope of the noise profile. */
    MMAL_RATIONAL_T strength;            /**< Denoise strength. */
 } MMAL_PARAMETER_DENOISE_T;
+
+typedef struct MMAL_PARAMETER_SHARPEN_T {
+   MMAL_PARAMETER_HEADER_T hdr;
+
+   MMAL_BOOL_T enable;                  /**< Enable sharpening parameters. */
+   MMAL_RATIONAL_T threshold;           /**< Threshold when sharpening starts. */
+   MMAL_RATIONAL_T strength;            /**< Rate at which sharpening ramps. */
+   MMAL_RATIONAL_T limit;               /**< Limit to total sharpening. */
+} MMAL_PARAMETER_SHARPEN_T;
 
 typedef struct MMAL_PARAMETER_GREEN_EQ_T {
    MMAL_PARAMETER_HEADER_T hdr;

@@ -540,6 +540,7 @@ typedef enum OMX_INDEXTYPE {
     OMX_IndexConfigBrcmDroppableRunLength,                    /**< reference: OMX_PARAM_U32TYPE */
     OMX_IndexParamMinimumAlignment,                           /**< reference: OMX_PARAM_MINALIGNTYPE */
     OMX_IndexParamDenoise,                                    /**< reference: OMX_PARAM_DENOISETYPE */
+    OMX_IndexParamSharpen,                                    /**< reference: OMX_PARAM_SHARPENTYPE */
     OMX_IndexParamGreenEq,                                    /**< reference: OMX_PARAM_GREENEQTYPE */
     OMX_IndexMax = 0x7FFFFFFF
 } OMX_INDEXTYPE;
