@@ -141,7 +141,7 @@ enum {
    MMAL_PARAMETER_JPEG_RESTART_INTERVAL,     /**< Takes a @ref MMAL_PARAMETER_UINT32_T */
    MMAL_PARAMETER_CAMERA_ISP_BLOCK_OVERRIDE, /**< Takes a @ref MMAL_PARAMETER_UINT32_T */
    MMAL_PARAMETER_LENS_SHADING_OVERRIDE,     /**< Takes a @ref MMAL_PARAMETER_LENS_SHADING_T */
-   MMAL_PARAMETER_BLACK_LEVEL,               /**< Takes a @ref MMAL_PARAMETER_UINT32_T */
+   MMAL_PARAMETER_BLACK_LEVEL,               /**< Takes a @ref MMAL_PARAMETER_UINT32_T  or @ref MMAL_PARAMETER_BLACK_LEVEL_T */
    MMAL_PARAMETER_RESIZE_PARAMS,             /**< Takes a @ref MMAL_PARAMETER_RESIZE_T */
    MMAL_PARAMETER_CROP,                      /**< Takes a @ref MMAL_PARAMETER_CROP_T */
    MMAL_PARAMETER_OUTPUT_SHIFT,              /**< Takes a @ref MMAL_PARAMETER_INT32_T */
@@ -993,5 +993,14 @@ typedef struct MMAL_PARAMETER_CUSTOM_CCM_T {
    MMAL_BOOL_T enable;           /**< Enable the custom CCM. */
    MMAL_PARAMETER_CCM_T ccm;     /**< CCM to be used. */
 } MMAL_PARAMETER_CUSTOM_CCM_T;
+
+typedef struct MMAL_PARAMETER_BLACK_LEVEL_T {
+   MMAL_PARAMETER_HEADER_T hdr;
+
+   MMAL_BOOL_T enable;                  /**< Enable denoise parameters. */
+   uint16_t black_level_r;              /**< Black level of red channel (out of 16 bits). */
+   uint16_t black_level_g;              /**< Black level of green channel (out of 16 bits). */
+   uint16_t black_level_b;              /**< Black level of blue channel (out of 16 bits). */
+} MMAL_PARAMETER_BLACK_LEVEL_T;
 
 #endif  /* MMAL_PARAMETERS_CAMERA_H */

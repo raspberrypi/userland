@@ -2736,5 +2736,20 @@ Used by the MMAL framework predominantly.
 Superceded by OMX_IndexParamMinimumAlignment.
 */
 
+/* OMX_IndexParamBrcmBlackLevel: Manual black level parameters. */
+/*
+Configures the black level within the ISP pipeline.
+*/
+typedef struct OMX_PARAM_BLACKLEVELTYPE {
+   OMX_U32 nSize;
+   OMX_VERSIONTYPE nVersion;
+
+   OMX_BOOL bEnabled;         /**< Enable black level subtraction */
+   OMX_U16 nBlackLevelR;      /**< Black level of red channel */
+   OMX_U16 nBlackLevelG;      /**< Black level of green channel */
+   OMX_U16 nBlackLevelB;      /**< Black level of blue channel */
+   OMX_U16 nBitDepth;         /**< Bit depth - refer to comments in code where used */
+} OMX_PARAM_BLACKLEVELTYPE;
+
 #endif
 /* File EOF */
