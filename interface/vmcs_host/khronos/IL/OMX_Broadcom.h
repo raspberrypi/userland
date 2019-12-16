@@ -2765,5 +2765,18 @@ typedef struct OMX_PARAM_DENOISETYPE {
    OMX_U32 nStrength;         /**< Strength of denoising, Q16 format with 0 = off */
 } OMX_PARAM_DENOISETYPE;
 
+/* OMX_IndexParamGreenEq: Manual Green Equalisation parameters. */
+/*
+Configures the Green Equalisation block within the ISP pipeline.
+*/
+typedef struct OMX_PARAM_GREENEQTYPE {
+   OMX_U32 nSize;
+   OMX_VERSIONTYPE nVersion;
+
+   OMX_BOOL bEnabled;         /**< Enable Green Equalisation */
+   OMX_U32 nOffset;           /**< Offset of Green Equalisation threshold. */
+   OMX_U32 nSlope;            /**< Slope of Green Equalisation threshold against pixel value, 0p16 */
+} OMX_PARAM_GREENEQTYPE;
+
 #endif
 /* File EOF */

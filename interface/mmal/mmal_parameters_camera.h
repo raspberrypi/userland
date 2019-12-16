@@ -150,6 +150,7 @@ enum {
    MMAL_PARAMETER_ANALOG_GAIN,               /**< Takes a @ref MMAL_PARAMETER_RATIONAL_T */
    MMAL_PARAMETER_DIGITAL_GAIN,              /**< Takes a @ref MMAL_PARAMETER_RATIONAL_T */
    MMAL_PARAMETER_DENOISE,                   /**< Takes a @ref MMAL_PARAMETER_DENOISE_T */
+   MMAL_PARAMETER_GREEN_EQ,                  /**< Takes a @ref MMAL_PARAMETER_GREEN_EQ_T */
 };
 
 /** Thumbnail configuration parameter type */
@@ -1012,5 +1013,13 @@ typedef struct MMAL_PARAMETER_DENOISE_T {
    MMAL_RATIONAL_T slope;               /**< Slope of the noise profile. */
    MMAL_RATIONAL_T strength;            /**< Denoise strength. */
 } MMAL_PARAMETER_DENOISE_T;
+
+typedef struct MMAL_PARAMETER_GREEN_EQ_T {
+   MMAL_PARAMETER_HEADER_T hdr;
+
+   MMAL_BOOL_T enable;                  /**< Enable Green Equalisation parameters. */
+   uint32_t offset;                     /**< Offset of Green Equalisation threshold. */
+   MMAL_RATIONAL_T slope;               /**< Rate at which Green Equalisation threshold ramps. */
+} MMAL_PARAMETER_GREEN_EQ_T;
 
 #endif  /* MMAL_PARAMETERS_CAMERA_H */
