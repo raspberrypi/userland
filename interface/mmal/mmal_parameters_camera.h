@@ -149,6 +149,7 @@ enum {
    MMAL_PARAMETER_CUSTOM_CCM,                /**< Takes a @ref MMAL_PARAMETER_CUSTOM_CCM_T */
    MMAL_PARAMETER_ANALOG_GAIN,               /**< Takes a @ref MMAL_PARAMETER_RATIONAL_T */
    MMAL_PARAMETER_DIGITAL_GAIN,              /**< Takes a @ref MMAL_PARAMETER_RATIONAL_T */
+   MMAL_PARAMETER_DENOISE,                   /**< Takes a @ref MMAL_PARAMETER_DENOISE_T */
 };
 
 /** Thumbnail configuration parameter type */
@@ -1002,5 +1003,14 @@ typedef struct MMAL_PARAMETER_BLACK_LEVEL_T {
    uint16_t black_level_g;              /**< Black level of green channel (out of 16 bits). */
    uint16_t black_level_b;              /**< Black level of blue channel (out of 16 bits). */
 } MMAL_PARAMETER_BLACK_LEVEL_T;
+
+typedef struct MMAL_PARAMETER_DENOISE_T {
+   MMAL_PARAMETER_HEADER_T hdr;
+
+   MMAL_BOOL_T enable;                  /**< Enable denoise parameters. */
+   uint32_t constant;                   /**< Constant offset of the noise profile. */
+   MMAL_RATIONAL_T slope;               /**< Slope of the noise profile. */
+   MMAL_RATIONAL_T strength;            /**< Denoise strength. */
+} MMAL_PARAMETER_DENOISE_T;
 
 #endif  /* MMAL_PARAMETERS_CAMERA_H */

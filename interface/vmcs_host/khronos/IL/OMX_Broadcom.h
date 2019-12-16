@@ -2751,5 +2751,19 @@ typedef struct OMX_PARAM_BLACKLEVELTYPE {
    OMX_U16 nBitDepth;         /**< Bit depth - refer to comments in code where used */
 } OMX_PARAM_BLACKLEVELTYPE;
 
+/* OMX_IndexParamDenoise: Manual denoise parameters. */
+/*
+Configures the spatial denoise block within the ISP pipeline.
+*/
+typedef struct OMX_PARAM_DENOISETYPE {
+   OMX_U32 nSize;
+   OMX_VERSIONTYPE nVersion;
+
+   OMX_BOOL bEnabled;         /**< Enable spatial denoise */
+   OMX_U32 nConstant;         /**< Constant noise offset */
+   OMX_U32 nSlope;            /**< Slope of the noise profile, Q16 format */
+   OMX_U32 nStrength;         /**< Strength of denoising, Q16 format with 0 = off */
+} OMX_PARAM_DENOISETYPE;
+
 #endif
 /* File EOF */
