@@ -2792,5 +2792,17 @@ typedef struct OMX_PARAM_GREENEQTYPE {
    OMX_U32 nSlope;            /**< Slope of Green Equalisation threshold against pixel value, 0p16 */
 } OMX_PARAM_GREENEQTYPE;
 
+/* OMX_IndexParamDpc: Manual DPC (defective pixel correction) parameters. */
+/*
+Configures the DPC block within the ISP pipeline.
+*/
+typedef struct OMX_PARAM_DPCTYPE {
+   OMX_U32 nSize;
+   OMX_VERSIONTYPE nVersion;
+
+   OMX_BOOL bEnabled;         /**< Enable DPC (automatic defective pixel correction) */
+   OMX_U32 nStrength;         /**< Strength (0 = off, 1 = normal, 2 = strong) */
+} OMX_PARAM_DPCTYPE;
+
 #endif
 /* File EOF */

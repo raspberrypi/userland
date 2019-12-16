@@ -542,6 +542,7 @@ typedef enum OMX_INDEXTYPE {
     OMX_IndexParamDenoise,                                    /**< reference: OMX_PARAM_DENOISETYPE */
     OMX_IndexParamSharpen,                                    /**< reference: OMX_PARAM_SHARPENTYPE */
     OMX_IndexParamGreenEq,                                    /**< reference: OMX_PARAM_GREENEQTYPE */
+    OMX_IndexParamDpc,                                        /**< reference: OMX_PARAM_DPCTYPE */
     OMX_IndexMax = 0x7FFFFFFF
 } OMX_INDEXTYPE;
 

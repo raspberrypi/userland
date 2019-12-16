@@ -152,6 +152,7 @@ enum {
    MMAL_PARAMETER_DENOISE,                   /**< Takes a @ref MMAL_PARAMETER_DENOISE_T */
    MMAL_PARAMETER_SHARPEN,                   /**< Takes a @ref MMAL_PARAMETER_SHARPEN_T */
    MMAL_PARAMETER_GREEN_EQ,                  /**< Takes a @ref MMAL_PARAMETER_GREEN_EQ_T */
+   MMAL_PARAMETER_DPC,                       /**< Tales a @ref MMAP_PARAMETER_DPC_T */
 };
 
 /** Thumbnail configuration parameter type */
@@ -1031,5 +1032,19 @@ typedef struct MMAL_PARAMETER_GREEN_EQ_T {
    uint32_t offset;                     /**< Offset of Green Equalisation threshold. */
    MMAL_RATIONAL_T slope;               /**< Rate at which Green Equalisation threshold ramps. */
 } MMAL_PARAMETER_GREEN_EQ_T;
+
+typedef enum MMAL_DPC_MODE_T {
+   MMAL_DPC_MODE_OFF =    0,
+   MMAL_DPC_MODE_NORMAL = 1,
+   MMAL_DPC_MODE_STRONG = 2,
+   MMAL_DPC_MODE_MAX =    0x7FFFFFFF,
+} MMAL_DPC_MODE_T;
+
+typedef struct MMAL_PARAMETER_DPC_T {
+   MMAL_PARAMETER_HEADER_T hdr;
+
+   MMAL_BOOL_T enable;                  /**< Enable DPC parameters. */
+   MMAL_DPC_MODE_T strength;            /**< DPC strength. */
+} MMAL_PARAMETER_DPC_T;
 
 #endif  /* MMAL_PARAMETERS_CAMERA_H */
