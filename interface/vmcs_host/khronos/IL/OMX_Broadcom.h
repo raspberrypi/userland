@@ -2804,5 +2804,20 @@ typedef struct OMX_PARAM_DPCTYPE {
    OMX_U32 nStrength;         /**< Strength (0 = off, 1 = normal, 2 = strong) */
 } OMX_PARAM_DPCTYPE;
 
+/* OMX_IndexParamGamma: Manual gamma parameters. */
+/*
+Configures the gamma block within the ISP pipeline.
+*/
+#define OMX_NUM_GAMMA_PTS 33
+
+typedef struct OMX_PARAM_GAMMATYPE {
+   OMX_U32 nSize;
+   OMX_VERSIONTYPE nVersion;
+
+   OMX_BOOL bEnabled;             /**< Enable gamma */
+   OMX_U16 nX[OMX_NUM_GAMMA_PTS]; /**< X coordinates (16 bit range) */
+   OMX_U16 nY[OMX_NUM_GAMMA_PTS]; /**< Y coordinates (16 bit range) */
+} OMX_PARAM_GAMMATYPE;
+
 #endif
 /* File EOF */

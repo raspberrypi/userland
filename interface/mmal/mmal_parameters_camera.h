@@ -153,6 +153,7 @@ enum {
    MMAL_PARAMETER_SHARPEN,                   /**< Takes a @ref MMAL_PARAMETER_SHARPEN_T */
    MMAL_PARAMETER_GREEN_EQ,                  /**< Takes a @ref MMAL_PARAMETER_GREEN_EQ_T */
    MMAL_PARAMETER_DPC,                       /**< Tales a @ref MMAP_PARAMETER_DPC_T */
+   MMAL_PARAMETER_GAMMA,                     /**< Tales a @ref MMAP_PARAMETER_GAMMA_T */
 };
 
 /** Thumbnail configuration parameter type */
@@ -1046,5 +1047,15 @@ typedef struct MMAL_PARAMETER_DPC_T {
    MMAL_BOOL_T enable;                  /**< Enable DPC parameters. */
    MMAL_DPC_MODE_T strength;            /**< DPC strength. */
 } MMAL_PARAMETER_DPC_T;
+
+#define MMAL_NUM_GAMMA_PTS 33
+
+typedef struct MMAL_PARAMETER_GAMMA_T {
+   MMAL_PARAMETER_HEADER_T hdr;
+
+   MMAL_BOOL_T enable;                  /**< Enable gamma parameters. */
+   uint16_t X[MMAL_NUM_GAMMA_PTS];      /**< X values (16 bit range) */
+   uint16_t Y[MMAL_NUM_GAMMA_PTS];      /**< Y values (16 bit range) */
+} MMAL_PARAMETER_GAMMA_T;
 
 #endif  /* MMAL_PARAMETERS_CAMERA_H */
