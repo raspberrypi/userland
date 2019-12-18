@@ -15,7 +15,7 @@ add_library(vchostif
 #            ${VMCS_TARGET}/vmcs_main.c
 #  vc_vchi_haud.c
 #add_library(bufman            vc_vchi_bufman.c            )
-set(INSTALL_TARGETS "vchostif")
+set(INSTALL_TARGETS vchostif)
 
 if(NOT ARM64)
 	# OpenMAX/IL component service
@@ -24,7 +24,7 @@ if(NOT ARM64)
 
 	# ILCS pulls in EGL for the ILCS/EGL surface API support
 	target_link_libraries(vcilcs brcmEGL brcmGLESv2 khrn_client vchiq_arm vcos)
-	set(INSTALL_TARGETS "${INSTALL_TARGETS} vcilcs")
+	set(INSTALL_TARGETS ${INSTALL_TARGETS} vcilcs)
 endif()
 
 # vchostif needs ilcore as well (vmcs_main pulls it in)
