@@ -55,13 +55,12 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <linux/types.h>
 
 #ifdef __CHECKER__
 #define __force __attribute__((force))
-#define __bitwise __attribute__((bitwise))
 #else
 #define __force
-#define __bitwise
 #endif
 
 typedef uint16_t __bitwise fdt16_t;
