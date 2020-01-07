@@ -2249,7 +2249,12 @@ int dtoverlay_find_symbol(DTBLOB_T *dtb, const char *symbol_name)
       node_path = fdt_getprop(dtb->fdt, symbols_off, symbol_name, &path_len);
       if (path_len < 0)
          return -FDT_ERR_NOTFOUND;
+
+      //Ensure we don't have trailing NULLs
+      if (path_len > strnlen(node_path, path_len))
+         path_len = strnlen(node_path, path_len);
    }
+
    return fdt_path_offset_namelen(dtb->fdt, node_path, path_len);
 }
 
