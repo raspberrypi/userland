@@ -110,6 +110,7 @@ extern "C" {
       VC_IMAGE_PROP_LINKED_MULTICHANN,
       VC_IMAGE_PROP_VPITCH,
       VC_IMAGE_PROP_TALL_YUVUV,
+      VC_IMAGE_PROP_YUVUV_4K_CHROMA_ALIGN,
    } VC_IMAGE_PROPERTY_T;
 
    /* A property key and value */
@@ -126,7 +127,7 @@ extern "C" {
       bits should be zero and enforce this in vc_image functions to catch people
       who aren't initialising the VC_IMAGE_T structure nicely; update when other
       bits are added */
-#define VC_IMAGE_INFO_VALIDBITS    0xBF0F
+#define VC_IMAGE_INFO_VALIDBITS    0xFF0F
    /* Define the bits of info used to denote the colourspace */
 #define VC_IMAGE_INFO_COLOURSPACE  0x0F
 
