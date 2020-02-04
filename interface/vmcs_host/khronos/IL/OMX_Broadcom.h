@@ -2643,6 +2643,18 @@ nRefTransform should be set to the transform in force when the reference table w
 captured. This allows correct compensation when the sensor is subsequently used with
 an alternate transform.
 */
+typedef enum OMX_LSGAINFORMATTYPE {
+   OMX_LSGAINFORMAT_U0P8_1 = 0,       /**< Gains are u0.8 format with a base of 1 */
+   OMX_LSGAINFORMAT_U1P7_0 = 1,       /**< Gains are u1.7 format with a base of 0 */
+   OMX_LSGAINFORMAT_U1P7_1 = 2,       /**< Gains are u1.7 format with a base of 1 */
+   OMX_LSGAINFORMAT_U2P6_0 = 3,       /**< Gains are u2.6 format with a base of 0 */
+   OMX_LSGAINFORMAT_U2P6_1 = 4,       /**< Gains are u2.6 format with a base of 1 */
+   OMX_LSGAINFORMAT_U3P5_0 = 5,       /**< Gains are u3.5 format with a base of 0 */
+   OMX_LSGAINFORMAT_U3P5_1 = 6,       /**< Gains are u3.5 format with a base of 1 */
+   OMX_LSGAINFORMAT_U4P10  = 7,       /**< Gains are u4.10 format with a base of 0 (note: 16-bit values) */
+   OMX_LSGAINFORMAT_DUMMY  = 0x7FFFFFFF
+} OMX_LSGAINFORMATTYPE;
+
 typedef struct OMX_PARAM_LENSSHADINGOVERRIDETYPE {
    OMX_U32 nSize;
    OMX_VERSIONTYPE nVersion;
@@ -2650,10 +2662,12 @@ typedef struct OMX_PARAM_LENSSHADINGOVERRIDETYPE {
    OMX_BOOL bEnabled;                     /**< Enable the override grid */
    OMX_U32 nGridCellSize;                 /**< size of each grid element. Assumes square grid */
    OMX_U32 nWidth;                        /**< grid width */
-   OMX_U32 nStride;                       /**< grid stride (allows for padding) */
+   OMX_U32 nStride;                       /**< grid stride (allows for padding) in *samples* (not bytes) */
    OMX_U32 nHeight;                       /**< grid height */
    OMX_U32 nMemHandleTable;               /**< Handle for grid */
    OMX_U32 nRefTransform;                 /**< Reference transform taken from raw header */
+   OMX_BOOL bCornerSampled;               /**< Are grids sampled at cell corners, or centres */
+   OMX_LSGAINFORMATTYPE eLsGainFormat;    /**< Format of the gain tables */
 } OMX_PARAM_LENSSHADINGOVERRIDETYPE;
 
 /* OMX_IndexConfigBrcmPowerMonitor: Deprecated.*/

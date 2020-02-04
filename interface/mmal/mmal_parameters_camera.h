@@ -950,6 +950,34 @@ typedef struct MMAL_PARAMETER_LENS_SHADING_T
    uint32_t ref_transform;
 } MMAL_PARAMETER_LENS_SHADING_T;
 
+typedef enum MMAL_PARAM_LS_GAIN_FORMAT_TYPE_T
+{
+   MMAL_PARAM_LS_GAIN_FORMAT_TYPE_U0P8_1 = 0,
+   MMAL_PARAM_LS_GAIN_FORMAT_TYPE_U1P7_0 = 1,
+   MMAL_PARAM_LS_GAIN_FORMAT_TYPE_U1P7_1 = 2,
+   MMAL_PARAM_LS_GAIN_FORMAT_TYPE_U2P6_0 = 3,
+   MMAL_PARAM_LS_GAIN_FORMAT_TYPE_U2P6_1 = 4,
+   MMAL_PARAM_LS_GAIN_FORMAT_TYPE_U3P5_0 = 5,
+   MMAL_PARAM_LS_GAIN_FORMAT_TYPE_U3P5_1 = 6,
+   MMAL_PARAM_LS_GAIN_FORMAT_TYPE_U4P10  = 7,
+   MMAL_PARAM_LS_GAIN_FORMAT_TYPE_DUMMY  = 0x7FFFFFFF
+} MMAL_PARAM_LS_GAIN_FORMAT_TYPE_T;
+
+typedef struct MMAL_PARAMETER_LENS_SHADING_V2_T
+{
+   MMAL_PARAMETER_HEADER_T hdr;
+
+   MMAL_BOOL_T enabled;
+   uint32_t grid_cell_size;
+   uint32_t grid_width;
+   uint32_t grid_stride;
+   uint32_t grid_height;
+   uint32_t mem_handle_table;
+   uint32_t ref_transform;
+   MMAL_BOOL_T corner_sampled;
+   MMAL_PARAM_LS_GAIN_FORMAT_TYPE_T gain_format;
+} MMAL_PARAMETER_LENS_SHADING_V2_T;
+
 /*
 The mode determines the kind of resize.
 MMAL_RESIZE_BOX allow the max_width and max_height to set a bounding box into
