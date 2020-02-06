@@ -512,13 +512,10 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
         dtoverlay_free_dtb(base_dtb);
     }
 
-    /* Prevent symbol clash by keeping them all private.
-     * In future we could choose to expose some - perhaps using
-     * a naming convention, or an "__exports__" node, at which
-     * point it will no longer be necessary to explictly target
-     * the /__symbols__ node with a fragment.
+    /* Prevent symbol clash by only preserving those appearing as
+     * properties of the "__exports__" node.
      */
-    dtoverlay_delete_node(overlay_dtb, "/__symbols__", 0);
+    dtoverlay_filter_symbols(overlay_dtb);
 
     if (param_string)
 	dtoverlay_dtb_set_trailer(overlay_dtb, param_string,
