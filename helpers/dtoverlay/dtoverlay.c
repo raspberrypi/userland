@@ -1109,6 +1109,97 @@ int dtoverlay_merge_params(DTBLOB_T *dtb, const DTOVERLAY_PARAM_T *params,
    return err;
 }
 
+int dtoverlay_filter_symbols(DTBLOB_T *dtb)
+{
+   int symbols_off;
+   int exports_off;
+   struct str_item *exports = NULL;
+   const fdt32_t *prop_val;
+   int prop_off;
+
+   struct str_item
+   {
+      struct str_item *next;
+      char str[0];
+   };
+
+   symbols_off = dtoverlay_find_node(dtb, "/__symbols__", 0);
+   if (symbols_off < 0)
+      return 0;
+
+   exports_off = dtoverlay_find_node(dtb, "/__exports__", 0);
+   if (exports_off < 0)
+   {
+      /* There are no exports, so keep all symbols private. */
+      fdt_del_node(dtb->fdt, symbols_off);
+      return 0;
+   }
+
+   /* Internalise the names of the exported properties for speed
+    * and to protect against the FDT contents moving. */
+   fdt_for_each_property_offset(prop_off, dtb->fdt, exports_off)
+   {
+      struct str_item *new_str;
+      const char *name = NULL;
+      fdt_getprop_by_offset(dtb->fdt, prop_off, &name, NULL);
+      if (!name)
+         break;
+      new_str = malloc(sizeof(*new_str) + strlen(name) + 1);
+      if (!new_str)
+      {
+         /* Free all of the internalised exports */
+         while (exports)
+         {
+            struct str_item *str = exports;
+            exports = str->next;
+            free(str);
+         }
+         dtoverlay_error("  out of memory");
+         return -FDT_ERR_NOSPACE;
+      }
+
+      strcpy(new_str->str, name);
+      new_str->next = exports;
+      exports = new_str;
+   }
+
+   /* Iterate through the symbols, deleting any that aren't
+    * exported.
+    */
+   prop_off = fdt_first_property_offset(dtb->fdt, symbols_off);
+   while (prop_off >= 0)
+   {
+      const char *name = NULL;
+      struct str_item *str;
+
+      prop_val = fdt_getprop_by_offset(dtb->fdt, prop_off, &name, NULL);
+      if (!name)
+         break;
+
+      for (str = exports; str; str = str->next)
+      {
+         if (!strcmp(str->str, name))
+            break;
+      }
+
+      if (str)
+         /* This symbol is exported */
+         prop_off = fdt_next_property_offset(dtb->fdt, prop_off);
+      else
+         fdt_delprop(dtb->fdt, symbols_off, name);
+   }
+
+   /* Free all of the internalised exports */
+   while (exports)
+   {
+      struct str_item *str = exports;
+      exports = str->next;
+      free(str);
+   }
+
+   return 0;
+}
+
 /* Returns a pointer to the override data and (through data_len) its length.
    On error, sets *data_len to be the error code. */
 const char *dtoverlay_find_override(DTBLOB_T *dtb, const char *override_name,

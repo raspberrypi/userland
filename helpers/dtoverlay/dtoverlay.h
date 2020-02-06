@@ -127,6 +127,8 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb);
 int dtoverlay_merge_params(DTBLOB_T *dtb, const DTOVERLAY_PARAM_T *params,
                            unsigned int num_params);
 
+int dtoverlay_filter_symbols(DTBLOB_T *dtb);
+
 const char *dtoverlay_find_override(DTBLOB_T *dtb, const char *override_name,
                                     int *data_len);
 
