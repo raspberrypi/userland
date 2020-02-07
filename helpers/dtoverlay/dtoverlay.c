@@ -954,26 +954,155 @@ static int dtoverlay_resolve_fixups(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
    return err;
 }
 
+static int dtoverlay_get_target_offset(DTBLOB_T *base_dtb,
+                                       DTBLOB_T *overlay_dtb,
+                                       int frag_off)
+{
+   const char *target_path;
+   int target_off;
+   int len;
+
+   target_path = fdt_getprop(overlay_dtb->fdt, frag_off, "target-path", &len);
+   if (target_path)
+   {
+      if (len && (target_path[len - 1] == '\0'))
+         len--;
+      target_off = fdt_path_offset_namelen(base_dtb->fdt, target_path, len);
+      if (target_off < 0)
+      {
+         dtoverlay_error("invalid target-path '%.*s'", len, target_path);
+         return NON_FATAL(target_off);
+      }
+   }
+   else
+   {
+      const void *target_prop;
+      target_prop = fdt_getprop(overlay_dtb->fdt, frag_off, "target", &len);
+      if (!target_prop)
+      {
+         dtoverlay_error("no target or target-path");
+         return NON_FATAL(len);
+      }
+
+      if (len != 4)
+         return NON_FATAL(FDT_ERR_BADSTRUCTURE);
+
+      target_off =
+         fdt_node_offset_by_phandle(base_dtb->fdt,
+                                    fdt32_to_cpu(*(fdt32_t *)target_prop));
+      if (target_off < 0)
+      {
+         dtoverlay_error("invalid target");
+         return NON_FATAL(target_off);
+      }
+   }
+
+   return target_off;
+}
+
 // Returns 0 on success, -ve for fatal errors and +ve for non-fatal errors
 int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
 {
    // Merge each fragment node
    int frag_off;
 
+   dtoverlay_filter_symbols(overlay_dtb);
+
    for (frag_off = fdt_first_subnode(overlay_dtb->fdt, 0);
         frag_off >= 0;
         frag_off = fdt_next_subnode(overlay_dtb->fdt, frag_off))
    {
-      const char *node_name, *target_path;
+      const char *node_name;
       const char *frag_name;
       int target_off, overlay_off;
-      int len, err;
+      int err;
 
       node_name = fdt_get_name(overlay_dtb->fdt, frag_off, NULL);
 
-      if (strncmp(node_name, "fragment@", 9) != 0 &&
-          strncmp(node_name, "fragment-", 9) != 0)
+      if (strcmp(node_name, "__symbols__") == 0)
+      {
+         /* At this point, only exported symbols should remain */
+         int sym_off;
+
+         fdt_for_each_property_offset(sym_off, overlay_dtb->fdt, frag_off)
+         {
+            char target_path[256];
+            const char *sym_name = NULL;
+            const char *sym_path;
+            const char *p;
+            int sym_len;
+            int sym_frag_off;
+            int target_path_len;
+            int new_path_len;
+            int base_symbols;
+
+            sym_path = fdt_getprop_by_offset(overlay_dtb->fdt, sym_off,
+                                             &sym_name, &sym_len);
+            if (!sym_path)
+               break;
+
+            /* Rebase the symbol path so that
+             *   /fragment@0/__overlay__/<something>
+             * becomes
+             *   <path-to-fragment-target>/<something>
+             */
+
+            /* Skip non-overlay symbols
+             * Overlay symbol paths should be of the form:
+             *     /<fragment>/__overlay__/<something>
+             * It doesn't actually matter what <fragment> is.
+             */
+            if (sym_path[0] != '/')
+               continue;
+
+            p = strchr(sym_path + 1, '/');
+            if (!p || strncmp(p + 1, "__overlay__/", 12) != 0)
+               continue;
+
+            /* Find the offset to the fragment */
+            sym_frag_off = dtoverlay_find_node(overlay_dtb, sym_path,
+                                               p - sym_path);
+
+            p += 12; /* p points to /<something> */
+
+            /* Locate the path to the fragment target */
+            target_off = dtoverlay_get_target_offset(base_dtb, overlay_dtb,
+                                                     sym_frag_off);
+
+            err = fdt_get_path(base_dtb->fdt, target_off,
+                               target_path, sizeof(target_path));
+            if (err != 0)
+            {
+               dtoverlay_error("bad target path for %s", sym_path);
+               return err;
+            }
+
+            /* Append the fragment-relative path to the target path */
+            target_path_len = strlen(target_path);
+            if (strcmp(target_path, "/") == 0)
+               p++; // Avoid a '//' if the target is the root
+            new_path_len = target_path_len + (sym_path + sym_len - p);
+            if (new_path_len >= sizeof(target_path))
+            {
+               dtoverlay_error("Exported symbol path too long for %s", sym_path);
+               return -FDT_ERR_NOSPACE;
+            }
+            strcpy(target_path + target_path_len, p);
+
+            base_symbols = fdt_path_offset(base_dtb->fdt, "/__symbols__");
+            fdt_setprop(base_dtb->fdt, base_symbols,
+                        sym_name, target_path, new_path_len);
+            dtoverlay_debug("Set label '%s' path to '%s'",
+                            sym_name, target_path);
+         }
          continue;
+      }
+      else if (strncmp(node_name, "fragment@", 9) != 0 &&
+               strncmp(node_name, "fragment-", 9) != 0)
+      {
+         continue;
+      }
+
       frag_name = node_name + 9;
 
       dtoverlay_debug("Found fragment %s (offset %d)", frag_name, frag_off);
@@ -989,40 +1118,9 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
          continue;
       }
 
-      target_path = fdt_getprop(overlay_dtb->fdt, frag_off, "target-path", &len);
-      if (target_path)
-      {
-         if (len && (target_path[len - 1] == '\0'))
-            len--;
-         target_off = fdt_path_offset_namelen(base_dtb->fdt, target_path, len);
-         if (target_off < 0)
-         {
-            dtoverlay_error("invalid target-path '%.*s'", len, target_path);
-            return NON_FATAL(target_off);
-         }
-      }
-      else
-      {
-         const void *target_prop;
-         target_prop = fdt_getprop(overlay_dtb->fdt, frag_off, "target", &len);
-         if (!target_prop)
-         {
-            dtoverlay_error("no target or target-path");
-            return NON_FATAL(len);
-         }
-
-         if (len != 4)
-            return NON_FATAL(FDT_ERR_BADSTRUCTURE);
-
-         target_off =
-            fdt_node_offset_by_phandle(base_dtb->fdt,
-                                       fdt32_to_cpu(*(fdt32_t *)target_prop));
-         if (target_off < 0)
-         {
-            dtoverlay_error("invalid target");
-            return NON_FATAL(target_off);
-         }
-      }
+      target_off = dtoverlay_get_target_offset(base_dtb, overlay_dtb, frag_off);
+      if (target_off < 0)
+         return target_off;
 
       // Now do the merge
       err = dtoverlay_merge_fragment(base_dtb, target_off, overlay_dtb,
