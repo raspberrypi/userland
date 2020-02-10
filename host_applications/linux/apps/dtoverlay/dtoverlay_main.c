@@ -257,12 +257,12 @@ int main(int argc, const char **argv)
 	    fatal_error("Failed to mount configfs - %d", errno);
     }
 
-    dt_overlays_dir = sprintf_dup("%s/%s", cfg_dir, DT_OVERLAYS_SUBDIR);
-    if (!dir_exists(dt_overlays_dir))
-	fatal_error("configfs overlays folder not found - incompatible kernel");
-
     if (!dry_run)
     {
+	dt_overlays_dir = sprintf_dup("%s/%s", cfg_dir, DT_OVERLAYS_SUBDIR);
+	if (!dir_exists(dt_overlays_dir))
+	    fatal_error("configfs overlays folder not found - incompatible kernel");
+
         state = read_state(work_dir);
         if (!state)
             fatal_error("Failed to read state");
