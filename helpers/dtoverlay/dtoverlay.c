@@ -965,6 +965,8 @@ static int dtoverlay_get_target_offset(DTBLOB_T *base_dtb,
    target_path = fdt_getprop(overlay_dtb->fdt, frag_off, "target-path", &len);
    if (target_path)
    {
+      if (!base_dtb)
+         return -FDT_ERR_NOTFOUND;
       if (len && (target_path[len - 1] == '\0'))
          len--;
       target_off = fdt_path_offset_namelen(base_dtb->fdt, target_path, len);
@@ -977,6 +979,8 @@ static int dtoverlay_get_target_offset(DTBLOB_T *base_dtb,
    else
    {
       const void *target_prop;
+      int phandle;
+
       target_prop = fdt_getprop(overlay_dtb->fdt, frag_off, "target", &len);
       if (!target_prop)
       {
@@ -987,12 +991,19 @@ static int dtoverlay_get_target_offset(DTBLOB_T *base_dtb,
       if (len != 4)
          return NON_FATAL(FDT_ERR_BADSTRUCTURE);
 
+      phandle = fdt32_to_cpu(*(fdt32_t *)target_prop);
+      if (!base_dtb)
+      {
+         if (phandle < 0 || phandle > overlay_dtb->max_phandle)
+            return -FDT_ERR_NOTFOUND;
+         return fdt_node_offset_by_phandle(overlay_dtb->fdt, phandle);
+      }
+
       target_off =
-         fdt_node_offset_by_phandle(base_dtb->fdt,
-                                    fdt32_to_cpu(*(fdt32_t *)target_prop));
+         fdt_node_offset_by_phandle(base_dtb->fdt, phandle);
       if (target_off < 0)
       {
-         dtoverlay_error("invalid target");
+         dtoverlay_error("invalid target (phandle %d)", phandle);
          return NON_FATAL(target_off);
       }
    }
@@ -1005,17 +1016,100 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
 {
    // Merge each fragment node
    int frag_off;
+   int frag_idx;
+   int err = 0;
+   int overlay_size = fdt_totalsize(overlay_dtb->fdt);
+   void *overlay_copy = NULL;
 
    dtoverlay_filter_symbols(overlay_dtb);
 
-   for (frag_off = fdt_first_subnode(overlay_dtb->fdt, 0);
+   for (frag_off = fdt_first_subnode(overlay_dtb->fdt, 0), frag_idx = 0;
         frag_off >= 0;
-        frag_off = fdt_next_subnode(overlay_dtb->fdt, frag_off))
+        frag_off = fdt_next_subnode(overlay_dtb->fdt, frag_off), frag_idx++)
    {
       const char *node_name;
       const char *frag_name;
       int target_off, overlay_off;
-      int err;
+      DTBLOB_T clone_dtb;
+      int idx;
+
+      node_name = fdt_get_name(overlay_dtb->fdt, frag_off, NULL);
+
+      if (strncmp(node_name, "fragment@", 9) != 0 &&
+          strncmp(node_name, "fragment-", 9) != 0)
+         continue;
+
+      frag_name = node_name + 9;
+
+      // Find the target and overlay nodes
+      overlay_off = fdt_subnode_offset(overlay_dtb->fdt, frag_off, "__overlay__");
+      if (overlay_off < 0)
+      {
+         if (fdt_subnode_offset(overlay_dtb->fdt, frag_off, "__dormant__") >= 0)
+            dtoverlay_debug("fragment %s disabled", frag_name);
+         else
+            dtoverlay_error("no overlay in fragment %s", frag_name);
+         continue;
+      }
+
+      target_off = dtoverlay_get_target_offset(NULL, overlay_dtb, frag_off);
+
+      if (target_off < 0)
+         continue;
+
+      // Merge the fragment with the overlay
+      // We can't just call dtoverlay_merge_fragment with the overlay_dtb
+      // as source and destination because the source is not expected to
+      // change. Instead, clone the overlay, apply the fragment, then switch.
+
+      if (!overlay_copy)
+      {
+         overlay_copy = malloc(overlay_size);
+         if (!overlay_copy)
+         {
+            err = -FDT_ERR_NOSPACE;
+            break;
+         }
+      }
+      memcpy(overlay_copy, overlay_dtb->fdt, overlay_size);
+      memcpy(&clone_dtb, overlay_dtb, sizeof(DTBLOB_T));
+      clone_dtb.fdt = overlay_copy;
+      err = dtoverlay_merge_fragment(&clone_dtb, target_off, overlay_dtb,
+                                     overlay_off, 0);
+      if (err)
+         break;
+      // Swap the buffers
+      {
+         void *temp = overlay_dtb->fdt;
+         overlay_dtb->fdt = overlay_copy;
+         overlay_copy = temp;
+      }
+
+      // Disable this fragment (and resync with the changed overlay)
+      for (frag_off = fdt_first_subnode(overlay_dtb->fdt, 0), idx = 0;
+           idx < frag_idx;
+           frag_off = fdt_next_subnode(overlay_dtb->fdt, frag_off), idx++)
+         continue;
+
+      overlay_off = fdt_subnode_offset(overlay_dtb->fdt, frag_off, "__overlay__");
+      if (overlay_off >= 0)
+         dtoverlay_set_node_name(overlay_dtb, overlay_off, "__dormant__");
+         // As the new name is the same length, the offsets are still valid
+   }
+
+   if (overlay_copy)
+      free(overlay_copy);
+
+   if (err || !base_dtb)
+      goto no_base_dtb;
+
+   for (frag_off = fdt_first_subnode(overlay_dtb->fdt, 0), frag_idx = 0;
+        frag_off >= 0;
+        frag_off = fdt_next_subnode(overlay_dtb->fdt, frag_off), frag_idx++)
+   {
+      const char *node_name;
+      const char *frag_name;
+      int target_off, overlay_off;
 
       node_name = fdt_get_name(overlay_dtb->fdt, frag_off, NULL);
 
@@ -1068,13 +1162,15 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
             /* Locate the path to the fragment target */
             target_off = dtoverlay_get_target_offset(base_dtb, overlay_dtb,
                                                      sym_frag_off);
+            if (target_off < 0)
+               return target_off;
 
             err = fdt_get_path(base_dtb->fdt, target_off,
                                target_path, sizeof(target_path));
-            if (err != 0)
+            if (err)
             {
                dtoverlay_error("bad target path for %s", sym_path);
-               return err;
+               break;
             }
 
             /* Append the fragment-relative path to the target path */
@@ -1085,7 +1181,8 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
             if (new_path_len >= sizeof(target_path))
             {
                dtoverlay_error("Exported symbol path too long for %s", sym_path);
-               return -FDT_ERR_NOSPACE;
+               err = -FDT_ERR_NOSPACE;
+               break;
             }
             strcpy(target_path + target_path_len, p);
 
@@ -1105,13 +1202,11 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
 
       frag_name = node_name + 9;
 
-      dtoverlay_debug("Found fragment %s (offset %d)", frag_name, frag_off);
-
       // Find the target and overlay nodes
       overlay_off = fdt_subnode_offset(overlay_dtb->fdt, frag_off, "__overlay__");
       if (overlay_off < 0)
       {
-         if (fdt_subnode_offset(overlay_dtb->fdt, frag_off, "__dormant__"))
+         if (fdt_subnode_offset(overlay_dtb->fdt, frag_off, "__dormant__") >= 0)
             dtoverlay_debug("fragment %s disabled", frag_name);
          else
             dtoverlay_error("no overlay in fragment %s", frag_name);
@@ -1120,21 +1215,24 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
 
       target_off = dtoverlay_get_target_offset(base_dtb, overlay_dtb, frag_off);
       if (target_off < 0)
-         return target_off;
+      {
+         err = target_off;
+         break;
+      }
 
       // Now do the merge
       err = dtoverlay_merge_fragment(base_dtb, target_off, overlay_dtb,
                                      overlay_off, 0);
-      if (err != 0)
-      {
-         dtoverlay_error("merge failed");
-         return err;
-      }
    }
 
-   base_dtb->max_phandle = overlay_dtb->max_phandle;
+   if (err == 0)
+      base_dtb->max_phandle = overlay_dtb->max_phandle;
 
-   return 0;
+no_base_dtb:
+   if (err)
+      dtoverlay_error("merge failed");
+
+   return err;
 }
 
 // Returns 0 on success, -ve for fatal errors and +ve for non-fatal errors
