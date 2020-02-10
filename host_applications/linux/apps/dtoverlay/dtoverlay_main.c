@@ -487,6 +487,11 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
 	free_string(p);
     }
 
+    /* Apply any intra-overlay fragments, filtering the symbols */
+    err = dtoverlay_merge_overlay(NULL, overlay_dtb);
+    if (err != 0)
+	return error("Failed to apply intra-overlay fragments");
+
     if (is_dtparam)
     {
         /* Build an overlay DTB */
@@ -511,11 +516,6 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
 
         dtoverlay_free_dtb(base_dtb);
     }
-
-    /* Prevent symbol clash by only preserving those appearing as
-     * properties of the "__exports__" node.
-     */
-    dtoverlay_filter_symbols(overlay_dtb);
 
     if (param_string)
 	dtoverlay_dtb_set_trailer(overlay_dtb, param_string,
