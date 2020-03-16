@@ -211,8 +211,7 @@ int OpenVideoCoreMemoryFileWithOffsetAndSize( const char *filename, VC_MEM_ACCES
         }
         else
         {
-
-            if (!loadOffset && !loadSize)
+            if ( !loadOffset && !loadSize )
             {
                 //Search /proc/cmdline for the vc_mem base and size params
                 int cmdlineFd;
@@ -306,7 +305,7 @@ int OpenVideoCoreMemoryFileWithOffsetAndSize( const char *filename, VC_MEM_ACCES
     else
     {
         off_t len;
-        if (!loadSize)
+        if ( !loadSize )
         {
             len = lseek( newHandle->memFd, 0, SEEK_END );
             if ( len < 0 )
@@ -491,7 +490,7 @@ err_exit:
 
 int OpenVideoCoreMemoryFileWithOffset( const char *filename, VC_MEM_ACCESS_HANDLE_T *vcHandlePtr, size_t loadOffset)
 {
-    return OpenVideoCoreMemoryFileWithOffsetAndSize(filename, vcHandlePtr, loadOffset, 0);
+    return OpenVideoCoreMemoryFileWithOffsetAndSize( filename, vcHandlePtr, loadOffset, 0 );
 }
 
 /****************************************************************************
