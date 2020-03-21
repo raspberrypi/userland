@@ -603,7 +603,9 @@ static int32_t tvservice_wait_for_reply(void *response, uint32_t max_length, uin
       //Check if there is something in the queue, if so return immediately
       //otherwise wait for the semaphore and read again
       success = vchi_msg_dequeue( tvservice_client.client_handle[0], response, max_length, &length_read, VCHI_FLAGS_NONE );
-   } while( length_read == 0 && vcos_event_wait(&tvservice_message_available_event) == VCOS_SUCCESS);
+   } while( (success == VCOS_SUCCESS) &&
+            (length_read == 0) && 
+            (vcos_event_wait(&tvservice_message_available_event) == VCOS_SUCCESS));
    if(length_read) {
       vcos_log_trace("TV service got reply %d bytes", length_read);
    } else {
