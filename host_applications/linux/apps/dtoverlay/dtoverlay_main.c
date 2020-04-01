@@ -102,6 +102,8 @@ const char *work_dir = WORK_DIR;
 const char *overlay_src_dir;
 const char *dt_overlays_dir;
 const char *error_file = NULL;
+const char *platform_string;
+int platform_string_len;
 int dry_run = 0;
 
 int main(int argc, const char **argv)
@@ -162,6 +164,13 @@ int main(int argc, const char **argv)
             if (argn == argc)
                 usage();
             overlay_src_dir = argv[argn++];
+        }
+        else if (strcmp(arg, "-p") == 0)
+        {
+            if (argn == argc)
+                usage();
+            platform_string = argv[argn++];
+            platform_string_len = strlen(platform_string) + 1;
         }
         else if (strcmp(arg, "-v") == 0)
         {
@@ -256,6 +265,34 @@ int main(int argc, const char **argv)
             (run_cmd("mount -t configfs none '%s'", cfg_dir) != 0))
             fatal_error("Failed to mount configfs - %d", errno);
     }
+
+    if (!platform_string)
+    {
+        FILE *fp = fopen("/proc/device-tree/compatible", "r");
+        if (fp)
+        {
+            long len;
+            long bytes_read;
+            char *prop_buf;
+
+            fseek(fp, 0, SEEK_END);
+            len = ftell(fp);
+            fseek(fp, 0, SEEK_SET);
+            prop_buf = malloc(len);
+            bytes_read = fread(prop_buf, 1, len, fp);
+            if (bytes_read == len)
+            {
+                platform_string = prop_buf;
+                platform_string_len = len;
+            }
+            else
+                fatal_error("Failed to read 'compatible' property");
+            fclose(fp);
+        }
+    }
+
+    if (platform_string)
+        dtoverlay_init_map(overlay_src_dir, platform_string, platform_string_len);
 
     if (!dry_run)
     {
@@ -425,6 +462,12 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
     }
     else
     {
+        const char *remapped = dtoverlay_remap_overlay(overlay);
+        if (!remapped)
+            return error("Failed to load '%s'", overlay);
+        if (strcmp(overlay, remapped))
+            dtoverlay_debug("mapped overlay '%s' to '%s'", overlay, remapped);
+        overlay = remapped;
         overlay_file = sprintf_dup("%s/%s.dtbo", overlay_src_dir, overlay);
     }
 
@@ -432,6 +475,7 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
         overlay_name = "dry_run";
     else
         overlay_name = sprintf_dup("%d_%s", state->count, overlay);
+    dtoverlay_debug("loading file '%s'", overlay_file);
     overlay_dtb = dtoverlay_load_dtb(overlay_file, DTOVERLAY_PADDING(4096));
     if (!overlay_dtb)
         return error("Failed to read '%s'", overlay_file);
@@ -851,7 +895,7 @@ static void usage(void)
         printf("  %s                Display help on all parameters\n", cmd_name);
         printf("  %s <param>=<val>...\n", cmd_name);
         printf("  %*s                Add an overlay (with parameters)\n", (int)strlen(cmd_name), "");
-        printf("  %s -D [<idx>]     Dry-run (prepare overlay, but don't apply -\n",
+        printf("  %s -D             Dry-run (prepare overlay, but don't apply -\n",
                cmd_name);
         printf("  %*s                save it as dry-run.dtbo)\n", (int)strlen(cmd_name), "");
         printf("  %s -r [<idx>]     Remove an overlay (by index, or the last)\n", cmd_name);
@@ -866,7 +910,7 @@ static void usage(void)
     {
         printf("  %s <overlay> [<param>=<val>...]\n", cmd_name);
         printf("  %*s                Add an overlay (with parameters)\n", (int)strlen(cmd_name), "");
-        printf("  %s -D [<idx>]     Dry-run (prepare overlay, but don't apply -\n",
+        printf("  %s -D             Dry-run (prepare overlay, but don't apply -\n",
                cmd_name);
         printf("  %*s                save it as dry-run.dtbo)\n", (int)strlen(cmd_name), "");
         printf("  %s -r [<overlay>] Remove an overlay (by name, index or the last)\n", cmd_name);
@@ -880,9 +924,10 @@ static void usage(void)
         printf("    where <overlay> is the name of an overlay or 'dtparam' for dtparams\n");
     }
     printf("Options applicable to most variants:\n");
-    printf("    -d <dir>    Specify an alternate location for the overlays\n");
-    printf("                (defaults to /boot/overlays or /flash/overlays)\n");
-    printf("    -v          Verbose operation\n");
+    printf("    -d <dir>        Specify an alternate location for the overlays\n");
+    printf("                    (defaults to /boot/overlays or /flash/overlays)\n");
+    printf("    -p <string>     Force a compatible string for the platform\n");
+    printf("    -v              Verbose operation\n");
     printf("\n");
     printf("Adding or removing overlays and parameters requires root privileges.\n");
 

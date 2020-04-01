@@ -49,11 +49,15 @@ int main(int argc, char **argv)
    const char *base_file;
    const char *merged_file;
    const char *overlay_file;
+   const char *compatible;
+   char *overlay_dir;
+   char *p;
    DTBLOB_T *base_dtb;
    DTBLOB_T *overlay_dtb;
    int err;
    int argn = 1;
    int max_dtb_size = 100000;
+   int compatible_len;
 
    while ((argn < argc) && (argv[argn][0] == '-'))
    {
@@ -87,6 +91,24 @@ int main(int argc, char **argv)
        return -1;
    }
 
+   if (strnlen(overlay_file, DTOVERLAY_MAX_PATH) == DTOVERLAY_MAX_PATH)
+   {
+       printf("* overlay filename too long\n");
+       return -1;
+   }
+
+   overlay_dir = strdup(overlay_file);
+   p = strrchr(overlay_dir, '/');
+   if (p)
+       *p = 0;
+   else
+       overlay_dir = ".";
+
+   compatible = dtoverlay_get_property(base_dtb,
+                                       dtoverlay_find_node(base_dtb, "/", 1),
+                                       "compatible", &compatible_len);
+   dtoverlay_init_map(overlay_dir, compatible, compatible_len);
+
    err = dtoverlay_set_synonym(base_dtb, "i2c", "i2c0");
    err = dtoverlay_set_synonym(base_dtb, "i2c_arm", "i2c0");
    err = dtoverlay_set_synonym(base_dtb, "i2c_vc", "i2c1");
@@ -100,11 +122,42 @@ int main(int argc, char **argv)
    }
    else
    {
-      overlay_dtb = dtoverlay_load_dtb(overlay_file, max_dtb_size);
-      if (overlay_dtb)
-          err = dtoverlay_fixup_overlay(base_dtb, overlay_dtb);
+      char new_file[DTOVERLAY_MAX_PATH];
+      char *overlay_name;
+      const char *new_name;
+      char *p;
+      int len;
+
+      strcpy(new_file, overlay_file);
+      overlay_name = strrchr(new_file, '/');
+      if (overlay_name)
+         overlay_name++;
       else
-          err = -1;
+         overlay_name = new_file;
+      p = strrchr(overlay_name, '.');
+      if (p)
+         *p = 0;
+      new_name = dtoverlay_remap_overlay(overlay_name);
+      if (new_name)
+      {
+         if (strcmp(overlay_name, new_name))
+            dtoverlay_debug("mapped overlay '%s' to '%s'", overlay_name, new_name);
+
+         len = strlen(new_name);
+         memmove(overlay_name, new_name, len);
+         strcpy(overlay_name + len, ".dtbo");
+
+         overlay_dtb = dtoverlay_load_dtb(new_file, max_dtb_size);
+         if (overlay_dtb)
+            err = dtoverlay_fixup_overlay(base_dtb, overlay_dtb);
+         else
+            err = -1;
+      }
+      else
+      {
+         overlay_dtb = NULL;
+         err = -2;
+      }
    }
 
    while (!err && (argn < argc))
@@ -164,9 +217,6 @@ int main(int argc, char **argv)
    }
 
    dtoverlay_free_dtb(base_dtb);
-
-   if (err != 0)
-      printf("* Exiting with error code %d\n", err);
 
    return err;
 }

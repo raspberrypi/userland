@@ -70,6 +70,9 @@ static void dtoverlay_stdio_logging(dtoverlay_logging_type_t type,
 
 static DTOVERLAY_LOGGING_FUNC *dtoverlay_logging_func = dtoverlay_stdio_logging;
 static int dtoverlay_debug_enabled = 0;
+static DTBLOB_T *overlay_map;
+static const char *platform_name;
+static int platform_name_len;
 
 static int strmemcmp(const char *mem, int mem_len, const char *str)
 {
@@ -541,8 +544,8 @@ static int dtoverlay_merge_fragment(DTBLOB_T *base_dtb, int target_off,
 
    if (dtoverlay_debug_enabled)
    {
-      char base_path[256];
-      char overlay_path[256];
+      char base_path[DTOVERLAY_MAX_PATH];
+      char overlay_path[DTOVERLAY_MAX_PATH];
       fdt_get_path(base_dtb->fdt, target_off, base_path, sizeof(base_path));
       fdt_get_path(overlay_dtb->fdt, overlay_off, overlay_path,
                    sizeof(overlay_path));
@@ -866,7 +869,7 @@ static int dtoverlay_resolve_fixups(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
 
          if (symbols_off < 0)
          {
-            dtoverlay_error("No symbols found");
+            dtoverlay_error("no symbols found");
             return -FDT_ERR_NOTFOUND;
          }
       }
@@ -1120,7 +1123,7 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
 
          fdt_for_each_property_offset(sym_off, overlay_dtb->fdt, frag_off)
          {
-            char target_path[256];
+            char target_path[DTOVERLAY_MAX_PATH];
             const char *sym_name = NULL;
             const char *sym_path;
             const char *p;
@@ -1180,7 +1183,7 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
             new_path_len = target_path_len + (sym_path + sym_len - p);
             if (new_path_len >= sizeof(target_path))
             {
-               dtoverlay_error("Exported symbol path too long for %s", sym_path);
+               dtoverlay_error("exported symbol path too long for %s", sym_path);
                err = -FDT_ERR_NOSPACE;
                break;
             }
@@ -1189,7 +1192,7 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
             base_symbols = fdt_path_offset(base_dtb->fdt, "/__symbols__");
             fdt_setprop(base_dtb->fdt, base_symbols,
                         sym_name, target_path, new_path_len);
-            dtoverlay_debug("Set label '%s' path to '%s'",
+            dtoverlay_debug("set label '%s' path to '%s'",
                             sym_name, target_path);
          }
          continue;
@@ -1310,7 +1313,6 @@ int dtoverlay_filter_symbols(DTBLOB_T *dtb)
    int symbols_off;
    int exports_off;
    struct str_item *exports = NULL;
-   const fdt32_t *prop_val;
    int prop_off;
 
    struct str_item
@@ -1368,7 +1370,7 @@ int dtoverlay_filter_symbols(DTBLOB_T *dtb)
       const char *name = NULL;
       struct str_item *str;
 
-      prop_val = fdt_getprop_by_offset(dtb->fdt, prop_off, &name, NULL);
+      (void)fdt_getprop_by_offset(dtb->fdt, prop_off, &name, NULL);
       if (!name)
          break;
 
@@ -1419,7 +1421,7 @@ const char *dtoverlay_find_override(DTBLOB_T *dtb, const char *override_name,
    data = fdt_getprop(dtb->fdt, overrides_off, override_name, &len);
    *data_len = len;
    if (data)
-      dtoverlay_debug("Found override %s", override_name);
+      dtoverlay_debug("found override %s", override_name);
    else
       dtoverlay_debug("/__overrides__ has no %s property", override_name);
 
@@ -2357,8 +2359,149 @@ DTBLOB_T *dtoverlay_load_dtb(const char *filename, int max_size)
    FILE *fp = fopen(filename, "rb");
    if (fp)
       return dtoverlay_load_dtb_from_fp(fp, max_size);
-   dtoverlay_error("Failed to open '%s'", filename);
+   dtoverlay_error("failed to open '%s'", filename);
    return NULL;
+}
+
+void dtoverlay_init_map_from_fp(FILE *fp, const char *compatible,
+                                int compatible_len)
+{
+    if (!compatible)
+        return;
+
+    while (compatible_len > 0)
+    {
+        const char *p;
+        int len;
+
+        // Look for a string containing a comma
+        p = memchr(compatible, ',', compatible_len);
+
+        if (p)
+        {
+            p++;
+            len = compatible + compatible_len - p;
+        }
+        else
+        {
+            // Otherwise treat it as a simple string
+            p = compatible;
+            len = compatible_len;
+        }
+
+        /* Group the members of the BCM2835 family */
+        if (strncmp(p, "bcm2708", len) == 0 ||
+            strncmp(p, "bcm2709", len) == 0 ||
+            strncmp(p, "bcm2710", len) == 0 ||
+            strncmp(p, "bcm2835", len) == 0 ||
+            strncmp(p, "bcm2836", len) == 0 ||
+            strncmp(p, "bcm2837", len) == 0)
+        {
+            platform_name = "bcm2835";
+            break;
+        }
+        else if (strncmp(p, "bcm2711", len) == 0)
+        {
+            platform_name = "bcm2711";
+            break;
+        }
+
+        compatible_len -= (p - compatible);
+        compatible = p;
+
+        len = strnlen(compatible, compatible_len) + 1;
+        compatible += len;
+        compatible_len -= len;
+    }
+
+    if (platform_name)
+    {
+        dtoverlay_debug("using platform '%s'", platform_name);
+        platform_name_len = strlen(platform_name);
+        if (fp)
+            overlay_map = dtoverlay_load_dtb_from_fp(fp, 0);
+    }
+    else
+    {
+        dtoverlay_warn("no matching platform found");
+    }
+
+    dtoverlay_debug("overlay map %sloaded", overlay_map ? "" : "not ");
+}
+
+void dtoverlay_init_map(const char *overlay_dir, const char *compatible,
+                        int compatible_len)
+{
+    char map_file[DTOVERLAY_MAX_PATH];
+    int dir_len = strlen(overlay_dir);
+    FILE *fp;
+    static int tried;
+
+    if (tried)
+        return;
+
+    tried = 1;
+
+    if (!compatible)
+        return;
+
+    /* Handle the possibility that the supplied directory may or may not end
+       with a slash */
+    sprintf(map_file, "%s%soverlay_map.dtb", overlay_dir,
+            (!dir_len || overlay_dir[dir_len - 1] != '/') ? "/" : "");
+    fp = fopen(map_file, "rb");
+    dtoverlay_init_map_from_fp(fp, compatible, compatible_len);
+}
+
+const char *dtoverlay_remap_overlay(const char *overlay)
+{
+    while (overlay_map)
+    {
+        const char *deprecated_msg;
+        const char *new_name;
+        int root_off;
+        int overlay_off;
+        int prop_len;
+
+        root_off = fdt_path_offset(overlay_map->fdt, "/");
+
+        overlay_off = fdt_subnode_offset(overlay_map->fdt, root_off, overlay);
+        if (overlay_off < 0)
+            break;
+
+        new_name = fdt_getprop_namelen(overlay_map->fdt, overlay_off,
+                                       platform_name, platform_name_len,
+                                       &prop_len);
+
+        if (new_name)
+        {
+            if (new_name[0])
+                overlay = new_name;
+            break;
+        }
+
+        // Has it been renamed or deprecated?
+        new_name = fdt_getprop_namelen(overlay_map->fdt, overlay_off,
+                                       "renamed", 7, &prop_len);
+        if (new_name)
+        {
+            dtoverlay_warn("overlay '%s' has been renamed '%s'",
+                            overlay, new_name);
+            overlay = new_name;
+            continue;
+        }
+
+        deprecated_msg = fdt_getprop_namelen(overlay_map->fdt, overlay_off,
+                                                 "deprecated", 10, &prop_len);
+        if (deprecated_msg)
+            dtoverlay_error("overlay '%s' is deprecated: %s",
+                            overlay, deprecated_msg);
+        else
+            dtoverlay_error("overlay '%s' is not supported on the '%s' platform", overlay, platform_name);
+        return NULL;
+    }
+
+    return overlay;
 }
 
 DTBLOB_T *dtoverlay_import_fdt(void *fdt, int buf_size)
@@ -2435,12 +2578,12 @@ int dtoverlay_save_dtb(const DTBLOB_T *dtb, const char *filename)
          goto error_exit;
       }
 
-      dtoverlay_debug("Wrote %ld bytes to '%s'", len, filename);
+      dtoverlay_debug("wrote %ld bytes to '%s'", len, filename);
       fclose(fp);
    }
    else
    {
-      dtoverlay_debug("Failed to create '%s'", filename);
+      dtoverlay_debug("failed to create '%s'", filename);
       err = -1;
    }
 
@@ -2529,7 +2672,7 @@ int dtoverlay_find_symbol(DTBLOB_T *dtb, const char *symbol_name)
 
       if (symbols_off < 0)
       {
-         dtoverlay_error("No symbols found");
+         dtoverlay_error("no symbols found");
          return -FDT_ERR_NOTFOUND;
       }
 
@@ -2595,7 +2738,7 @@ int dtoverlay_set_property(DTBLOB_T *dtb, int pos,
 {
    int err = fdt_setprop(dtb->fdt, pos, prop_name, prop, prop_len);
    if (err < 0)
-      dtoverlay_error("Failed to set property '%s'", prop_name);
+      dtoverlay_error("failed to set property '%s'", prop_name);
    return err;
 }
 
@@ -2642,6 +2785,14 @@ void dtoverlay_error(const char *fmt, ...)
    va_end(args);
 }
 
+void dtoverlay_warn(const char *fmt, ...)
+{
+   va_list args;
+   va_start(args, fmt);
+   (*dtoverlay_logging_func)(DTOVERLAY_WARN, fmt, args);
+   va_end(args);
+}
+
 void dtoverlay_debug(const char *fmt, ...)
 {
    va_list args;
@@ -2662,6 +2813,10 @@ static void dtoverlay_stdio_logging(dtoverlay_logging_type_t type,
    {
    case DTOVERLAY_ERROR:
       type_str = "error";
+      break;
+
+   case DTOVERLAY_WARN:
+      type_str = "warn";
       break;
 
    case DTOVERLAY_DEBUG:

@@ -45,11 +45,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define ONLY_FATAL(err) (IS_FATAL(err) ? (err) : 0)
 
 #define DTOVERLAY_PADDING(size) (-(size))
+#define DTOVERLAY_MAX_PATH 256
 
 typedef enum
 {
    DTOVERLAY_ERROR,
-   DTOVERLAY_DEBUG
+   DTOVERLAY_DEBUG,
+   DTOVERLAY_WARN, // Append to preserve backwards compatibility
 } dtoverlay_logging_type_t;
 
 typedef struct dtoverlay_struct
@@ -160,6 +162,13 @@ DTBLOB_T *dtoverlay_load_dtb_from_fp(FILE *fp, int max_size);
 
 DTBLOB_T *dtoverlay_load_dtb(const char *filename, int max_size);
 
+void dtoverlay_init_map_from_fp(FILE *fp, const char *compatible,
+                                int compatible_len);
+void dtoverlay_init_map(const char *overlay_dir, const char *compatible,
+                        int compatible_len);
+
+const char *dtoverlay_remap_overlay(const char *overlay);
+
 DTBLOB_T *dtoverlay_import_fdt(void *fdt, int max_size);
 
 int dtoverlay_save_dtb(const DTBLOB_T *dtb, const char *filename);
@@ -220,6 +229,8 @@ void dtoverlay_set_logging_func(DTOVERLAY_LOGGING_FUNC *func);
 void dtoverlay_enable_debug(int enable);
 
 void dtoverlay_error(const char *fmt, ...);
+
+void dtoverlay_warn(const char *fmt, ...);
 
 void dtoverlay_debug(const char *fmt, ...);
 
