@@ -90,11 +90,11 @@ typedef void DTOVERLAY_LOGGING_FUNC(dtoverlay_logging_type_t type,
                                     const char *fmt, va_list args);
 
 typedef int (*override_callback_t)(int override_type,
-				   const char *override_value,
-				   DTBLOB_T *dtb, int node_off,
-				   const char *prop_name, int target_phandle,
-				   int target_off, int target_size,
-				   void *callback_state);
+                                   const char *override_value,
+                                   DTBLOB_T *dtb, int node_off,
+                                   const char *prop_name, int target_phandle,
+                                   int target_off, int target_size,
+                                   void *callback_state);
 
 uint8_t dtoverlay_read_u8(const void *src, int off);
 uint16_t dtoverlay_read_u16(const void *src, int off);
@@ -143,7 +143,7 @@ int dtoverlay_foreach_override_target(DTBLOB_T *dtb, const char *override_name,
                                       const char *override_data, int data_len,
                                       const char *override_value,
                                       override_callback_t callback,
-                		      void *callback_value);
+                                      void *callback_value);
 
 int dtoverlay_apply_override(DTBLOB_T *dtb, const char *override_name,
                              const char *override_data, int data_len,

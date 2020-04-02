@@ -51,7 +51,7 @@ typedef enum
 #define DTOVERRIDE_BYTE_STRING 6
 
 static int dtoverlay_extract_override(const char *override_name,
-				      char *override_value, int value_size,
+                                      char *override_value, int value_size,
                                       int *phandle_ptr,
                                       const char **datap, const char *dataendp,
                                       const char **namep, int *namelenp,
@@ -61,7 +61,7 @@ static const char *dtoverlay_lookup_key(const char *lookup_string, const char *d
                                         const char *key, char *buf, int buf_len);
 
 static int dtoverlay_set_node_name(DTBLOB_T *dtb, int node_off,
-				   const char *name);
+                                   const char *name);
 
 static void dtoverlay_stdio_logging(dtoverlay_logging_type_t type,
                                     const char *fmt, va_list args);
@@ -336,7 +336,7 @@ static void dynstring_free(struct dynstring *ds)
 }
 
 static int dtoverlay_set_node_name(DTBLOB_T *dtb, int node_off,
-				   const char *name)
+                                   const char *name)
 {
    struct dynstring path_buf;
    struct dynstring prop_buf;
@@ -515,20 +515,20 @@ int dtoverlay_create_prop_fragment(DTBLOB_T *dtb, int idx, int target_phandle,
                                    const char *prop_name, const void *prop_data,
                                    int prop_len)
 {
-	char fragment_name[20];
-	int frag_off, ovl_off;
-	int ret;
-	snprintf(fragment_name, sizeof(fragment_name), "fragment-%u", idx);
-	frag_off = fdt_add_subnode(dtb->fdt, 0, fragment_name);
-	if (frag_off < 0)
-		return frag_off;
-	ret = fdt_setprop_u32(dtb->fdt, frag_off, "target", target_phandle);
-	if (ret < 0)
-		return ret;
-	ovl_off = fdt_add_subnode(dtb->fdt, frag_off, "__overlay__");
-	if (ovl_off < 0)
-		return ovl_off;
-	return fdt_setprop(dtb->fdt, ovl_off, prop_name, prop_data, prop_len);
+   char fragment_name[20];
+   int frag_off, ovl_off;
+   int ret;
+   snprintf(fragment_name, sizeof(fragment_name), "fragment-%u", idx);
+   frag_off = fdt_add_subnode(dtb->fdt, 0, fragment_name);
+   if (frag_off < 0)
+      return frag_off;
+   ret = fdt_setprop_u32(dtb->fdt, frag_off, "target", target_phandle);
+   if (ret < 0)
+      return ret;
+   ovl_off = fdt_add_subnode(dtb->fdt, frag_off, "__overlay__");
+   if (ovl_off < 0)
+      return ovl_off;
+   return fdt_setprop(dtb->fdt, ovl_off, prop_name, prop_data, prop_len);
 }
 
 // Returns 0 on success, otherwise <0 error code
@@ -568,7 +568,7 @@ static int dtoverlay_merge_fragment(DTBLOB_T *base_dtb, int target_off,
       /* Skip these system properties (only phandles in the first level) */
       if ((strcmp(prop_name, "name") == 0) ||
           ((depth == 0) && ((strcmp(prop_name, "phandle") == 0) ||
-			    (strcmp(prop_name, "linux,phandle") == 0))))
+                            (strcmp(prop_name, "linux,phandle") == 0))))
           continue;
 
       dtoverlay_debug("  +prop(%s)", prop_name);
@@ -1439,11 +1439,11 @@ int hex_digit(char c)
 }
 
 int dtoverlay_override_one_target(int override_type,
-				  const char *override_value,
-				  DTBLOB_T *dtb, int node_off,
-				  const char *prop_name, int target_phandle,
-				  int target_off, int target_size,
-				  void *callback_state)
+                                  const char *override_value,
+                                  DTBLOB_T *dtb, int node_off,
+                                  const char *prop_name, int target_phandle,
+                                  int target_off, int target_size,
+                                  void *callback_state)
 {
    int err = 0;
 
@@ -1454,19 +1454,19 @@ int dtoverlay_override_one_target(int override_type,
 
       /* Replace the whole property with the string */
       if ((strcmp(prop_name, "bootargs") == 0) &&
-	  ((prop_val = fdt_getprop_w(dtb->fdt, node_off, prop_name,
-				     &prop_len)) != NULL) &&
-	  (prop_len > 0) && prop_val[0])
+          ((prop_val = fdt_getprop_w(dtb->fdt, node_off, prop_name,
+                                     &prop_len)) != NULL) &&
+          (prop_len > 0) && prop_val[0])
       {
-	 prop_val[prop_len - 1] = ' ';
-	 err = fdt_appendprop_string(dtb->fdt, node_off, prop_name, override_value);
+         prop_val[prop_len - 1] = ' ';
+         err = fdt_appendprop_string(dtb->fdt, node_off, prop_name, override_value);
       }
       else if (strcmp(prop_name, "name") == 0) // "name" is a pseudo-property
       {
          err = dtoverlay_set_node_name(dtb, node_off, override_value);
       }
       else
-	 err = fdt_setprop_string(dtb->fdt, node_off, prop_name, override_value);
+         err = fdt_setprop_string(dtb->fdt, node_off, prop_name, override_value);
    }
    else if (override_type == DTOVERRIDE_BYTE_STRING)
    {
@@ -1540,44 +1540,44 @@ int dtoverlay_override_one_target(int override_type,
       switch (override_type)
       {
       case DTOVERRIDE_INTEGER:
-	 /* Patch a word within the property */
-	 prop_val = (void *)fdt_getprop(dtb->fdt, node_off, prop_name,
-					&prop_len);
-	 new_prop_len = target_off + target_size;
-	 if (prop_len < new_prop_len)
-	 {
-	     /* This property either doesn't exist or isn't long enough.
-		Create a buffer containing any existing property data
-		with zero padding, which will later be patched and written
-		back. */
-	     prop_buf = calloc(1, new_prop_len);
-	     if (!prop_buf)
-	     {
-		 dtoverlay_error("  out of memory");
-		 return NON_FATAL(FDT_ERR_NOSPACE);
-	     }
-	     if (prop_len > 0)
-		 memcpy(prop_buf, prop_val, prop_len);
-	     prop_val = prop_buf;
-	 }
+         /* Patch a word within the property */
+         prop_val = (void *)fdt_getprop(dtb->fdt, node_off, prop_name,
+                                        &prop_len);
+         new_prop_len = target_off + target_size;
+         if (prop_len < new_prop_len)
+         {
+             /* This property either doesn't exist or isn't long enough.
+                Create a buffer containing any existing property data
+                with zero padding, which will later be patched and written
+                back. */
+             prop_buf = calloc(1, new_prop_len);
+             if (!prop_buf)
+             {
+                 dtoverlay_error("  out of memory");
+                 return NON_FATAL(FDT_ERR_NOSPACE);
+             }
+             if (prop_len > 0)
+                 memcpy(prop_buf, prop_val, prop_len);
+             prop_val = prop_buf;
+         }
 
-	 switch (target_size)
-	 {
-	 case 1:
-	     dtoverlay_write_u8(prop_val, target_off, (uint32_t)override_int);
-	     break;
-	 case 2:
-	     dtoverlay_write_u16(prop_val, target_off, (uint32_t)override_int);
-	     break;
-	 case 4:
-	     dtoverlay_write_u32(prop_val, target_off, (uint32_t)override_int);
-	     break;
-	 case 8:
-	     dtoverlay_write_u64(prop_val, target_off, override_int);
-	     break;
-	 default:
-	     break;
-	 }
+         switch (target_size)
+         {
+         case 1:
+             dtoverlay_write_u8(prop_val, target_off, (uint32_t)override_int);
+             break;
+         case 2:
+             dtoverlay_write_u16(prop_val, target_off, (uint32_t)override_int);
+             break;
+         case 4:
+             dtoverlay_write_u32(prop_val, target_off, (uint32_t)override_int);
+             break;
+         case 8:
+             dtoverlay_write_u64(prop_val, target_off, override_int);
+             break;
+         default:
+             break;
+         }
 
          if (prop_buf)
          {
@@ -1602,76 +1602,76 @@ int dtoverlay_override_one_target(int override_type,
                free(new_name);
             }
          }
-	 break;
+         break;
 
       case DTOVERRIDE_BOOLEAN:
       case DTOVERRIDE_BOOLEAN_INV:
-	 /* This is a boolean property (present->true, absent->false) */
-	 if (override_int ^ (override_type == DTOVERRIDE_BOOLEAN_INV))
-	    err = fdt_setprop(dtb->fdt, node_off, prop_name, NULL, 0);
-	 else
-	 {
-	    err = fdt_delprop(dtb->fdt, node_off, prop_name);
-	    if (err == -FDT_ERR_NOTFOUND)
-	       err = 0;
-	 }
-	 break;
+         /* This is a boolean property (present->true, absent->false) */
+         if (override_int ^ (override_type == DTOVERRIDE_BOOLEAN_INV))
+            err = fdt_setprop(dtb->fdt, node_off, prop_name, NULL, 0);
+         else
+         {
+            err = fdt_delprop(dtb->fdt, node_off, prop_name);
+            if (err == -FDT_ERR_NOTFOUND)
+               err = 0;
+         }
+         break;
 
       case DTOVERRIDE_OVERLAY:
-	 /* Apply the overlay-wide override. The supported options are (<frag> is a fragment number):
-	    +<frag>    Enable a fragment
-	    -<frag>    Disable a fragment
-	    =<frag>    Enable/disable the fragment according to the override value
-	    !<frag>    Disable/enable the fragment according to the inverse of the override value */
-	 p = prop_name;
-	 while (*p && !err)
-	 {
-	    char type = *p;
-	    int frag_off;
-	    switch (type)
-	    {
-	    case '+':
-	    case '-':
-	    case '=':
-	    case '!':
-	       frag_num = strtoul(p + 1, &end, 0);
-	       if (end != p)
-	       {
-		  /* Change fragment@<frag_num>/__overlay__<->__dormant__ as necessary */
-		  const char *states[2] = { "__dormant__", "__overlay__" };
-		  char node_name[24];
-		  int active = (type == '+') ||
-			  ((type == '=') && (override_int != 0)) ||
-			  ((type == '!') && (override_int == 0));
-		  snprintf(node_name, sizeof(node_name), "/fragment@%u", frag_num);
-		  frag_off = fdt_path_offset(dtb->fdt, node_name);
-		  if (frag_off < 0)
-		  {
-		      snprintf(node_name, sizeof(node_name), "/fragment-%u", frag_num);
-		      frag_off = fdt_path_offset(dtb->fdt, node_name);
-		  }
-		  if (frag_off >= 0)
-		  {
-		     frag_off = fdt_subnode_offset(dtb->fdt, frag_off, states[!active]);
-		     if (frag_off >= 0)
-			(void)dtoverlay_set_node_name(dtb, frag_off, states[active]);
-		  }
-		  else
-		  {
-		     dtoverlay_error("  fragment %u not found", frag_num);
-		     err = NON_FATAL(frag_off);
-		  }
-		  p = end;
-	       }
-	       else
-	       {
-		  dtoverlay_error("  invalid overlay override '%s'", prop_name);
-		  err = NON_FATAL(FDT_ERR_BADVALUE);
-	       }
-	       break;
-	    }
-	 }
-	 break;
+         /* Apply the overlay-wide override. The supported options are (<frag> is a fragment number):
+            +<frag>    Enable a fragment
+            -<frag>    Disable a fragment
+            =<frag>    Enable/disable the fragment according to the override value
+            !<frag>    Disable/enable the fragment according to the inverse of the override value */
+         p = prop_name;
+         while (*p && !err)
+         {
+            char type = *p;
+            int frag_off;
+            switch (type)
+            {
+            case '+':
+            case '-':
+            case '=':
+            case '!':
+               frag_num = strtoul(p + 1, &end, 0);
+               if (end != p)
+               {
+                  /* Change fragment@<frag_num>/__overlay__<->__dormant__ as necessary */
+                  const char *states[2] = { "__dormant__", "__overlay__" };
+                  char node_name[24];
+                  int active = (type == '+') ||
+                          ((type == '=') && (override_int != 0)) ||
+                          ((type == '!') && (override_int == 0));
+                  snprintf(node_name, sizeof(node_name), "/fragment@%u", frag_num);
+                  frag_off = fdt_path_offset(dtb->fdt, node_name);
+                  if (frag_off < 0)
+                  {
+                      snprintf(node_name, sizeof(node_name), "/fragment-%u", frag_num);
+                      frag_off = fdt_path_offset(dtb->fdt, node_name);
+                  }
+                  if (frag_off >= 0)
+                  {
+                     frag_off = fdt_subnode_offset(dtb->fdt, frag_off, states[!active]);
+                     if (frag_off >= 0)
+                        (void)dtoverlay_set_node_name(dtb, frag_off, states[active]);
+                  }
+                  else
+                  {
+                     dtoverlay_error("  fragment %u not found", frag_num);
+                     err = NON_FATAL(frag_off);
+                  }
+                  p = end;
+               }
+               else
+               {
+                  dtoverlay_error("  invalid overlay override '%s'", prop_name);
+                  err = NON_FATAL(FDT_ERR_BADVALUE);
+               }
+               break;
+            }
+         }
+         break;
       }
    }
 
@@ -1704,10 +1704,10 @@ Translation:
 // Returns 0 on success, -ve for fatal errors and +ve for non-fatal errors
 // After calling this, assume all node offsets are no longer valid
 int dtoverlay_foreach_override_target(DTBLOB_T *dtb, const char *override_name,
-				      const char *override_data, int data_len,
-				      const char *override_value,
-				      override_callback_t callback,
-				      void *callback_state)
+                                      const char *override_data, int data_len,
+                                      const char *override_value,
+                                      override_callback_t callback,
+                                      void *callback_state)
 {
    int err = 0;
    int target_phandle = 0;
@@ -1775,7 +1775,7 @@ int dtoverlay_foreach_override_target(DTBLOB_T *dtb, const char *override_name,
       }
 
       err = callback(override_type, target_value, dtb, node_off, prop_name,
-		     target_phandle, target_off, target_size, callback_state);
+                     target_phandle, target_off, target_size, callback_state);
 
       if (override_type == DTOVERRIDE_END)
          break;
@@ -1792,10 +1792,10 @@ int dtoverlay_apply_override(DTBLOB_T *dtb, const char *override_name,
                              const char *override_value)
 {
    return dtoverlay_foreach_override_target(dtb, override_name,
-					    override_data, data_len,
-					    override_value,
-					    dtoverlay_override_one_target,
-					    NULL);
+                                            override_data, data_len,
+                                            override_value,
+                                            dtoverlay_override_one_target,
+                                            NULL);
 }
 
 /* Returns an override type (DTOVERRIDE_INTEGER, DTOVERRIDE_BOOLEAN, DTOVERRIDE_STRING, DTOVERRIDE_OVERLAY),
@@ -1805,7 +1805,7 @@ static int dtoverlay_extract_override(const char *override_name,
                                       int *phandle_ptr,
                                       const char **datap, const char *data_end,
                                       const char **namep, int *namelenp,
-				      int *offp, int *sizep)
+                                      int *offp, int *sizep)
 {
    const char *data;
    const char *prop_name, *override_end;
@@ -1820,7 +1820,7 @@ static int dtoverlay_extract_override(const char *override_name,
    if (len <= 0)
    {
       if (len < 0)
-	 return len;
+         return len;
       *phandle_ptr = 0;
       *namep = NULL;
       return DTOVERRIDE_END;
@@ -1897,7 +1897,7 @@ static int dtoverlay_extract_override(const char *override_name,
       else if (sep == '!')
       {
          /* The target is a boolean parameter (present->true, absent->false),
-	  * but the sense of the value is inverted */
+          * but the sense of the value is inverted */
          *offp = 0;
          *sizep = 0;
          type = DTOVERRIDE_BOOLEAN_INV;
