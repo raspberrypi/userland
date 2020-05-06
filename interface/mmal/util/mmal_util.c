@@ -126,10 +126,21 @@ static struct {
    {MMAL_ENCODING_BAYER_SGRBG12P,      12,8, 32},
    {MMAL_ENCODING_BAYER_SGBRG12P,      12,8, 32},
    {MMAL_ENCODING_BAYER_SRGGB12P,      12,8, 32},
+   {MMAL_ENCODING_BAYER_SBGGR14P,      14,8, 32},
+   {MMAL_ENCODING_BAYER_SGRBG14P,      14,8, 32},
+   {MMAL_ENCODING_BAYER_SGBRG14P,      14,8, 32},
+   {MMAL_ENCODING_BAYER_SRGGB14P,      14,8, 32},
    {MMAL_ENCODING_BAYER_SBGGR16,       2, 1, 32},
    {MMAL_ENCODING_BAYER_SGBRG16,       2, 1, 32},
    {MMAL_ENCODING_BAYER_SGRBG16,       2, 1, 32},
    {MMAL_ENCODING_BAYER_SRGGB16,       2, 1, 32},
+
+   // Monochrome formats with MIPI packing
+   {MMAL_ENCODING_GREY,                1, 1, 32},
+   {MMAL_ENCODING_Y10P,                10,8, 32},
+   {MMAL_ENCODING_Y12P,                12,8, 32},
+   {MMAL_ENCODING_Y14P,                14,8, 32},
+   {MMAL_ENCODING_Y16,                 2, 1, 32},
 
    /* {MMAL_ENCODING_YUVUV128, 1, 1}, That's a special case which must not be included */
    /* {MMAL_ENCODING_YUVUV64_16, 1, 1}, That's a special case which must not be included */
