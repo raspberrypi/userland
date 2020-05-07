@@ -167,6 +167,7 @@ typedef struct raspicam_camera_parameters_s
    unsigned int annotate_justify;
    unsigned int annotate_x;
    unsigned int annotate_y;
+   int focus_window;
 
    MMAL_PARAMETER_STEREOSCOPIC_MODE_T stereo_mode;
    float analog_gain;         // Analog gain
@@ -222,6 +223,7 @@ int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int bitmask, co
                                  const unsigned int justify, const unsigned int x, const unsigned int y);
 int raspicamcontrol_set_stereo_mode(MMAL_PORT_T *port, MMAL_PARAMETER_STEREOSCOPIC_MODE_T *stereo_mode);
 int raspicamcontrol_set_gains(MMAL_COMPONENT_T *camera, float analog, float digital);
+int raspicamcontrol_set_focus_window(MMAL_COMPONENT_T *camera, int focus_window);
 
 //Individual getting functions
 int raspicamcontrol_get_saturation(MMAL_COMPONENT_T *camera);

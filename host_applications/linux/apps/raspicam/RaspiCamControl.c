@@ -180,7 +180,8 @@ enum
    CommandFlicker,
    CommandAnalogGain,
    CommandDigitalGain,
-   CommandSettings
+   CommandSettings,
+   CommandFocusWindow
 };
 
 static COMMAND_LIST  cmdline_commands[] =
@@ -214,6 +215,7 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandAnalogGain,  "-analoggain", "ag", "Set the analog gain (floating point)", 1},
    {CommandDigitalGain, "-digitalgain", "dg", "Set the digital gain (floating point)", 1},
    {CommandSettings,    "-settings",   "set","Retrieve camera settings and write to stdout", 0},
+   {CommandFocusWindow, "-focus",      "fw","Draw a window with the focus FoM value on the image.", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -848,6 +850,13 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
       break;
    }
 
+   case CommandFocusWindow:
+   {
+      params->focus_window = 1;
+      used = 1;
+      break;
+   }
+
    }
 
    return used;
@@ -1047,6 +1056,7 @@ int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_
                                           params->annotate_x,
                                           params->annotate_y);
    result += raspicamcontrol_set_gains(camera, params->analog_gain, params->digital_gain);
+   result += raspicamcontrol_set_focus_window(camera, params->focus_window);
 
    if (params->settings)
    {
@@ -1582,6 +1592,13 @@ int raspicamcontrol_set_stats_pass(MMAL_COMPONENT_T *camera, int stats_pass)
    return mmal_status_to_int(mmal_port_parameter_set_boolean(camera->control, MMAL_PARAMETER_CAPTURE_STATS_PASS, stats_pass));
 }
 
+int raspicamcontrol_set_focus_window(MMAL_COMPONENT_T *camera, int focus_window)
+{
+   if (!camera)
+      return 1;
+
+   return mmal_status_to_int(mmal_port_parameter_set_boolean(camera->control, MMAL_PARAMETER_DRAW_BOX_FACES_AND_FOCUS, focus_window));
+}
 
 /**
  * Set the annotate data
