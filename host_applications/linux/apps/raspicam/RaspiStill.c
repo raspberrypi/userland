@@ -1733,6 +1733,14 @@ int main(int argc, const char **argv)
       encoder_input_port  = state.encoder_component->input[0];
       encoder_output_port = state.encoder_component->output[0];
 
+      if (state.burstCaptureMode &&
+          state.camera_parameters.exposureMode == MMAL_PARAM_EXPOSUREMODE_OFF &&
+          state.camera_parameters.shutter_speed &&
+          state.camera_parameters.analog_gain && state.camera_parameters.stats_pass)
+      {
+         mmal_port_parameter_set_boolean(state.camera_component->control,  MMAL_PARAMETER_CAMERA_BURST_CAPTURE, 1);
+      }
+
       if (! state.useGL)
       {
          if (state.common_settings.verbose)
