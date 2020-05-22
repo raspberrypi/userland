@@ -231,8 +231,8 @@ void vcos_log_dump_mem_impl( const VCOS_LOG_CAT_T *cat,
 
 # if !defined(AMPUTATE_ALL_VCOS_LOGGING) && (!defined(NDEBUG) || defined(VCOS_ALWAYS_WANT_LOGGING))
 #  define VCOS_LOGGING_ENABLED
-#  define _VCOS_LOG_X(cat, _level, fmt...)   do { if (vcos_is_log_enabled(cat,_level)) vcos_log_impl(cat,_level,fmt); } while (0)
-#  define _VCOS_VLOG_X(cat, _level, fmt, ap) do { if (vcos_is_log_enabled(cat,_level)) vcos_vlog_impl(cat,_level,fmt,ap); } while (0)
+#  define _VCOS_LOG_X(cat, _level, fmt...)   do { if (vcos_is_log_enabled(cat,_level) && NULL != cat) vcos_log_impl(cat,_level,fmt); } while (0)
+#  define _VCOS_VLOG_X(cat, _level, fmt, ap) do { if (vcos_is_log_enabled(cat,_level) && NULL != cat) vcos_vlog_impl(cat,_level,fmt,ap); } while (0)
 # else
 #  define _VCOS_LOG_X(cat, _level, fmt...) (void)0
 #  define _VCOS_VLOG_X(cat, _level, fmt, ap) (void)0
