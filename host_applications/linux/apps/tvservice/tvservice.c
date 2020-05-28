@@ -545,7 +545,7 @@ static int dump_edid( int display_id, const char *filename )
    if (fp)
       fclose(fp);
    if(written) {
-      LOG_STD( "Written %d bytes to %s", written, filename);
+      LOG_STD( "Written %zu bytes to %s", written, filename);
    } else {
       LOG_STD( "Nothing written!");
    }
