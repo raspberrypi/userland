@@ -8,9 +8,13 @@ SET(PROJECT_VER_PATCH 0)
 SET(PROJECT_VER "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}.${PROJECT_VER_PATCH}")
 SET(PROJECT_APIVER "${PROJECT_VER}")
 
-set(BUILD_MMAL TRUE)
-set(BUILD_MMAL_APPS TRUE)
-
+if(ARM64)
+   set(BUILD_MMAL FALSE)
+   set(BUILD_MMAL_APPS FALSE)
+else()
+   set(BUILD_MMAL TRUE)
+   set(BUILD_MMAL_APPS TRUE)
+endif()
 set(vmcs_root ${PROJECT_SOURCE_DIR})
 get_filename_component(VIDEOCORE_ROOT . ABSOLUTE)
 
@@ -74,11 +78,9 @@ if(BUILD_MMAL)
 endif()
 
 # VidTex supports Android and Linux
-if(NOT ARM64)
-   if(BUILD_MMAL_APPS)
-   add_subdirectory(host_applications/android/apps/vidtex)
-   endif(BUILD_MMAL_APPS)
-endif()
+if(BUILD_MMAL_APPS)
+add_subdirectory(host_applications/android/apps/vidtex)
+endif(BUILD_MMAL_APPS)
 
 if(NOT ARM64)
    add_subdirectory(middleware/openmaxil)
