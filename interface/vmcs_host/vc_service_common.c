@@ -44,11 +44,11 @@ VC_SERVICE_VCHI_STATUS_T vchi2service_status(int32_t x) {
 const char* vchi2service_status_string(VC_SERVICE_VCHI_STATUS_T status) {
    const char* string = "";
    switch(status) {
-   case VCHIQ_SUCCESS:
+   case VC_SERVICE_VCHI_SUCCESS:
       string = "success"; break;
-   case VCHIQ_ERROR:
+   case VC_SERVICE_VCHI_VCHIQ_ERROR:
       string = "vchiq error"; break;
-   case VCHIQ_RETRY:
+   case VC_SERVICE_VCHI_RETRY:
       string = "retry"; break;
    default:
       string = "unknown";
