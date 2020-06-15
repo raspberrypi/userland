@@ -688,6 +688,7 @@ static struct {
    {MMAL_ENCODING_BMP,            OMX_IMAGE_CodingBMP},
    {MMAL_ENCODING_TGA,            OMX_IMAGE_CodingTGA},
    {MMAL_ENCODING_PPM,            OMX_IMAGE_CodingPPM},
+   {MMAL_ENCODING_BRCM_STATS,     OMX_IMAGE_CodingBrcmStatistics},
    {MMAL_ENCODING_UNKNOWN,        OMX_IMAGE_CodingUnused}
 };
 
