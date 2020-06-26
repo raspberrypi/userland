@@ -306,7 +306,7 @@ void vcos_vlog_default_impl(const VCOS_LOG_CAT_T *cat, VCOS_LOG_LEVEL_T _level, 
 #endif
       if(NULL != log_fhandle)
       {
-         if (cat->flags.want_prefix)
+         if (cat->flags.want_prefix && cat->name)
             fprintf( log_fhandle, "%s: ", cat->name );
          vfprintf(log_fhandle, fmt, args);
          fputs("\n", log_fhandle);
