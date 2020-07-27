@@ -1014,12 +1014,10 @@ int64_t vc_hostfs_totalspace64(const char *inPath)
       {
          ret = -1;
       }
-   }
 
-   DEBUG_MINOR( "vc_hostfs_totalspace for '%s' returning %" PRId64 "", path, ret );
-
-   if (path)
+      DEBUG_MINOR( "vc_hostfs_totalspace for '%s' returning %" PRId64 "", path, ret );
       free( path );
+   }
    return ret;
 }
 
