@@ -33,7 +33,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define CHECK_STATUS(status, msg) if (status != MMAL_SUCCESS) { fprintf(stderr, msg"\n"); goto error; }
 
-static uint8_t codec_header_bytes[512];
+static uint8_t codec_header_bytes[128];
 static unsigned int codec_header_bytes_size = sizeof(codec_header_bytes);
 
 static FILE *source_file;
