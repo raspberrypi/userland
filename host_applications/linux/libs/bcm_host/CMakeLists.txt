@@ -15,9 +15,7 @@ include_directories( ../../../..
 		     ../../../../host_applications/vmcs/test_apps/iltest
                      ../../../../host_applications/framework/common )
 
-add_library(bcm_host ${SHARED} bcm_host.c 
-       ../../../../interface/vmcs_host/linux/vcfilesys.c 
-       ../../../../interface/vmcs_host/linux/vcfiled/vcfiled_check.c)
+add_library(bcm_host ${SHARED} bcm_host.c)
 
 target_link_libraries(bcm_host vcos vchostif)
 
