@@ -1135,6 +1135,14 @@ int main(int argc, const char **argv)
       if (state.common_settings.verbose)
          fprintf(stderr, "Starting component connection stage\n");
 
+      if (state.burstCaptureMode &&
+          state.camera_parameters.exposureMode == MMAL_PARAM_EXPOSUREMODE_OFF &&
+          state.camera_parameters.shutter_speed &&
+          state.camera_parameters.analog_gain && state.camera_parameters.stats_pass)
+      {
+         mmal_port_parameter_set_boolean(state.camera_component->control,  MMAL_PARAMETER_CAMERA_BURST_CAPTURE, 1);
+      }
+
       camera_preview_port = state.camera_component->output[MMAL_CAMERA_PREVIEW_PORT];
       camera_video_port   = state.camera_component->output[MMAL_CAMERA_VIDEO_PORT];
       camera_still_port   = state.camera_component->output[MMAL_CAMERA_CAPTURE_PORT];
