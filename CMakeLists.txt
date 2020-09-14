@@ -19,12 +19,13 @@ set(vmcs_root ${PROJECT_SOURCE_DIR})
 get_filename_component(VIDEOCORE_ROOT . ABSOLUTE)
 
 set(VCOS_PTHREADS_BUILD_SHARED TRUE)
+set(CMAKE_C_STANDARD_LIBRARIES "-llog")
 
 include(makefiles/cmake/global_settings.cmake)
-include(makefiles/cmake/arm-linux.cmake)
+#include(makefiles/cmake/arm-linux.cmake)
 include(makefiles/cmake/vmcs.cmake)
 
-enable_language(ASM)
+#enable_language(ASM)
 
 # Global include paths
 include_directories(host_applications/framework)
@@ -79,7 +80,7 @@ endif()
 
 # VidTex supports Android and Linux
 if(BUILD_MMAL_APPS)
-add_subdirectory(host_applications/android/apps/vidtex)
+#add_subdirectory(host_applications/android/apps/vidtex)
 endif(BUILD_MMAL_APPS)
 
 if(NOT ARM64)

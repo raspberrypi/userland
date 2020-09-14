@@ -23,7 +23,8 @@ if(NOT ARM64)
 		    vcilcs.c vcilcs_in.c vcilcs_out.c vcilcs_common.c)
 
 	# ILCS pulls in EGL for the ILCS/EGL surface API support
-	target_link_libraries(vcilcs brcmEGL brcmGLESv2 khrn_client vchiq_arm vcos)
+#	target_link_libraries(vcilcs brcmEGL brcmGLESv2 khrn_client vchiq_arm vcos)
+	target_link_libraries(vcilcs khrn_client vchiq_arm vcos)
 	set(INSTALL_TARGETS ${INSTALL_TARGETS} vcilcs)
 endif()
 

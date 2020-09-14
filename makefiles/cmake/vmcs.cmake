@@ -8,9 +8,9 @@ INCLUDE(CPack)
 
 # Where shall we install?
 if (ANDROID)
-  SET(VMCS_INSTALL_PREFIX "/vendor/brcm/islands" CACHE PATH "Prefix prepended to install directories" FORCE)
+  SET(VMCS_INSTALL_PREFIX "" CACHE PATH "Prefix prepended to install directories" FORCE)
 elseif(NOT DEFINED VMCS_INSTALL_PREFIX)
-  SET(VMCS_INSTALL_PREFIX "/opt/vc" CACHE PATH "Prefix prepended to install directories" FORCE)
+  SET(VMCS_INSTALL_PREFIX "" CACHE PATH "Prefix prepended to install directories" FORCE)
 endif()
 
 SET(CMAKE_INSTALL_PREFIX "${VMCS_INSTALL_PREFIX}" CACHE INTERNAL "Prefix
@@ -74,8 +74,8 @@ install(DIRECTORY ${vmcs_root}/vcinclude           DESTINATION ${VMCS_INSTALL_PR
 install(DIRECTORY ${vmcs_root}/interface/peer      DESTINATION ${VMCS_INSTALL_PREFIX}/include/interface FILES_MATCHING PATTERN "*.h")
 install(DIRECTORY ${vmcs_root}/interface/vmcs_host DESTINATION ${VMCS_INSTALL_PREFIX}/include/interface FILES_MATCHING PATTERN "*.h" PATTERN "${vmcs_root}/interface/vmcs_host/khronos" EXCLUDE)
 
-install(DIRECTORY ${vmcs_root}/interface/khronos/include       DESTINATION ${VMCS_INSTALL_PREFIX}     FILES_MATCHING PATTERN "*.h")
+install(DIRECTORY ${vmcs_root}/interface/khronos/include       DESTINATION /    FILES_MATCHING PATTERN "*.h")
 install(DIRECTORY ${vmcs_root}/interface/vmcs_host/khronos/IL  DESTINATION ${VMCS_INSTALL_PREFIX}/include     FILES_MATCHING PATTERN "*.h")
 
-install(DIRECTORY ${vmcs_root}/host_applications/linux/libs/bcm_host/include     DESTINATION ${VMCS_INSTALL_PREFIX}       FILES_MATCHING PATTERN "*.h")
+install(DIRECTORY ${vmcs_root}/host_applications/linux/libs/bcm_host/include     DESTINATION /     FILES_MATCHING PATTERN "*.h")
 

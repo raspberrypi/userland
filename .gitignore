@@ -1,5 +1,5 @@
 # Build directory
-build/
+temp/
 
 # Compiled Object files
 *.slo

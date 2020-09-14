@@ -36,11 +36,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # include "vcos.h"
 #endif
 
-#ifdef __ANDROID__
-#define LOG_TAG "ContainersCore"
-#include <cutils/log.h>
-#endif
-
 /* Default verbosity that will be inherited by containers */
 static uint32_t default_verbosity_mask = VC_CONTAINER_LOG_ALL;
 
@@ -83,29 +78,5 @@ void vc_container_log_vargs(VC_CONTAINER_T *ctx, VC_CONTAINER_LOG_TYPE_T type, c
    // If the verbosity is such that the type doesn't need logging quit now.
    if(!(type & verbosity)) return;
 
-#ifdef __ANDROID__
-   {
-      // Default to Android's "verbose" level (doesn't usually come out)
-      android_LogPriority logLevel = ANDROID_LOG_VERBOSE;
-
-      // Where type suggest a higher level is required update logLevel.
-      // (Usually type contains only 1 bit as set by the LOG_DEBUG, LOG_ERROR or LOG_INFO macros)
-      if (type & VC_CONTAINER_LOG_ERROR)
-         logLevel = ANDROID_LOG_ERROR;
-      else if (type & VC_CONTAINER_LOG_INFO)
-         logLevel = ANDROID_LOG_INFO;
-      else if (type & VC_CONTAINER_LOG_DEBUG)
-         logLevel = ANDROID_LOG_DEBUG;
-
-      // Actually put the message out.
-      LOG_PRI_VA(logLevel, LOG_TAG, format, args);
-   }
-#else
-#ifndef ENABLE_CONTAINERS_STANDALONE
    vcos_vlog(format, args);
-#else
-   vprintf(format, args); printf("\n");
-   fflush(0);
-#endif
-#endif
 }

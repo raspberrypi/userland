@@ -40,20 +40,20 @@ set (COMMON_SOURCES
    RaspiGPS.c
    libgps_loader.c)
 
-if(NOT ARM64)
-  set (EGL_LIBS brcmGLESv2 brcmEGL)
-  set (EGL_SOURCES RaspiTex.c RaspiTexUtil.c tga.c)
-  set (GL_SCENE_SOURCES
-     gl_scenes/models.c
-     gl_scenes/mirror.c
-     gl_scenes/yuv.c
-     gl_scenes/sobel.c
-     gl_scenes/square.c
-     gl_scenes/teapot.c
-     gl_scenes/vcsm_square.c)
-else()
+#if(NOT ARM64)
+#  set (EGL_LIBS brcmGLESv2 brcmEGL)
+#  set (EGL_SOURCES RaspiTex.c RaspiTexUtil.c tga.c)
+#  set (GL_SCENE_SOURCES
+#     gl_scenes/models.c
+#     gl_scenes/mirror.c
+#     gl_scenes/yuv.c
+#     gl_scenes/sobel.c
+#     gl_scenes/square.c
+#     gl_scenes/teapot.c
+#     gl_scenes/vcsm_square.c)
+#else()
   set (EGL_SOURCES RaspiTexStub.c)
-endif()
+#endif()
 
 add_executable(raspistill ${COMMON_SOURCES} RaspiStill.c  ${EGL_SOURCES} ${GL_SCENE_SOURCES} )
 add_executable(raspiyuv   ${COMMON_SOURCES} RaspiStillYUV.c)
