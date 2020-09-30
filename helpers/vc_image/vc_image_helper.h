@@ -258,6 +258,9 @@ int vc_image_get_mipmap_offset(VC_IMAGE_T *image, int miplvl);
 #define VC_IMAGE_MIPMAP_LINEAR_TILE 1
 int vc_image_get_mipmap_type(VC_IMAGE_T const *image, int miplvl);
 
+/* Ensure required alignment for format */
+long fix_alignment(VC_IMAGE_TYPE_T type, long value, VC_IMAGE_INFO_T *info);
+
 #ifdef __cplusplus
 }
 #endif
