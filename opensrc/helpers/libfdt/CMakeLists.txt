@@ -1,6 +1,6 @@
 include_directories(.)
 
-add_library(fdt
+add_library(fdt STATIC
             fdt.c 
             fdt_empty_tree.c
             fdt_ro.c
