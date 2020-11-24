@@ -389,7 +389,7 @@ static MMAL_STATUS_T mmal_port_clock_forward_event(MMAL_PORT_T *port, const MMAL
    {
       LOG_ERROR("failed to lock buffer %s", mmal_status_to_string(status));
       mmal_queue_put_back(port->priv->clock->queue, buffer);
-      goto end;
+      return status;
    }
    buffer->length = sizeof(MMAL_CLOCK_EVENT_T);
    memcpy(buffer->data, event, buffer->length);
@@ -397,8 +397,7 @@ static MMAL_STATUS_T mmal_port_clock_forward_event(MMAL_PORT_T *port, const MMAL
 
    mmal_port_buffer_header_callback(port, buffer);
 
-end:
-   return status;
+   return MMAL_SUCCESS;
 }
 
 /* Send a clock active state to a connected port */
