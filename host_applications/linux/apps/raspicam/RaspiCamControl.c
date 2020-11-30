@@ -199,7 +199,7 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandImageFX,     "-imxfx",     "ifx","Set image effect (see Notes)", 1},
    {CommandColourFX,    "-colfx",     "cfx","Set colour effect (U:V)",  1},
    {CommandMeterMode,   "-metering",  "mm", "Set metering mode (see Notes)", 1},
-   {CommandRotation,    "-rotation",  "rot","Set image rotation (0-359)", 1},
+   {CommandRotation,    "-rotation",  "rot","Set image rotation (0, 90, 180, or 270)", 1},
    {CommandHFlip,       "-hflip",     "hf", "Set horizontal flip", 0},
    {CommandVFlip,       "-vflip",     "vf", "Set vertical flip", 0},
    {CommandROI,         "-roi",       "roi","Set region of interest (x,y,w,d as normalised coordinates [0.0-1.0])", 1},
