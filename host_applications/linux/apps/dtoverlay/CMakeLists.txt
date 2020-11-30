@@ -17,9 +17,11 @@ include_directories (
 add_executable(dtoverlay dtoverlay_main.c utils.c)
 target_link_libraries(dtoverlay dtovl)
 install(TARGETS dtoverlay RUNTIME DESTINATION bin)
+install(FILES dtoverlay.1 DESTINATION man/man1)
 
 add_custom_command(TARGET dtoverlay POST_BUILD COMMAND ln;-sf;dtoverlay;dtparam)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/dtparam DESTINATION bin)
+install(FILES dtparam.1 DESTINATION man/man1)
 
 set(DTOVERLAY_SCRIPTS dtoverlay-pre dtoverlay-post)
 install(PROGRAMS ${DTOVERLAY_SCRIPTS} DESTINATION bin)
