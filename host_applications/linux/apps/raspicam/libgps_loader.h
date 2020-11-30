@@ -30,8 +30,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "gps.h"
 
-// IMPORTANT: Remember to copy gps.h from gpsd when upgrading libgps version.
-#define LIBGPS_SO_VERSION     "libgps.so.23"
+#define LIBGPS_SO_VERSION     "libgps.so"
+
+#define TS_NZ(ts) (0 != (ts).tv_sec || 0 != (ts).tv_nsec)
 
 /** Structure containing all libgps information
  */

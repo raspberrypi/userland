@@ -73,7 +73,7 @@ static void *gps_reader_process(void *gps_reader_data_ptr)
             (ret = read_gps_data_once(&gps_reader_data.gpsd)) < 0 )
          break;
 
-      if (ret > 0 && gps_reader_data.gpsd.gpsdata.online)
+      if (ret > 0 && TS_NZ(gps_reader_data.gpsd.gpsdata.online))
       {
          if (gps_reader_data.gpsd.gpsdata.fix.mode >= MODE_2D)
          {
@@ -201,12 +201,12 @@ char *raspi_gps_location_string()
    {
       time_t rawtime;
       struct tm *timeinfo;
-      rawtime = gpsdata->fix.time;
+      rawtime = gpsdata->fix.time.tv_sec;
       timeinfo = localtime(&rawtime);
       strftime(datetime, sizeof(datetime), "%Y:%m:%d %H:%M:%S", timeinfo);
    }
 
-   if (gpsdata->online && gpsdata->fix.mode >= MODE_2D)
+   if (TS_NZ(gpsdata->online) && gpsdata->fix.mode >= MODE_2D)
    {
       if (gpsdata->set & LATLON_SET)
       {

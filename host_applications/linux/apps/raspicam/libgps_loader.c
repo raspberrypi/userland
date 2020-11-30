@@ -124,12 +124,12 @@ int wait_gps_time(gpsd_info *gpsd, int timeout_s)
       gps_mask_t mask = TIME_SET;
       time_t start = time(NULL);
       while ((time(NULL) - start < timeout_s) &&
-             ((!gpsd->gpsdata.online) || ((gpsd->gpsdata.set & mask) == 0)))
+             ((!TS_NZ(gpsd->gpsdata.online)) || ((gpsd->gpsdata.set & mask) == 0)))
       {
          if (gpsd->gps_waiting(&gpsd->gpsdata, 200))
             read_gps_data_once(gpsd);
       }
-      if ((gpsd->gpsdata.online) && ((gpsd->gpsdata.set & mask) != 0))
+      if (TS_NZ(gpsd->gpsdata.online) && ((gpsd->gpsdata.set & mask) != 0))
          return 0;
    }
    return -1;
