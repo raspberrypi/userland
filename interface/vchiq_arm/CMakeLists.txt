@@ -5,7 +5,7 @@ add_library(vchiq_arm SHARED
 # pull in VCHI cond variable emulation
 target_link_libraries(vchiq_arm vcos)
 
-install(TARGETS vchiq_arm DESTINATION lib)
+install(TARGETS vchiq_arm)
 #install(FILES etc/10-vchiq.rules DESTINATION /etc/udev/rules.d)
 
 include_directories(../..)
@@ -17,4 +17,4 @@ target_link_libraries(vchiq_test
                       vchiq_arm
                       vcos)
 
-install(TARGETS vchiq_test RUNTIME DESTINATION bin)
+install(TARGETS vchiq_test RUNTIME)
