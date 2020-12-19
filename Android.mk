@@ -82,6 +82,14 @@ include $(BUILD_PREBUILT)
 #######################################################
 
 include $(CLEAR_VARS)
+LOCAL_MODULE := vcgencmd
+LOCAL_SRC_FILES := build/bin/vcgencmd
+LOCAL_MODULE_CLASS := EXECUTABLES
+include $(BUILD_PREBUILT)
+
+#######################################################
+
+include $(CLEAR_VARS)
 LOCAL_MODULE := mmal_vc_diag
 LOCAL_SRC_FILES := build/bin/mmal_vc_diag
 LOCAL_MODULE_CLASS := EXECUTABLES
