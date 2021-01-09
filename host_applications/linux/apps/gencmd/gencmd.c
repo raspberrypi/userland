@@ -149,7 +149,7 @@ int main( int argc, char **argv )
             {
                fprintf (stderr, "%s\n\n", buffer);
                if ( strcmp( buffer, "error=1 error_msg=\"Command not registered\"" ) == 0 )
-               show_usage();
+                  show_usage();
                return -2;
             }
             else
