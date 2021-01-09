@@ -43,12 +43,11 @@ void show_usage()
    puts( "Send a command to the VideoCore and print the result.\n" );
    puts( "  -t          Time how long the command takes to complete" );
    puts( "  -h, --help  Show this information\n" );
-   puts( "Use the command 'vcgencmd commands' to get a list of available commands\n" );
    puts( "Exit status:" );
    puts( "   0    command completed successfully" );
    puts( "  -1    problem with VCHI" );
    puts( "  -2    VideoCore returned an error\n" );
-   puts( "For further documentation please see" );
+   puts( "For further documentation see the manual ('man vcgencmd') - or" );
    puts( "https://www.raspberrypi.org/documentation/raspbian/applications/vcgencmd.md\n" );
 }
 
@@ -148,11 +147,9 @@ int main( int argc, char **argv )
          {
             if (strncmp( buffer, "error=", 6) == 0 )
             {
-               fprintf (stderr, "%s\n", buffer);
+               fprintf (stderr, "%s\n\n", buffer);
                if ( strcmp( buffer, "error=1 error_msg=\"Command not registered\"" ) == 0 )
-               {
-                  fprintf( stderr, "Use 'vcgencmd commands' to get a list of commands\n" );
-               }
+               show_usage();
                return -2;
             }
             else
