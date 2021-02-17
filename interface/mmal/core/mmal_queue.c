@@ -43,7 +43,7 @@ struct MMAL_QUEUE_T
 static void mmal_queue_sanity_check(MMAL_QUEUE_T *queue, MMAL_BUFFER_HEADER_T *buffer)
 {
   MMAL_BUFFER_HEADER_T *q;
-  int len = 0;
+  unsigned int len = 0;
   for (q = queue->first; q && len<queue->length; q = q->next)
   {
     vcos_assert(buffer != q);
@@ -150,7 +150,7 @@ static MMAL_BUFFER_HEADER_T *mmal_queue_get_core(MMAL_QUEUE_T *queue)
 MMAL_BUFFER_HEADER_T *mmal_queue_get(MMAL_QUEUE_T *queue)
 {
    vcos_assert(queue);
-   if(!queue) return 0;
+   if(!queue) return NULL;
 
    if(vcos_semaphore_trywait(&queue->semaphore) != VCOS_SUCCESS)
        return NULL;
@@ -161,12 +161,12 @@ MMAL_BUFFER_HEADER_T *mmal_queue_get(MMAL_QUEUE_T *queue)
 /** Wait for a MMAL_BUFFER_HEADER_T from a QUEUE. */
 MMAL_BUFFER_HEADER_T *mmal_queue_wait(MMAL_QUEUE_T *queue)
 {
-	if(!queue) return 0;
+  if(!queue) return NULL;
 
-   if (vcos_semaphore_wait(&queue->semaphore) != VCOS_SUCCESS)
-       return NULL;
+  if (vcos_semaphore_wait(&queue->semaphore) != VCOS_SUCCESS)
+      return NULL;
 
-   return mmal_queue_get_core(queue);
+  return mmal_queue_get_core(queue);
 }
 
 MMAL_BUFFER_HEADER_T *mmal_queue_timedwait(MMAL_QUEUE_T *queue, VCOS_UNSIGNED timeout)
@@ -183,16 +183,16 @@ MMAL_BUFFER_HEADER_T *mmal_queue_timedwait(MMAL_QUEUE_T *queue, VCOS_UNSIGNED ti
 /** Get the number of MMAL_BUFFER_HEADER_T currently in a QUEUE */
 unsigned int mmal_queue_length(MMAL_QUEUE_T *queue)
 {
-	if(!queue) return 0;
+  if(!queue) return 0;
 
-	return queue->length;
+  return queue->length;
 }
 
 /** Destroy a queue of MMAL_BUFFER_HEADER_T */
 void mmal_queue_destroy(MMAL_QUEUE_T *queue)
 {
-   if(!queue) return;
-   vcos_mutex_delete(&queue->lock);
-   vcos_semaphore_delete(&queue->semaphore);
-   vcos_free(queue);
+  if(!queue) return;
+  vcos_mutex_delete(&queue->lock);
+  vcos_semaphore_delete(&queue->semaphore);
+  vcos_free(queue);
 }
