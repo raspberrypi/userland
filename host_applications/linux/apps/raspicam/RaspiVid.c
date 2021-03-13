@@ -1097,7 +1097,7 @@ static FILE *open_filename(RASPIVID_STATE *pState, char *filename)
             if (sockListen >= 0)//regardless success or error
                close(sockListen);//do not listen on a given port anymore
          }
-         else//if (pState->netListen)
+         else//if (! pState->netListen)
          {
             if(0 <= (sfd = socket(AF_INET, socktype, 0)))
             {
