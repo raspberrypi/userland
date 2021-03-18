@@ -99,7 +99,7 @@ int main(void)
    bcm_host_init();
    int s;
 
-   if (get_processor_id() == PROCESSOR_BCM2838)
+   if (get_processor_id() == PROCESSOR_BCM2711)
    {
       puts("This demo application is not available on the Pi4\n\n");
       exit(0);

@@ -28,7 +28,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define PROCESSOR_BCM2835 0
 #define PROCESSOR_BCM2836 1
 #define PROCESSOR_BCM2837 2
-#define PROCESSOR_BCM2838 3
+#define PROCESSOR_BCM2711 3
+#define PROCESSOR_BCM2838 3 // included for backwards-compatibility
 
 /* Returns the type of the Pi being used
 */

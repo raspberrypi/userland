@@ -93,7 +93,8 @@ extern int bcm_host_is_kms_active(void);
 #define BCM_HOST_PROCESSOR_BCM2835 0
 #define BCM_HOST_PROCESSOR_BCM2836 1
 #define BCM_HOST_PROCESSOR_BCM2837 2
-#define BCM_HOST_PROCESSOR_BCM2838 3
+#define BCM_HOST_PROCESSOR_BCM2711 3
+#define BCM_HOST_PROCESSOR_BCM2838 3 // included for backwards-compatibility
 
 extern int bcm_host_get_processor_id(void);
 
