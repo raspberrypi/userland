@@ -107,6 +107,15 @@ include $(BUILD_PREBUILT)
 #######################################################
 
 include $(CLEAR_VARS)
+LOCAL_MODULE := libcontainers
+LOCAL_MODULE_SUFFIX := .so
+LOCAL_MODULE_CLASS := SHARED_LIBRARIES
+LOCAL_SRC_FILES := build/lib/libcontainers.so
+include $(BUILD_PREBUILT)
+
+#######################################################
+
+include $(CLEAR_VARS)
 LOCAL_MODULE := libbcm_host
 LOCAL_MODULE_SUFFIX := .a
 LOCAL_MODULE_CLASS := STATIC_LIBRARIES

@@ -38,6 +38,9 @@ set (HEADERS
    vcos_types.h
 )
 
+include_directories(../..)
+include_directories(pthreads/)
+
 foreach (header ${HEADERS})
    configure_file ("${header}" "${VCOS_HEADERS_BUILD_DIR}/${header}" COPYONLY)
 endforeach ()
@@ -65,4 +68,4 @@ if (WIN32)
    configure_file (build_all.bat.in build_all.bat @ONLY)
 endif ()
 
-#install (FILES ${HEADERS} DESTINATION include/interface/vcos)
+install (FILES ${HEADERS} DESTINATION include/interface/vcos)

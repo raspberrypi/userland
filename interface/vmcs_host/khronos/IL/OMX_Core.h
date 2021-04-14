@@ -42,7 +42,7 @@ extern "C" {
    * Warn if this isn't set, as the GPU will not interpret your buffers correctly,
    * or vice versa.
    */
-  #warning OMX_SKIP64BIT is not defined - this will be incompatible with the VC GPU code.
+  #pragma message("OMX_SKIP64BIT is not defined - this will be incompatible with the VC GPU code.")
 #endif
 
 /* Each OMX header shall include all required header files to allow the
