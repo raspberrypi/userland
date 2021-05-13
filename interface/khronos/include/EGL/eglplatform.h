@@ -107,15 +107,8 @@ typedef void *EGLNativeWindowType;
 
 #ifndef EGL_SERVER_SMALLINT
 
-#include "interface/vmcs_host/vc_dispmanx.h"
-/* TODO: EGLNativeWindowType is really one of these but I'm leaving it
- * as void* for now, in case changing it would cause problems
- */
-typedef struct {
-   DISPMANX_ELEMENT_HANDLE_T element;
-   int width;   /* This is necessary because dispmanx elements are not queriable. */
-   int height;
-} EGL_DISPMANX_WINDOW_T;
+#include "interface/vmcs_host/vc_dispmanx_egl.h"
+
 #elif defined (ABSTRACT_PLATFORM)
 
 #else
