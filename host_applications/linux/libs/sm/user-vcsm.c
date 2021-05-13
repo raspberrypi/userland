@@ -485,6 +485,13 @@ unsigned int vcsm_malloc_cache( unsigned int size, VCSM_CACHE_TYPE_T cache, cons
                       );
 
       payload = vcsm_payload_list_get();
+      if (!payload)
+      {
+         vcos_log_error("[%s]: max number of allocations reached: %d", __func__, VCSM_PAYLOAD_ELEM_MAX);
+         munmap(usr_ptr, alloc.size);
+         vcsm_free(alloc.handle);
+         return 0;
+      }
       payload->handle = handle;
       payload->fd = alloc.handle;
       payload->vc_handle = alloc.vc_handle;
@@ -2308,6 +2315,13 @@ unsigned int vcsm_import_dmabuf( int dmabuf, const char *name )
                         import.handle );
 
          payload = vcsm_payload_list_get();
+         if (!payload)
+         {
+            vcos_log_error("[%s]: max number of allocations reached: %d", __func__, VCSM_PAYLOAD_ELEM_MAX);
+            munmap(usr_ptr, import.size);
+            vcsm_free(import.handle);
+            return 0;
+         }
          payload->handle = handle;
          payload->fd = import.handle;
          payload->vc_handle = import.vc_handle;
