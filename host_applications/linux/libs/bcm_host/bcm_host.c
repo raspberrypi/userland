@@ -265,11 +265,11 @@ int bcm_host_get_model_type(void)
    return model_type;
 }
 
-/* Returns the type of the Pi being used
+/* Test if the host is a member of the Pi 4 family (4B, 400 and CM4)
 */
 int bcm_host_is_model_pi4(void)
 {
-   return bcm_host_get_model_type() == 0x11 ? 1 : 0;
+   return bcm_host_get_processor_id() == BCM_HOST_PROCESSOR_BCM2711;
 }
 
 /* returns the processor ID
