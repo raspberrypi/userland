@@ -8,13 +8,22 @@ SET(PROJECT_VER_PATCH 0)
 SET(PROJECT_VER "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}.${PROJECT_VER_PATCH}")
 SET(PROJECT_APIVER "${PROJECT_VER}")
 
-if(ARM64)
-   set(BUILD_MMAL FALSE)
-   set(BUILD_MMAL_APPS FALSE)
-else()
+# This project is traditionally expecting to be compiled on armv6,7.
+# Due to CMake limitations, if the platform (in the host/platform/target
+# triplet) this is compiled for differs from that, one of the following targets
+# need to be set:
+# -DARM64=ON (if compiling for aarch64)
+# -DAMD64=ON (if compiling for x86_64)
+
+# broken on anything except ARM32 currently
+if(NOT ARM64 AND NOT AMD64)
    set(BUILD_MMAL TRUE)
    set(BUILD_MMAL_APPS TRUE)
+else()
+   set(BUILD_MMAL FALSE)
+   set(BUILD_MMAL_APPS FALSE)
 endif()
+
 set(vmcs_root ${PROJECT_SOURCE_DIR})
 get_filename_component(VIDEOCORE_ROOT . ABSOLUTE)
 
@@ -66,7 +75,9 @@ endif()
 add_subdirectory(interface/vcos)
 add_subdirectory(interface/vmcs_host)
 add_subdirectory(interface/vchiq_arm)
-if(NOT ARM64)
+
+# The khronos libraries include arm32 assembly
+if(NOT ARM64 AND NOT AMD64)
    add_subdirectory(interface/khronos)
 endif()
 
@@ -82,7 +93,8 @@ if(BUILD_MMAL_APPS)
 add_subdirectory(host_applications/android/apps/vidtex)
 endif(BUILD_MMAL_APPS)
 
-if(NOT ARM64)
+# ARM32 only, as it needs the khronos libraries
+if(NOT ARM64 AND NOT AMD64)
    add_subdirectory(middleware/openmaxil)
 endif()
 
