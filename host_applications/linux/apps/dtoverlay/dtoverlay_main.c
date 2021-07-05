@@ -43,7 +43,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define CFG_DIR_1 "/sys/kernel/config"
 #define CFG_DIR_2 "/config"
 #define DT_SUBDIR "/device-tree"
-#define WORK_DIR "/tmp/.dtoverlays"
+#define WORK_DIR "/run/dtoverlay"
 #define OVERLAY_SRC_SUBDIR "overlays"
 #define README_FILE "README"
 #define DT_OVERLAYS_SUBDIR "overlays"
