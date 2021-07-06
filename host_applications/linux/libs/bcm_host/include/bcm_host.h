@@ -48,6 +48,7 @@ unsigned bcm_host_get_peripheral_size(void);
 unsigned bcm_host_get_sdram_address(void);
 
 #include "interface/vmcs_host/vc_dispmanx.h"
+#include "interface/vmcs_host/vc_dispmanx_egl.h"
 #include "interface/vmcs_host/vc_tvservice.h"
 #include "interface/vmcs_host/vc_cec.h"
 #include "interface/vmcs_host/vc_cecservice.h"
