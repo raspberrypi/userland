@@ -38,7 +38,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <vmcs_sm_ioctl.h>
 #include "vc_sm_cma_ioctl.h"
-#include "dma-buf.h"
+#include <linux/dma-buf.h>
 #include "user-vcsm.h"
 #include "interface/vcos/vcos.h"
 
