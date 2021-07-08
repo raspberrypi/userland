@@ -8,12 +8,12 @@ target_link_libraries(mmal_vc_client vchiq_arm vcos vcsm)
 if(BUILD_MMAL_APPS)
 add_executable(mmal_vc_diag mmal_vc_diag.c)
 target_link_libraries(mmal_vc_diag mmal mmal_vc_client debug_sym vcos)
-install(TARGETS mmal_vc_diag RUNTIME DESTINATION bin)
+install(TARGETS mmal_vc_diag RUNTIME)
 endif(BUILD_MMAL_APPS)
 
 include_directories ( ../../../host_applications/linux/libs/sm )
 
-install(TARGETS mmal_vc_client DESTINATION lib)
+install(TARGETS mmal_vc_client)
 install(FILES
    mmal_vc_api.h
    mmal_vc_api_drm.h

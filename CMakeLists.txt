@@ -125,7 +125,7 @@ if(PKG_CONFIG_FOUND)
 	foreach(PCFILE bcm_host.pc brcmegl.pc brcmglesv2.pc brcmvg.pc vcsm.pc mmal.pc)
 		configure_file("pkgconfig/${PCFILE}.in" "${PCFILE}" @ONLY)
 		install(FILES       "${CMAKE_CURRENT_BINARY_DIR}/${PCFILE}"
-			DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig")
+			DESTINATION "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/pkgconfig")
 	endforeach()
 endif()
 # Remove cache entry, if one added by command line
