@@ -13,7 +13,7 @@ add_library (mmal_core ${LIBRARY_TYPE}
 
 target_link_libraries (mmal_core vcos)
 
-install(TARGETS mmal_core DESTINATION lib)
+install(TARGETS mmal_core DESTINATION ${LIBDIR})
 install(FILES
    mmal_buffer_private.h
    mmal_clock_private.h

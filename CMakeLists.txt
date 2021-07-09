@@ -8,6 +8,8 @@ SET(PROJECT_VER_PATCH 0)
 SET(PROJECT_VER "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}.${PROJECT_VER_PATCH}")
 SET(PROJECT_APIVER "${PROJECT_VER}")
 
+include(GNUInstallDirs)
+
 if(ARM64)
    set(BUILD_MMAL FALSE)
    set(BUILD_MMAL_APPS FALSE)
@@ -125,7 +127,7 @@ if(PKG_CONFIG_FOUND)
 	foreach(PCFILE bcm_host.pc brcmegl.pc brcmglesv2.pc brcmvg.pc vcsm.pc mmal.pc)
 		configure_file("pkgconfig/${PCFILE}.in" "${PCFILE}" @ONLY)
 		install(FILES       "${CMAKE_CURRENT_BINARY_DIR}/${PCFILE}"
-			DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig")
+			DESTINATION "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/pkgconfig")
 	endforeach()
 endif()
 # Remove cache entry, if one added by command line

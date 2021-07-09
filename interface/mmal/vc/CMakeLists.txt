@@ -13,7 +13,7 @@ endif(BUILD_MMAL_APPS)
 
 include_directories ( ../../../host_applications/linux/libs/sm )
 
-install(TARGETS mmal_vc_client DESTINATION lib)
+install(TARGETS mmal_vc_client DESTINATION ${LIBDIR})
 install(FILES
    mmal_vc_api.h
    mmal_vc_api_drm.h
