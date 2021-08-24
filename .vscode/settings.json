@@ -1,0 +1,31 @@
+{
+    "files.associations": {
+        "stdio.h": "c",
+        "mmal_connection.h": "c",
+        "mmal_logging.h": "c",
+        "mmal.h": "c",
+        "mmal_util.h": "c",
+        "mmal_buffer.h": "c",
+        "mmal_util_params.h": "c",
+        "mmal_default_components.h": "c",
+        "math.h": "c",
+        "semaphore.h": "c",
+        "pthread.h": "c",
+        "pthreadtypes.h": "c",
+        "mmal_component_private.h": "c",
+        "in.h": "c",
+        "bcm_host.h": "c",
+        "raspicommonsettings.h": "c",
+        "raspipreview.h": "c",
+        "raspicamcontrol.h": "c",
+        "raspihelpers.h": "c",
+        "raspigps.h": "c",
+        "stdbool.h": "c",
+        "raspicli.h": "c",
+        "vc_dispmanx.h": "c",
+        "vcos.h": "c",
+        "socket.h": "c",
+        "memory.h": "c",
+        "ctype.h": "c"
+    }
+}

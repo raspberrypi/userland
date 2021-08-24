@@ -1,0 +1,9 @@
+[
+    {
+        "name": "GCC 8.3.0 arm-linux-gnueabihf for raspberry",
+        "compilers": {
+            "C": "/opt/cross-pi-gcc/bin/arm-linux-gnueabihf-gcc-8.3.0"
+        },
+        "toolchainFile": "/home/xbron/Projects/cpp/userland-master/makefiles/cmake/toolchains/Toolchain-rpi.cmake"
+    }
+]
