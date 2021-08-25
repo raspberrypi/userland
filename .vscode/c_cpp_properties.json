@@ -6,10 +6,12 @@
                 "${workspaceFolder}/**"
             ],
             "defines": [],
-            "compilerPath": "/usr/bin/gcc",
+            "compilerPath": "/opt/cross-pi-gcc/bin/arm-linux-gnueabihf-gcc-8.3.0",
             "cStandard": "gnu17",
             "cppStandard": "c++17",
-            "intelliSenseMode": "linux-gcc-x64",
+            "intelliSenseMode": "linux-gcc-x64"
+            // "configurationProvider": "ms-vscode.cmake-tools"
+            ,
             "configurationProvider": "ms-vscode.cmake-tools"
         }
     ],

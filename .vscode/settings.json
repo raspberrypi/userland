@@ -26,6 +26,12 @@
         "vcos.h": "c",
         "socket.h": "c",
         "memory.h": "c",
-        "ctype.h": "c"
+        "ctype.h": "c",
+        "rpicam.h": "c",
+        "string.h": "c",
+        "inet.h": "c",
+        "time.h": "c",
+        "stdlib.h": "c",
+        "sysexits.h": "c"
     }
 }
