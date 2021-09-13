@@ -1671,6 +1671,10 @@ int dtoverlay_override_one_target(int override_type,
                   err = NON_FATAL(FDT_ERR_BADVALUE);
                }
                break;
+
+            default:
+               err = NON_FATAL(FDT_ERR_BADVALUE);
+               break;
             }
          }
          break;
