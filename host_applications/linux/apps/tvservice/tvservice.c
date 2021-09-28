@@ -37,6 +37,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <assert.h>
 #include <string.h>
 
+#include "bcm_host.h"
 #include "interface/vmcs_host/vc_tvservice.h"
 
 #define TV_SUPPORTED_MODE_T TV_SUPPORTED_MODE_NEW_T
@@ -805,6 +806,14 @@ int main( int argc, char **argv )
    SDTV_ASPECT_T sdtvon_aspect = SDTV_ASPECT_UNKNOWN;
    int sdtvon_progressive = 0;
    TV_ATTACHED_DEVICES_T devices;
+
+   if (bcm_host_is_kms_active())
+   {
+      fprintf(stderr, "%s is not supported when using the vc4-kms-v3d driver.\n"
+                       "Similar features are available with standard linux tools\n"
+                       "such as modetest from libdrm-tests.\n", argv[0]);
+      exit(1);
+   }
 
    // Initialize VCOS
    vcos_init();
