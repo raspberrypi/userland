@@ -152,6 +152,7 @@ static int vc_mem_copy(void *dst, uint32_t src, uint32_t length)
     const char *filename = "/dev/fb0";
     int memFd;
     struct fb_dmacopy ioparam;
+    static int expected_error = ENOENT;
 
     ioparam.dst = dst;
     ioparam.src = src;
@@ -159,7 +160,10 @@ static int vc_mem_copy(void *dst, uint32_t src, uint32_t length)
 
     if (( memFd = open( filename, O_RDWR | O_SYNC )) < 0 )
     {
-        ERR( "Unable to open '%s': %s(%d)\n", filename, strerror( errno ), errno );
+        if (errno != expected_error)
+            ERR( "Unable to open '%s': %s(%d)\n", filename,
+                 strerror( errno ), errno );
+        expected_error = errno;
         return -errno;
     }
 
