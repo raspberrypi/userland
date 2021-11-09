@@ -1014,6 +1014,99 @@ static int dtoverlay_get_target_offset(DTBLOB_T *base_dtb,
    return target_off;
 }
 
+// Copy a node full of path strings (__symbols__, aliases) from an overlay to
+// the base dtb, rebasing any fragment-relative paths to make them relative
+// to the respective fragment target. Note that this should not be called for
+// intra-overlay fragments, and that overlay_dtb is not modified.
+static int dtoverlay_apply_overlay_paths(DTBLOB_T *base_dtb, int strings_off,
+                                         DTBLOB_T *overlay_dtb, int frag_off,
+                                         const char *type)
+{
+   int sym_off;
+   int err = 0;
+
+   fdt_for_each_property_offset(sym_off, overlay_dtb->fdt, frag_off)
+   {
+      char target_path[DTOVERLAY_MAX_PATH];
+      const char *sym_name = NULL;
+      const char *sym_path;
+      const char *p;
+      int sym_len;
+      int sym_frag_off;
+      int target_off;
+      int target_path_len;
+      int new_path_len;
+
+      sym_path = fdt_getprop_by_offset(overlay_dtb->fdt, sym_off,
+                                             &sym_name, &sym_len);
+      if (!sym_path)
+         break;
+
+      /* Skip non-overlay symbols
+       * Overlay symbol paths should be of the form:
+       *     /<fragment>/__overlay__/<something>
+       * It doesn't actually matter what <fragment> is.
+       */
+      if (sym_path[0] != '/')
+         goto copy_verbatim;
+
+      p = strchr(sym_path + 1, '/');
+      if (!p || strncmp(p + 1, "__overlay__", 11) != 0 ||
+          (p[11] != '/' && p[11] != '\0'))
+         goto copy_verbatim;
+
+      /* Rebase the symbol path so that
+       *   /fragment@0/__overlay__/<something>
+       * becomes
+       *   <path-to-fragment-target>/<something>
+       */
+
+      /* Find the offset to the fragment */
+      sym_frag_off = dtoverlay_find_node(overlay_dtb, sym_path,
+                                         p - sym_path);
+
+      p += 12; /* p points to /<something> */
+
+      /* Locate the path to the fragment target */
+      target_off = dtoverlay_get_target_offset(base_dtb, overlay_dtb,
+                                               sym_frag_off);
+      if (target_off < 0)
+         return target_off;
+
+      err = fdt_get_path(base_dtb->fdt, target_off,
+                         target_path, sizeof(target_path));
+      if (err)
+      {
+         dtoverlay_error("bad target path for %s", sym_path);
+         break;
+      }
+
+      /* Append the fragment-relative path to the target path */
+      target_path_len = strlen(target_path);
+      if (strcmp(target_path, "/") == 0)
+         p++; // Avoid a '//' if the target is the root
+      new_path_len = target_path_len + (sym_path + sym_len - p);
+      if (new_path_len >= sizeof(target_path))
+      {
+         dtoverlay_error("exported symbol path too long for %s", sym_path);
+         err = -FDT_ERR_NOSPACE;
+         break;
+      }
+      strcpy(target_path + target_path_len, p);
+      fdt_setprop(base_dtb->fdt, strings_off,
+                  sym_name, target_path, new_path_len);
+      dtoverlay_debug("set %s '%s' path to '%s'", type,
+                      sym_name, target_path);
+      continue;
+
+copy_verbatim:
+      fdt_setprop(base_dtb->fdt, strings_off,
+                  sym_name, sym_path, sym_len);
+   }
+
+   return err;
+}
+
 // Returns 0 on success, -ve for fatal errors and +ve for non-fatal errors
 int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
 {
@@ -1119,82 +1212,9 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
       if (strcmp(node_name, "__symbols__") == 0)
       {
          /* At this point, only exported symbols should remain */
-         int sym_off;
-
-         fdt_for_each_property_offset(sym_off, overlay_dtb->fdt, frag_off)
-         {
-            char target_path[DTOVERLAY_MAX_PATH];
-            const char *sym_name = NULL;
-            const char *sym_path;
-            const char *p;
-            int sym_len;
-            int sym_frag_off;
-            int target_path_len;
-            int new_path_len;
-            int base_symbols;
-
-            sym_path = fdt_getprop_by_offset(overlay_dtb->fdt, sym_off,
-                                             &sym_name, &sym_len);
-            if (!sym_path)
-               break;
-
-            /* Rebase the symbol path so that
-             *   /fragment@0/__overlay__/<something>
-             * becomes
-             *   <path-to-fragment-target>/<something>
-             */
-
-            /* Skip non-overlay symbols
-             * Overlay symbol paths should be of the form:
-             *     /<fragment>/__overlay__/<something>
-             * It doesn't actually matter what <fragment> is.
-             */
-            if (sym_path[0] != '/')
-               continue;
-
-            p = strchr(sym_path + 1, '/');
-            if (!p || strncmp(p + 1, "__overlay__/", 12) != 0)
-               continue;
-
-            /* Find the offset to the fragment */
-            sym_frag_off = dtoverlay_find_node(overlay_dtb, sym_path,
-                                               p - sym_path);
-
-            p += 12; /* p points to /<something> */
-
-            /* Locate the path to the fragment target */
-            target_off = dtoverlay_get_target_offset(base_dtb, overlay_dtb,
-                                                     sym_frag_off);
-            if (target_off < 0)
-               return target_off;
-
-            err = fdt_get_path(base_dtb->fdt, target_off,
-                               target_path, sizeof(target_path));
-            if (err)
-            {
-               dtoverlay_error("bad target path for %s", sym_path);
-               break;
-            }
-
-            /* Append the fragment-relative path to the target path */
-            target_path_len = strlen(target_path);
-            if (strcmp(target_path, "/") == 0)
-               p++; // Avoid a '//' if the target is the root
-            new_path_len = target_path_len + (sym_path + sym_len - p);
-            if (new_path_len >= sizeof(target_path))
-            {
-               dtoverlay_error("exported symbol path too long for %s", sym_path);
-               err = -FDT_ERR_NOSPACE;
-               break;
-            }
-            strcpy(target_path + target_path_len, p);
-
-            base_symbols = fdt_path_offset(base_dtb->fdt, "/__symbols__");
-            fdt_setprop(base_dtb->fdt, base_symbols,
-                        sym_name, target_path, new_path_len);
-            dtoverlay_debug("set label '%s' path to '%s'",
-                            sym_name, target_path);
-         }
+         int symbols_off = dtoverlay_find_node(base_dtb, "/__symbols__", 0);
+         dtoverlay_apply_overlay_paths(base_dtb, symbols_off,
+                                       overlay_dtb, frag_off, "label");
          continue;
       }
       else if (strncmp(node_name, "fragment@", 9) != 0 &&
@@ -1224,8 +1244,13 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
       }
 
       // Now do the merge
-      err = dtoverlay_merge_fragment(base_dtb, target_off, overlay_dtb,
-                                     overlay_off, 0);
+      node_name = fdt_get_name(base_dtb->fdt, target_off, NULL);
+      if (node_name && strcmp(node_name, "aliases") == 0)
+         err = dtoverlay_apply_overlay_paths(base_dtb, target_off, overlay_dtb,
+                                             overlay_off, "alias");
+      else
+         err = dtoverlay_merge_fragment(base_dtb, target_off, overlay_dtb,
+                                        overlay_off, 0);
    }
 
    if (err == 0)
