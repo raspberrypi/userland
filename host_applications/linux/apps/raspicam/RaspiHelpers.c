@@ -33,6 +33,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <unistd.h>
 #include <stdint.h>
 
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <linux/videodev2.h>
 
 #include "interface/vcos/vcos.h"
 #include "interface/mmal/mmal.h"
@@ -293,4 +296,26 @@ uint64_t get_microseconds64()
    us += spec.tv_nsec / 1000;
 
    return us;
+}
+
+
+/*
+ * If we are configured to use /dev/video0 as unicam (e.g. for libcamera) then
+ * these legacy camera apps can't work. Fail immediately with an obvious message.
+ */
+void check_camera_stack()
+{
+	int fd = open("/dev/video0", O_RDWR, 0);
+	if (fd < 0)
+		return;
+
+	struct v4l2_capability caps;
+	int ret = ioctl(fd, VIDIOC_QUERYCAP, &caps);
+	close(fd);
+
+	if (ret < 0 || strcmp((char *)caps.driver, "unicam"))
+		return;
+
+	fprintf(stderr, "ERROR: the system should be configured for the legacy camera stack\n");
+	exit(-1);
 }
