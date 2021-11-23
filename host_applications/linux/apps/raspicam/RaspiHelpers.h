@@ -39,5 +39,6 @@ void default_signal_handler(int signal_number);
 int mmal_status_to_int(MMAL_STATUS_T status);
 void print_app_details(FILE *fd);
 uint64_t get_microseconds64();
+void check_camera_stack();
 
 #endif

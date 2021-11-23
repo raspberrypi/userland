@@ -2408,6 +2408,8 @@ int main(int argc, const char **argv)
    MMAL_PORT_T *splitter_output_port = NULL;
    MMAL_PORT_T *splitter_preview_port = NULL;
 
+   check_camera_stack();
+
    bcm_host_init();
 
    // Register our application with the logging system

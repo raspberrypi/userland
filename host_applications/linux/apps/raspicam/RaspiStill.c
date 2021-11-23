@@ -1647,6 +1647,8 @@ int main(int argc, const char **argv)
    MMAL_PORT_T *encoder_input_port = NULL;
    MMAL_PORT_T *encoder_output_port = NULL;
 
+   check_camera_stack();
+
    bcm_host_init();
 
    // Register our application with the logging system
