@@ -31,6 +31,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "core/mmal_core_private.h"
 #include "mmal_logging.h"
 
+#include "vc/mmal_vc_api.h"
+
 /* Minimum number of buffers that will be available on the control port */
 #define MMAL_CONTROL_PORT_BUFFERS_MIN 4
 
@@ -665,6 +667,12 @@ MMAL_STATUS_T mmal_component_action_unlock(MMAL_COMPONENT_T *component)
 static void mmal_core_init_once(void)
 {
    vcos_mutex_create(&mmal_core_lock, VCOS_FUNCTION);
+
+   /* Horrid hack as linkers are now setting --as-needed by default, so fail
+    * to see the requirement for mmal_vc_client as a library because the core
+    * never calls it.
+    */
+   mmal_register_component_videocore();
 }
 
 static void mmal_core_init(void)
