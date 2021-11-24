@@ -11,7 +11,7 @@ add_library (mmal_core ${LIBRARY_TYPE}
    mmal_clock.c
 )
 
-target_link_libraries (mmal_core vcos)
+target_link_libraries (mmal_core vcos mmal_vc_client)
 
 install(TARGETS mmal_core DESTINATION lib)
 install(FILES

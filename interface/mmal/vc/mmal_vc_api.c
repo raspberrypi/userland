@@ -1508,7 +1508,11 @@ fail:
    return status;
 }
 
+/*
+ * Do NOT register as a constructor due to horrid hack where the core will register
+ * these components in case the linker has determined that they weren't needed.
 MMAL_CONSTRUCTOR(mmal_register_component_videocore);
+*/
 void mmal_register_component_videocore(void)
 {
    mmal_component_supplier_register(VIDEOCORE_PREFIX, mmal_vc_component_create);
