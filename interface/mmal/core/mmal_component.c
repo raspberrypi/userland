@@ -668,11 +668,13 @@ static void mmal_core_init_once(void)
 {
    vcos_mutex_create(&mmal_core_lock, VCOS_FUNCTION);
 
+#ifndef __VIDEOCORE__
    /* Horrid hack as linkers are now setting --as-needed by default, so fail
     * to see the requirement for mmal_vc_client as a library because the core
     * never calls it.
     */
    mmal_register_component_videocore();
+#endif
 }
 
 static void mmal_core_init(void)
