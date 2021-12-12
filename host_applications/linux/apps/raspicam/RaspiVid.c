@@ -1117,6 +1117,10 @@ static FILE *open_filename(RASPIVID_STATE *pState, char *filename)
 
          if (sfd >= 0)
             new_handle = fdopen(sfd, "w");
+            if (bcm_host_get_processor_id() == BCM_HOST_PROCESSOR_BCM2835)
+               // Turn off buffering
+               // BCM2835 provides a 128KB system L2 cache, which is used primarily by the GPU
+               setvbuf(new_handle, NULL, _IONBF, 0);
       }
       else
       {
