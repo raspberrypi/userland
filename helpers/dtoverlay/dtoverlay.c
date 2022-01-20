@@ -976,7 +976,7 @@ static int dtoverlay_get_target_offset(DTBLOB_T *base_dtb,
       if (target_off < 0)
       {
          dtoverlay_error("invalid target-path '%.*s'", len, target_path);
-         return NON_FATAL(target_off);
+         return target_off;
       }
    }
    else
@@ -988,11 +988,11 @@ static int dtoverlay_get_target_offset(DTBLOB_T *base_dtb,
       if (!target_prop)
       {
          dtoverlay_error("no target or target-path");
-         return NON_FATAL(len);
+         return len;
       }
 
       if (len != 4)
-         return NON_FATAL(FDT_ERR_BADSTRUCTURE);
+         return -FDT_ERR_BADSTRUCTURE;
 
       phandle = fdt32_to_cpu(*(fdt32_t *)target_prop);
       if (!base_dtb)
@@ -1007,7 +1007,7 @@ static int dtoverlay_get_target_offset(DTBLOB_T *base_dtb,
       if (target_off < 0)
       {
          dtoverlay_error("invalid target (phandle %d)", phandle);
-         return NON_FATAL(target_off);
+         return target_off;
       }
    }
 
@@ -1071,7 +1071,7 @@ static int dtoverlay_apply_overlay_paths(DTBLOB_T *base_dtb, int strings_off,
       target_off = dtoverlay_get_target_offset(base_dtb, overlay_dtb,
                                                sym_frag_off);
       if (target_off < 0)
-         return target_off;
+         return NON_FATAL(target_off);
 
       err = fdt_get_path(base_dtb->fdt, target_off,
                          target_path, sizeof(target_path));
@@ -1239,7 +1239,7 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
       target_off = dtoverlay_get_target_offset(base_dtb, overlay_dtb, frag_off);
       if (target_off < 0)
       {
-         err = target_off;
+         err = NON_FATAL(target_off);
          break;
       }
 
