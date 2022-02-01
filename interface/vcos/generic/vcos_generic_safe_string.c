@@ -90,3 +90,34 @@ size_t vcos_safe_strcpy(char *dst, const char *src, size_t dstlen, size_t offset
 
    return offset;
 }
+
+/** Copies at most srclen characters from string src to dst at the specified offset.
+  * Output is truncated to fit in dstlen bytes, i.e. the string is at most
+  * (buflen - 1) characters long. Unlike strncpy, exactly one NUL is written
+  * to dst, which is always NUL-terminated.
+  * Returns the string length before/without truncation.
+  */
+size_t vcos_safe_strncpy(char *dst, const char *src, size_t srclen, size_t dstlen, size_t offset)
+{
+   if (offset < dstlen)
+   {
+      const char *p = src;
+      const char *srcend = src + srclen;
+      char *endp = dst + dstlen -1;
+
+      dst += offset;
+
+      for (; p != srcend && *p!='\0' && dst != endp; dst++, p++)
+         *dst = *p;
+      *dst = '\0';
+   }
+
+   // Open-code strnlen
+   while (*src && srclen)
+   {
+       offset++;
+       srclen--;
+   }
+
+   return offset;
+}
