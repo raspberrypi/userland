@@ -423,11 +423,60 @@ int dtparam_apply(DTBLOB_T *dtb, const char *override_name,
     return err;
 }
 
+static int apply_parameter(DTBLOB_T *overlay_dtb, const char *arg, int is_dtparam,
+                           STRING_VEC_T *used_props, char **param_string)
+{
+    const char *param_val = strchr(arg, '=');
+    const char *param, *override;
+    char *p = NULL;
+    int override_len;
+    int err = 0;
+
+    if (param_val)
+    {
+        int len = (param_val - arg);
+        p = sprintf_dup("%.*s", len, arg);
+        param = p;
+        param_val++;
+    }
+    else
+    {
+        /* Use the default parameter value - true */
+        param = arg;
+        param_val = "true";
+    }
+
+    override = dtoverlay_find_override(overlay_dtb, param, &override_len);
+
+    if (!override)
+        return error("Unknown parameter '%s'", param);
+
+    if (is_dtparam)
+        err = dtparam_apply(overlay_dtb, param,
+                            override, override_len,
+                            param_val, used_props);
+    else
+        err = dtoverlay_apply_override(overlay_dtb, param,
+                                       override, override_len,
+                                       param_val);
+    if (err != 0)
+        return error("Failed to set %s=%s", param, param_val);
+
+    *param_string = sprintf_dup("%s %s=%s",
+                                *param_string ? *param_string : "",
+                                param, param_val);
+
+    free_string(p);
+
+    return 0;
+}
+
 static int dtoverlay_add(STATE_T *state, const char *overlay,
                          int argc, const char **argv)
 {
     const char *overlay_name;
     const char *overlay_file;
+    const char *overrides = NULL;
     char *param_string = NULL;
     int is_dtparam;
     DTBLOB_T *base_dtb = NULL;
@@ -463,11 +512,16 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
     else
     {
         const char *remapped = dtoverlay_remap_overlay(overlay);
+        int name_len;
         if (!remapped)
             return error("Failed to load '%s'", overlay);
         if (strcmp(overlay, remapped))
             dtoverlay_debug("mapped overlay '%s' to '%s'", overlay, remapped);
         overlay = remapped;
+        name_len = strcspn(overlay, ",");
+        if (overlay[name_len])
+            overrides = overlay + name_len + 1;
+        overlay = sprintf_dup("%.*s", name_len, overlay);
         overlay_file = sprintf_dup("%s/%s.dtbo", overlay_src_dir, overlay);
     }
 
@@ -486,49 +540,28 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
         string_vec_init(&used_props);
     }
 
-    /* Apply any parameters next */
+    /* Apply any parameters that came from the overlay map */
+    while (overrides && *overrides)
+    {
+        int override_len = strcspn(overrides, ",");
+        char *override = strndup(overrides, override_len);
+        if (!override)
+            return error("Out of memory applying parameter");
+        err = apply_parameter(overlay_dtb, override, is_dtparam,
+                              &used_props, &param_string);
+        free(override);
+        if (err)
+            return err;
+        overrides += override_len + 1;
+    }
+
+    /* Then any supplied on the commad line */
     for (i = 0; i < argc; i++)
     {
-        const char *arg = argv[i];
-        const char *param_val = strchr(arg, '=');
-        const char *param, *override;
-        char *p = NULL;
-        int override_len;
-        if (param_val)
-        {
-            int len = (param_val - arg);
-            p = sprintf_dup("%.*s", len, arg);
-            param = p;
-            param_val++;
-        }
-        else
-        {
-            /* Use the default parameter value - true */
-            param = arg;
-            param_val = "true";
-        }
-
-        override = dtoverlay_find_override(overlay_dtb, param, &override_len);
-
-        if (!override)
-            return error("Unknown parameter '%s'", param);
-
-        if (is_dtparam)
-            err = dtparam_apply(overlay_dtb, param,
-                                override, override_len,
-                                param_val, &used_props);
-        else
-            err = dtoverlay_apply_override(overlay_dtb, param,
-                                           override, override_len,
-                                           param_val);
-        if (err != 0)
-            return error("Failed to set %s=%s", param, param_val);
-
-        param_string = sprintf_dup("%s %s=%s",
-                                   param_string ? param_string : "",
-                                   param, param_val);
-
-        free_string(p);
+        err = apply_parameter(overlay_dtb, argv[i], is_dtparam,
+                              &used_props, &param_string);
+        if (err)
+            return err;
     }
 
     /* Apply any intra-overlay fragments, filtering the symbols */
