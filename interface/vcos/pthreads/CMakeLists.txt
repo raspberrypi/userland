@@ -33,12 +33,14 @@ set (SOURCES
    ../generic/vcos_generic_blockpool.c
 )
 
+find_library (EXECINFO_LIBRARY execinfo)
+
 if (VCOS_PTHREADS_BUILD_SHARED)
    add_library (vcos SHARED ${SOURCES})
-   target_link_libraries (vcos pthread dl rt)
+   target_link_libraries (vcos pthread dl rt $<$<BOOL:${EXECINFO_LIBRARY}>:${EXECINFO_LIBRARY}>)
 else ()
    add_library (vcos ${SOURCES})
-   target_link_libraries (vcos pthread rt)
+   target_link_libraries (vcos pthread rt $<$<BOOL:${EXECINFO_LIBRARY}>:${EXECINFO_LIBRARY}>)
 endif ()
 
 
