@@ -1453,7 +1453,7 @@ const char *dtoverlay_find_override(DTBLOB_T *dtb, const char *override_name,
    return data;
 }
 
-int hex_digit(char c)
+static int hex_digit(char c)
 {
    if (c >= '0' && c <= '9')
       return c - '0';
@@ -1463,6 +1463,19 @@ int hex_digit(char c)
       return 10 + c - 'a';
    else
       return -1;
+}
+
+static int hex_byte(const char *p)
+{
+   int nib1, nib2;
+
+   nib1 = hex_digit(p[0]);
+   if (nib1 < 0)
+      return -1;
+   nib2 = hex_digit(p[1]);
+   if (nib2 < 0)
+      return -1;
+   return (nib1 << 4) | nib2;
 }
 
 int dtoverlay_override_one_target(int override_type,
@@ -1476,24 +1489,75 @@ int dtoverlay_override_one_target(int override_type,
 
    if (override_type == DTOVERRIDE_STRING)
    {
-      char *prop_val;
+      char unescaped_value[256];
+      char *prop_val, *q;
+      const char *p;
       int prop_len;
 
-      /* Replace the whole property with the string */
+      p = override_value;
+      q = unescaped_value;
+      while (*p)
+      {
+         int c = *(p++);
+         if (c == '\\')
+         {
+            c = *(p++);
+            if (c >= '0' && c <= '7')
+            {
+               c -= '0';
+               if (*p >= '0' && *p <= '7')
+               {
+                  c = (c << 3) + *(p++) - '0';
+                  if (*p >= '0' && *p <= '7')
+                  {
+                     c = (c << 3) + *(p++) - '0';
+                     if (c > 255)
+                        c = -1;
+                  }
+               }
+            }
+            else if (c == 'a')
+               c = '\x07';
+            else if (c == 'b')
+               c = '\b';
+            else if (c == 'f')
+               c = '\f';
+            else if (c == 'n')
+               c = '\n';
+            else if (c == 'r')
+               c = '\r';
+            else if (c == 't')
+               c = '\t';
+            else if (c == 'v')
+               c = '\v';
+            else if (c == 'x')
+               c = hex_byte(p), p += 2;
+            else if (c != '\\' && c != '\'' && c != '"')
+               c = -1;
+            if (c < 0)
+            {
+               dtoverlay_error("invalid escape in '%s'", override_value);
+               return NON_FATAL(FDT_ERR_BADVALUE);
+            }
+         }
+         *(q++) = (char)c;
+      }
+      *(q++) = '\0';
+      /* Append to or replace the property string */
       if ((strcmp(prop_name, "bootargs") == 0) &&
           ((prop_val = fdt_getprop_w(dtb->fdt, node_off, prop_name,
                                      &prop_len)) != NULL) &&
           (prop_len > 0) && prop_val[0])
       {
          prop_val[prop_len - 1] = ' ';
-         err = fdt_appendprop_string(dtb->fdt, node_off, prop_name, override_value);
+         err = fdt_appendprop(dtb->fdt, node_off, prop_name, unescaped_value, q - unescaped_value);
       }
       else if (strcmp(prop_name, "name") == 0) // "name" is a pseudo-property
       {
-         err = dtoverlay_set_node_name(dtb, node_off, override_value);
+         err = dtoverlay_set_node_name(dtb, node_off, unescaped_value);
       }
       else
-         err = fdt_setprop_string(dtb->fdt, node_off, prop_name, override_value);
+         err = fdt_setprop(dtb->fdt, node_off, prop_name, unescaped_value, q - unescaped_value);
    }
    else if (override_type == DTOVERRIDE_BYTE_STRING)
    {
@@ -1504,18 +1568,17 @@ int dtoverlay_override_one_target(int override_type,
 
       while (*p)
       {
-          int nib1, nib2;
+          int byteval;
           // whitespace and colons are legal separators
           if (*p == ':' || *p == ' ' || *p == '\t')
           {
              p++;
              continue;
           }
-          nib1 = hex_digit(*p++);
-          nib2 = hex_digit(*p++);
-          if (nib1 < 0 || nib2 < 0)
+          byteval = hex_byte(p);
+          if (byteval < 0)
           {
-             dtoverlay_error("invalid bytestring '%s'", override_value);
+             dtoverlay_error("invalid bytestring at '%s'", p);
              return NON_FATAL(FDT_ERR_BADVALUE);
           }
           if (byte_count == sizeof(bytes_buf))
@@ -1523,7 +1586,8 @@ int dtoverlay_override_one_target(int override_type,
              dtoverlay_error("bytestring '%s' too long", override_value);
              return NON_FATAL(FDT_ERR_BADVALUE);
           }
-          bytes_buf[byte_count++] = (nib1 << 4) | nib2;
+          bytes_buf[byte_count++] = byteval;
+          p += 2;
       }
 
       err = fdt_setprop(dtb->fdt, node_off, prop_name, bytes_buf, byte_count);
