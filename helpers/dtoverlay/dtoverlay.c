@@ -2364,7 +2364,8 @@ int dtoverlay_next_pin(PIN_ITER_T *iter, int *pin, int *func, int *pull)
       if ((iter->pin_off) + 4 <= iter->pins_len)
       {
          int off = iter->pin_off;
-         *pin = GETBE4(iter->pins, off);
+         if (pin)
+            *pin = GETBE4(iter->pins, off);
          if (func && iter->funcs_len)
             *func = GETBE4(iter->funcs, (iter->funcs_len > 4) ? off : 0);
          if (pull && iter->pulls_len)
