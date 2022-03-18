@@ -265,7 +265,7 @@ static int dynstring_init_size(struct dynstring *ds, int initial_size)
 {
    if (initial_size < 32)
       initial_size = 32;
-   ds->size = initial_size;
+   ds->size = 0;
    ds->len = 0;
    ds->buf = malloc(initial_size);
    if (!ds->buf)
@@ -273,6 +273,7 @@ static int dynstring_init_size(struct dynstring *ds, int initial_size)
       dtoverlay_error("  out of memory");
       return -FDT_ERR_NOSPACE;
    }
+   ds->size = initial_size;
    return 0;
 }
 
@@ -289,6 +290,10 @@ static int dynstring_set_size(struct dynstring *ds, int size)
       }
       ds->size = size;
    }
+   else if (size < 0)
+   {
+      return -FDT_ERR_BADVALUE;
+   }
    return 0;
 }
 
@@ -298,6 +303,8 @@ static int dynstring_dup(struct dynstring *ds, const char *src, int len)
 
    if (!len)
       len = strlen(src);
+   if (len < 0)
+      return -FDT_ERR_BADVALUE;
 
    err = dynstring_set_size(ds, len + 1);
    if (!err)
@@ -2619,7 +2626,6 @@ DTBLOB_T *dtoverlay_import_fdt(void *fdt, int buf_size)
    if (buf_size < dtb_len)
    {
       dtoverlay_error("fdt is too large");
-      err = -FDT_ERR_NOSPACE;
       goto error_exit;
    }
 
