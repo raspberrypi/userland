@@ -1052,7 +1052,7 @@ static int dtoverlay_apply_overlay_paths(DTBLOB_T *base_dtb, int strings_off,
 
       p = strchr(sym_path + 1, '/');
       if (!p || strncmp(p + 1, "__overlay__", 11) != 0 ||
-          (p[11] != '/' && p[11] != '\0'))
+          (p[12] != '/' && p[12] != '\0'))
          goto copy_verbatim;
 
       /* Rebase the symbol path so that
