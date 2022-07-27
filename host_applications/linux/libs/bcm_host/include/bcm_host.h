@@ -47,7 +47,7 @@ int32_t graphics_get_display_size( const uint16_t display_number,
  * which may differ from the physical peripheral address on the
  * peripheral datasheet. For example, on the BCM2711,
  * bcm_host_get_peripheral_address() returns a value 0x0200_0000 bytes higher
- * than the "main peripheral" physical addresses from the BCM2xxx datasheets.
+ * than the "main peripheral" physical addresses from its datasheet.
  * On the BCM2711, this is because the first 0x0200_0000 bytes in the "main
  * peripherals" block are reserved for BCM2711-specific addresses.
  * Source:
