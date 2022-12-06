@@ -35,6 +35,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "dtoverlay.h"
 
 #define ARRAY_SIZE(a)   (sizeof(a) / sizeof(a[0]))
+#define UNUSED(x) (void)(x)
 
 typedef enum
 {
@@ -232,7 +233,7 @@ int dtoverlay_set_node_properties(DTBLOB_T *dtb, const char *node_path,
       node_off = dtoverlay_create_node(dtb, node_path, 0);
    if (node_off >= 0)
    {
-      int i;
+      unsigned int i;
       for (i = 0; (i < num_properties) && (err == 0); i++)
       {
          DTOVERLAY_PARAM_T *p;
@@ -356,7 +357,7 @@ static int dtoverlay_set_node_name(DTBLOB_T *dtb, int node_off,
    int dir_len; // Excluding the node name, but with the trailling slash
    int name_len;
    int offset;
-   int fixup_idx;
+   unsigned int fixup_idx;
    int err = 0;
 
    // Fixups and local-fixups both use node names, so this
@@ -694,7 +695,7 @@ static int dtoverlay_apply_fixups(DTBLOB_T *dtb, const char *fixups_stringlist,
                                      offset_str - 1 - prop_name, &prop_len);
       if (!prop_ptr)
          return prop_len;
-      if (offset > (prop_len - 4))
+      if ((int)offset > (prop_len - 4))
          return -FDT_ERR_BADSTRUCTURE;
 
       // Now apply the patch. Yes, prop_ptr is a const void *, but the
@@ -997,7 +998,7 @@ static int dtoverlay_get_target_offset(DTBLOB_T *base_dtb,
       phandle = fdt32_to_cpu(*(fdt32_t *)target_prop);
       if (!base_dtb)
       {
-         if (phandle < 0 || phandle > overlay_dtb->max_phandle)
+         if (phandle < 0 || (uint32_t)phandle > overlay_dtb->max_phandle)
             return -FDT_ERR_NOTFOUND;
          return fdt_node_offset_by_phandle(overlay_dtb->fdt, phandle);
       }
@@ -1086,7 +1087,7 @@ static int dtoverlay_apply_overlay_paths(DTBLOB_T *base_dtb, int strings_off,
       if (strcmp(target_path, "/") == 0)
          p++; // Avoid a '//' if the target is the root
       new_path_len = target_path_len + (sym_path + sym_len - p);
-      if (new_path_len >= sizeof(target_path))
+      if (new_path_len >= (int)sizeof(target_path))
       {
          dtoverlay_error("exported symbol path too long for %s", sym_path);
          err = -FDT_ERR_NOSPACE;
@@ -1343,7 +1344,7 @@ int dtoverlay_filter_symbols(DTBLOB_T *dtb)
    struct str_item
    {
       struct str_item *next;
-      char str[0];
+      char str[1];
    };
 
    symbols_off = dtoverlay_find_node(dtb, "/__symbols__", 0);
@@ -1367,7 +1368,7 @@ int dtoverlay_filter_symbols(DTBLOB_T *dtb)
       fdt_getprop_by_offset(dtb->fdt, prop_off, &name, NULL);
       if (!name)
          break;
-      new_str = malloc(sizeof(*new_str) + strlen(name) + 1);
+      new_str = malloc(sizeof(*new_str) + strlen(name));
       if (!new_str)
       {
          /* Free all of the internalised exports */
@@ -1485,6 +1486,8 @@ int dtoverlay_override_one_target(int override_type,
                                   int target_off, int target_size,
                                   void *callback_state)
 {
+   UNUSED(target_phandle);
+   UNUSED(callback_state);
    int err = 0;
 
    if (override_type == DTOVERRIDE_STRING)
@@ -1922,7 +1925,7 @@ static int dtoverlay_extract_override(const char *override_name,
    }
 
    // Check for space for a phandle, a terminating NUL and at least one char
-   if (len < (sizeof(fdt32_t) + 1 + 1))
+   if (len < ((int)sizeof(fdt32_t) + 1 + 1))
    {
       dtoverlay_error("  override %s: data is truncated or mangled",
                       override_name);
@@ -2656,15 +2659,15 @@ int dtoverlay_save_dtb(const DTBLOB_T *dtb, const char *filename)
 
    if (fp)
    {
-      long len = fdt_totalsize(dtb->fdt);
-      if (len != fwrite(dtb->fdt, 1, len, fp))
+      int len = fdt_totalsize(dtb->fdt);
+      if (fwrite(dtb->fdt, len, 1, fp) != 1)
       {
          dtoverlay_error("fwrite failed");
          err = -2;
          goto error_exit;
       }
       if (dtb->trailer_len &&
-          (fwrite(dtb->trailer, 1, dtb->trailer_len, fp) != dtb->trailer_len))
+          (fwrite(dtb->trailer, dtb->trailer_len, 1, fp) != 1))
       {
          dtoverlay_error("fwrite failed");
          err = -2;
@@ -2774,8 +2777,8 @@ int dtoverlay_find_symbol(DTBLOB_T *dtb, const char *symbol_name)
          return -FDT_ERR_NOTFOUND;
 
       //Ensure we don't have trailing NULLs
-      if (path_len > strnlen(node_path, path_len))
-         path_len = strnlen(node_path, path_len);
+      if (path_len > (int)strnlen(node_path, path_len))
+         path_len = (int)strnlen(node_path, path_len);
    }
 
    return fdt_path_offset_namelen(dtb->fdt, node_path, path_len);

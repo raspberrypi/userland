@@ -67,8 +67,8 @@ typedef struct dtblob_struct
    char fdt_is_malloced;
    char trailer_is_malloced;
    char fixups_applied;
-   int min_phandle;
-   int max_phandle;
+   uint32_t min_phandle;
+   uint32_t max_phandle;
    void *trailer;
    int trailer_len;
 } DTBLOB_T;
