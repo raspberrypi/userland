@@ -811,7 +811,7 @@ int main( int argc, char **argv )
    {
       fprintf(stderr, "%s is not supported when using the vc4-kms-v3d driver.\n"
                        "Similar features are available with standard linux tools\n"
-                       "such as modetest from libdrm-tests.\n", argv[0]);
+                       "such as kmsprint from kms++-utils\n", argv[0]);
       exit(1);
    }
 
