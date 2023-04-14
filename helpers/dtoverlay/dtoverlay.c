@@ -2559,6 +2559,11 @@ void dtoverlay_init_map_from_fp(FILE *fp, const char *compatible,
             platform_name = "bcm2711";
             break;
         }
+        else if (strncmp(p, "bcm2712", len) == 0)
+        {
+            platform_name = "bcm2712";
+            break;
+        }
 
         compatible_len -= (p - compatible);
         compatible = p;
