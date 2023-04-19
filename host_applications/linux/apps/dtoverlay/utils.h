@@ -70,5 +70,6 @@ void string_vec_sort(STRING_VEC_T *vec);
 void string_vec_uninit(STRING_VEC_T *vec);
 int error(const char *fmt, ...);
 void fatal_error(const char *fmt, ...);
+char *read_file_as_string(const char *path, int *plen);
 
 #endif

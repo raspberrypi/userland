@@ -218,12 +218,19 @@ int main(int argc, const char **argv)
     if (!overlay_src_dir)
     {
         /* Find the overlays and README */
+        const char *os_prefix;
         int i;
+
+        /* Check for an os_prefix value */
+        os_prefix = read_file_as_string("/proc/device-tree/chosen/os_prefix",
+                                        NULL);
+        if (!os_prefix)
+            os_prefix = "";
 
         for (i = 0; boot_dirs[i]; i++)
         {
-            overlay_src_dir = sprintf_dup("%s/" OVERLAY_SRC_SUBDIR,
-                                          boot_dirs[i]);
+            overlay_src_dir = sprintf_dup("%s/%s" OVERLAY_SRC_SUBDIR,
+                                          boot_dirs[i], os_prefix);
             if (dir_exists(overlay_src_dir))
                 break;
             free_string(overlay_src_dir);
@@ -267,29 +274,8 @@ int main(int argc, const char **argv)
     }
 
     if (!platform_string)
-    {
-        FILE *fp = fopen("/proc/device-tree/compatible", "r");
-        if (fp)
-        {
-            long len;
-            long bytes_read;
-            char *prop_buf;
-
-            fseek(fp, 0, SEEK_END);
-            len = ftell(fp);
-            fseek(fp, 0, SEEK_SET);
-            prop_buf = malloc(len);
-            bytes_read = fread(prop_buf, 1, len, fp);
-            if (bytes_read == len)
-            {
-                platform_string = prop_buf;
-                platform_string_len = len;
-            }
-            else
-                fatal_error("Failed to read 'compatible' property");
-            fclose(fp);
-        }
-    }
+        platform_string = read_file_as_string("/proc/device-tree/compatible",
+                                              &platform_string_len);
 
     if (platform_string)
         dtoverlay_init_map(overlay_src_dir, platform_string, platform_string_len);

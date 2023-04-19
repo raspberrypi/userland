@@ -461,3 +461,30 @@ void fatal_error(const char *fmt, ...)
     fprintf(stderr, "\n");
     exit(1);
 }
+
+char *read_file_as_string(const char *path, int *plen)
+{
+    FILE *fp = fopen(path, "r");
+    char *string = NULL;
+    long len = 0;
+    if (fp)
+    {
+        long bytes_read;
+
+        fseek(fp, 0, SEEK_END);
+        len = ftell(fp);
+        fseek(fp, 0, SEEK_SET);
+        /* Ensure NUL-termination */
+        string = malloc(len + 1);
+        if (!string)
+            fatal_error("Out of memory", path);
+        string[len] = 0;
+        bytes_read = fread(string, 1, len, fp);
+        if (bytes_read != len)
+            fatal_error("Failed to read file '%s'", path);
+        fclose(fp);
+    }
+    if (plen)
+        *plen = (int)len;
+    return string;
+}
