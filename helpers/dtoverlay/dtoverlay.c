@@ -2047,6 +2047,47 @@ static int dtoverlay_extract_override(const char *override_name,
              literal_value[0])
          {
             /* String */
+            if (type == DTOVERRIDE_STRING && !literal_value[0])
+            {
+               /* The empty string is a special case indicating that the literal
+                * string follows the NUL. This could appear as
+                *     "foo=","bar";
+                * but the expecged use case is to support label paths:
+                *     "console=",&uart1;
+                * which dtc will expand to something like:
+                *     "console=","/soc/serial@7e215040";
+                * Note that the corollary of this is that assigning an empty
+                * string (not a likely scenario, and not one encountered at the
+                * time of writing) requires an empty string to appear
+                * immediately afterwards:
+                *     <&aliases>,"console=","",<&node>,"other:0";
+                * or that the empty string assignment is at the end:
+                *     <&aliases>,"console=";
+                * although the same effect can be achieved with:
+                *     <&aliases>,"console[=00";
+                */
+               len = data_end - data;
+               if (!len)
+               {
+                  /* end-of-property case - treat as an empty string */
+                  literal_value = data - 1;
+                  override_len = 1;
+               }
+               else
+               {
+                  override_end = memchr(data, 0, len);
+                  if (!override_end)
+                  {
+                     dtoverlay_error("  override %s: string is not NUL-terminated",
+                                     override_name);
+                     return -FDT_ERR_BADSTRUCTURE;
+                  }
+
+                  literal_value = data;
+                  data = override_end + 1;
+               }
+               *datap = data;
+            }
             strcpy(override_value, literal_value);
          }
          else
