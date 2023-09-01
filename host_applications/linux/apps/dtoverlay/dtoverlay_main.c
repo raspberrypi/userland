@@ -65,6 +65,7 @@ static const char *boot_dirs[] =
 #ifdef FORCE_BOOT_DIR
     FORCE_BOOT_DIR,
 #else
+    "/boot/firmware",
     "/boot",
     "/flash",
 #ifdef OTHER_BOOT_DIR
