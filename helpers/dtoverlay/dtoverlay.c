@@ -220,6 +220,16 @@ int dtoverlay_find_node(DTBLOB_T *dtb, const char *node_path, int path_len)
    return fdt_path_offset_namelen(dtb->fdt, node_path, path_len);
 }
 
+int dtoverlay_first_subnode(DTBLOB_T *dtb, int node_off)
+{
+    return fdt_first_subnode(dtb->fdt, node_off);
+}
+
+int dtoverlay_next_subnode(DTBLOB_T *dtb, int subnode_off)
+{
+    return fdt_next_subnode(dtb->fdt, subnode_off);
+}
+
 // Returns 0 on success, otherwise <0 error code
 int dtoverlay_set_node_properties(DTBLOB_T *dtb, const char *node_path,
                                   DTOVERLAY_PARAM_T *properties,

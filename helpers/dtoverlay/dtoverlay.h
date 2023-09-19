@@ -114,6 +114,10 @@ int dtoverlay_delete_node(DTBLOB_T *dtb, const char *node_name, int path_len);
 
 int dtoverlay_find_node(DTBLOB_T *dtb, const char *node_path, int path_len);
 
+
+int dtoverlay_first_subnode(DTBLOB_T *dtb, int node_off);
+int dtoverlay_next_subnode(DTBLOB_T *dtb, int subnode_off);
+
 int dtoverlay_set_node_properties(DTBLOB_T *dtb, const char *node_path,
                                   DTOVERLAY_PARAM_T *properties,
                                   unsigned int num_properties);
