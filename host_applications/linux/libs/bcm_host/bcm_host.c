@@ -293,10 +293,12 @@ int bcm_host_get_processor_id(void)
 static int bcm_host_is_fkms_or_kms_active(int kms)
 {
    if (!read_string_from_file("/proc/device-tree/soc/v3d@7ec00000/status", "okay", NULL) &&
-       !read_string_from_file("/proc/device-tree/v3dbus/v3d@7ec04000/status", "okay", NULL))
+       !read_string_from_file("/proc/device-tree/v3dbus/v3d@7ec04000/status", "okay", NULL) &&
+       !read_string_from_file("/proc/device-tree/axi/v3d@2000000/status", "okay", NULL))
       return 0;
    else
-      return read_string_from_file("/proc/device-tree/soc/firmwarekms@7e600000/status", "okay", NULL) ^ kms;
+      return (read_string_from_file("/proc/device-tree/soc/firmwarekms@7e600000/status", "okay", NULL) ||
+              read_string_from_file("/proc/device-tree/soc/firmwarekms@7d503000/status", "okay", NULL)) ^ kms;
 }
 
 int bcm_host_is_fkms_active(void)
