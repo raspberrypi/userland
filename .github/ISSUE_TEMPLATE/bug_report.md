@@ -14,7 +14,7 @@ about: Create a report to help us fix your issue
 ---
 
 **Is this the right place for my bug report?**
-This repository contains the Raspberry Pi userland code. If you believe that the issue you are seeing is in the userland libraries, this is the right place. If not, we have other repositories for the GPU firmware at [github.com/raspberrypi/firmware](https://github.com/raspberrypi/firmware) and linux kernel at [github.com/raspberrypi/linux](https://github.com/raspberrypi/linux). If you have problems with the Raspbian distribution packages, report them in the [github.com/RPi-Distro/repo](https://github.com/RPi-Distro/repo). If you simply have a question, then [the Raspberry Pi forums](https://www.raspberrypi.org/forums) are the best place to ask it.
+This repository contains the Raspberry Pi userland code. If you believe that the issue you are seeing is in the userland libraries, this is the right place. If not, we have other repositories for the GPU firmware at [github.com/raspberrypi/firmware](https://github.com/raspberrypi/firmware) and linux kernel at [github.com/raspberrypi/linux](https://github.com/raspberrypi/linux). If you have problems with the Raspbian distribution packages, report them in the [github.com/RPi-Distro/repo](https://github.com/RPi-Distro/repo). If you simply have a question, then [the Raspberry Pi forums](https://forums.raspberrypi.com/) are the best place to ask it.
 
 **Describe the bug**
 Add a clear and concise description of what you think the bug is.
