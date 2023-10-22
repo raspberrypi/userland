@@ -1,0 +1,33 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  build-arm64:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Dependency packages
+      run: sudo apt-get -y install build-essential cmake gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross
+    - name: Build
+      run: ./buildme --aarch64 ${GITHUB_WORKSPACE}/destdir
+    - name: Build tarball
+      run: mkdir -p ${GITHUB_WORKSPACE}/artifacts && tar zcvf ${GITHUB_WORKSPACE}/artifacts/${{ github.job }}-${{ github.run_id }}.${{ github.run_number }}.tar.gz -C ${GITHUB_WORKSPACE}/destdir .
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: userland-ci-${{ github.job }}-${{ github.run_id }}.${{ github.run_number }}
+        path: artifacts/*.tar.gz
+  build-armhf:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Dependency packages
+      run: sudo apt-get -y install build-essential cmake gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf libc6-dev-armhf-cross
+    - name: Build
+      run: ./buildme ${GITHUB_WORKSPACE}/destdir
+    - name: Build tarball
+      run: mkdir -p ${GITHUB_WORKSPACE}/artifacts && tar zcvf ${GITHUB_WORKSPACE}/artifacts/${{ github.job }}-${{ github.run_id }}.${{ github.run_number }}.tar.gz -C ${GITHUB_WORKSPACE}/destdir .
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: userland-ci-${{ github.job }}-${{ github.run_id }}.${{ github.run_number }}
+        path: artifacts/*.tar.gz
