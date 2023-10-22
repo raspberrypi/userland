@@ -2,6 +2,7 @@
 BUILDTYPE=Release
 ARCH=$(uname -m)
 ARM64=OFF
+AMD64=OFF
 CMAKE_TOOLCHAIN_FILE=../../../makefiles/cmake/toolchains/arm-linux-gnueabihf.cmake
 
 if [ "$1" = "--debug" ]; then
@@ -33,10 +34,11 @@ if [ $ARCH = "armv6l" ] || [ $ARCH = "armv7l" ] || [ $ARCH = "aarch64" ]; then
 		sudo make install
 	fi
 elif [ "$1" = "--native" ]; then
+	AMD64=ON
 	# Build natively on the host
 	mkdir -p build/native/$BUILDSUBDIR
 	pushd build/native/$BUILDSUBDIR
-	cmake -DCMAKE_BUILD_TYPE=$BUILDTYPE ../../..
+	cmake -DCMAKE_BUILD_TYPE=$BUILDTYPE -DAMD64=$AMD64../../..
 	shift
 	make -j `nproc` $*
 else
