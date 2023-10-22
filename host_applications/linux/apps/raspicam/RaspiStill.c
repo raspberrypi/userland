@@ -1257,13 +1257,13 @@ static void add_exif_tags(RASPISTILL_STATE *state, struct gps_data_t *gpsdata)
       add_exif_tag(state, "GPS.GPSTrack=");
       add_exif_tag(state, "GPS.GPSTrackRef=");
 
-      if (gpsdata->online)
+      if (TS_NZ(gpsdata->online))
       {
          if (state->common_settings.verbose)
             fprintf(stderr, "Adding GPS EXIF\n");
          if (gpsdata->set & TIME_SET)
          {
-            rawtime = gpsdata->fix.time;
+            rawtime = gpsdata->fix.time.tv_sec;
             timeinfo = localtime(&rawtime);
             strftime(time_buf, sizeof(time_buf), "%Y:%m:%d", timeinfo);
             snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSDateStamp=%s", time_buf);
