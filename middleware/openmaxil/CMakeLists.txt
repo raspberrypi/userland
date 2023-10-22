@@ -49,4 +49,4 @@ else ()
 
 endif ()
 
-install (TARGETS openmaxil DESTINATION lib)
+install (TARGETS openmaxil DESTINATION ${LIBDIR})
