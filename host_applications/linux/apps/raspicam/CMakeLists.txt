@@ -67,5 +67,5 @@ target_link_libraries(raspivid   ${MMAL_LIBS} vcos bcm_host m)
 target_link_libraries(raspividyuv   ${MMAL_LIBS} vcos bcm_host m)
 
 install(TARGETS raspistill raspiyuv raspivid raspividyuv RUNTIME DESTINATION bin)
-install(FILES raspistill.1 raspiyuv.1 raspivid.1 raspividyuv.1 DESTINATION man/man1)
-install(FILES raspicam.7 DESTINATION man/man7)
+install(FILES raspistill.1 raspiyuv.1 raspivid.1 raspividyuv.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
+install(FILES raspicam.7 DESTINATION ${CMAKE_INSTALL_MANDIR}/man7)

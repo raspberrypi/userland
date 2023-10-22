@@ -18,4 +18,4 @@ add_executable(dtmerge dtmerge.c)
 target_link_libraries(dtmerge dtovl)
 
 install(TARGETS dtmerge RUNTIME DESTINATION bin)
-install(FILES dtmerge.1 DESTINATION man/man1)
+install(FILES dtmerge.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
