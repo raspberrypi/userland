@@ -154,7 +154,7 @@ void show_usage()
    puts( "  -1    problem with VCHI" );
    puts( "  -2    VideoCore returned an error\n" );
    puts( "For further documentation please see" );
-   puts( "https://www.raspberrypi.org/documentation/computers/os.html#vcgencmd\n" );
+   puts( "https://www.raspberrypi.com/documentation/computers/os.html#vcgencmd\n" );
 }
 
 int main( int argc, char **argv )
