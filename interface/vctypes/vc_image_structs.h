@@ -34,8 +34,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/vcos/vcos_stdint.h"
 #include "interface/vcos/vcos_attr.h"
 
-#include "helpers/debug_utils/debug_writer.h"
-
 #include "interface/vctypes/vc_image_types.h"
 
    /* Format specific infos for vc images */
@@ -243,15 +241,6 @@ unsigned int cube_map           : 1;
       of VC_IMAGE_T is *not* 64 bytes, which is a problem ... */
    typedef int vc_image_t_size_check[(sizeof(VC_IMAGE_T) == 64) * 2 - 1];
 #endif
-
-/******************************************************************************
- Debugging rules (defined in camera_debug.c)
- *****************************************************************************/
-extern DEBUG_WRITE_ENUM_LOOKUP_T vc_image_type_lookup[];
-extern DEBUG_WRITE_ENUM_LOOKUP_T vc_image_bayer_order_lookup[];
-extern DEBUG_WRITE_ENUM_LOOKUP_T vc_image_bayer_format_lookup[];
-extern DEBUG_WRITE_RULE_T vc_image_info_rule[];
-extern DEBUG_WRITE_RULE_T vc_image_rule[];
 
 #endif /* __VC_INCLUDE_IMAGE_TYPES_H__ */
 
