@@ -15,8 +15,6 @@ add_subdirectory(apps/dtmerge)
 
 if(ALL_APPS)
  add_subdirectory(apps/vcdbg)
- add_subdirectory(libs/elftoolchain)
- # add_subdirectory(apps/smct)
  add_subdirectory(apps/edid_parser)
  add_subdirectory(apps/hello_pi)
 endif()
