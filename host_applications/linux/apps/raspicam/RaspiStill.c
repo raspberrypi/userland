@@ -57,6 +57,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <unistd.h>
 #include <errno.h>
 #include <sysexits.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -254,6 +257,16 @@ static struct
 
 static int next_frame_description_size = sizeof(next_frame_description) / sizeof(next_frame_description[0]);
 
+/**
+ * Handler for sigusr1 signals
+ *
+ * @param signal_number ID of incoming signal.
+ *
+ */
+static void sigusr1_handler(int signal_number)
+{
+   vcos_semaphore_post(&signal_semaphore);
+}
 
 /**
  * Assign a default set of parameters to the state passed in
@@ -605,7 +618,8 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
       case CommandSignal:   // Set SIGUSR1 & SIGUSR2 between capture mode
          state->frameNextMethod = FRAME_NEXT_SIGNAL;
          // Reenable the signal
-         signal(SIGUSR1, default_signal_handler);
+         //signal(SIGUSR1, default_signal_handler);
+         signal(SIGUSR1, sigusr1_handler);
          signal(SIGUSR2, default_signal_handler);
 
          if (state->timeout == -1)
@@ -1399,8 +1413,22 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag)
  * @return Returns a MMAL_STATUS_T giving result of operation
 */
 
-MMAL_STATUS_T create_filenames(char** finalName, char** tempName, char * pattern, int frame)
+MMAL_STATUS_T create_filenames(char **finalName, char **tempName, char *pattern, int frame)
 {
+   //pattern contains full path!
+   char *dirc, *basec, *bname, *dname;
+
+   dirc = strdup(pattern);
+   basec = strdup(pattern);
+   dname = dirname(dirc);
+   bname = basename(basec);
+
+   struct stat st = {0};
+
+   //create folder, if not exists
+   if (stat(dname, &st) == -1)
+      mkdir(dname, 0777);
+
    *finalName = NULL;
    *tempName = NULL;
    if (0 > asprintf(finalName, pattern, frame) ||
@@ -1412,6 +1440,60 @@ MMAL_STATUS_T create_filenames(char** finalName, char** tempName, char * pattern
       }
       return MMAL_ENOMEM;    // It may be some other error, but it is not worth getting it right
    }
+   return MMAL_SUCCESS;
+}
+
+MMAL_STATUS_T create_filenames_datetime(char **finalName, char **tempName, char *pattern)
+{
+   //pattern contains full path!
+   char *dirc, *basec, *bname, *dname;
+
+   dirc = strdup(pattern);
+   basec = strdup(pattern);
+   dname = dirname(dirc);
+   bname = basename(basec);
+
+   struct stat st = {0};
+
+   //create folder, if not exists
+   if (stat(dname, &st) == -1)
+   {
+      mode_t target_mode = 0777;
+      if (mkdir(dname, target_mode) == 0)
+         chmod(dname, target_mode);
+   }
+
+   *finalName = NULL;
+   *tempName = NULL;
+
+   time_t rawtime;
+   struct tm *timeinfo;
+
+   struct timespec now;
+   clock_gettime(CLOCK_REALTIME, &now);
+   const struct tm *tms = localtime(&now.tv_sec);
+
+   time(&rawtime);
+   timeinfo = localtime(&rawtime);
+
+   *finalName = malloc(100);
+   *tempName = malloc(100);
+
+   sprintf(*tempName, "img_%04d%02d%02d_%02d%02d%02d_%04d.jpg", timeinfo->tm_year + 1900, timeinfo->tm_mon + 1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec, ((int)now.tv_nsec / 1000000));
+
+   strcpy(*finalName, dname);
+   strcat(*finalName, "/");
+   strcat(*finalName, *tempName);
+
+   if (0 > asprintf(tempName, "%s~", *finalName))
+   {
+      if (*finalName != NULL)
+      {
+         free(*finalName);
+      }
+      return MMAL_ENOMEM; // It may be some other error, but it is not worth getting it right
+   }
+
    return MMAL_SUCCESS;
 }
 
@@ -1530,9 +1612,13 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
       // This could probably be tuned down.
       // First frame has a much longer delay to ensure we get exposure to a steady state
       if (*frame == 0)
-         vcos_sleep(CAMERA_SETTLE_TIME);
+      {
+         //vcos_sleep(CAMERA_SETTLE_TIME);
+      }
       else
-         vcos_sleep(30);
+      {
+         //vcos_sleep(30);
+      }
 
       *frame+=1;
 
@@ -1558,14 +1644,17 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
 
       // We are multi threaded because we use mmal, so need to use the pthread
       // variant of procmask to block until a SIGUSR1 or SIGUSR2 signal appears
-      pthread_sigmask( SIG_BLOCK, &waitset, NULL );
+
+      //      pthread_sigmask( SIG_BLOCK, &waitset, NULL );
 
       if (state->common_settings.verbose)
       {
          fprintf(stderr, "Waiting for SIGUSR1 to initiate capture and continue or SIGUSR2 to capture and exit\n");
       }
 
-      result = sigwait( &waitset, &sig );
+      //      result = sigwait( &waitset, &sig );
+
+      vcos_semaphore_wait(&signal_semaphore);
 
       if (result == 0)
       {
@@ -1780,6 +1869,10 @@ int main(int argc, const char **argv)
 
          vcos_assert(vcos_status == VCOS_SUCCESS);
 
+         vcos_status = vcos_semaphore_create(&signal_semaphore, "RaspiStill-signal-sem", 0);
+
+         vcos_assert(vcos_status == VCOS_SUCCESS);
+
          /* If GL preview is requested then start the GL threads */
          if (state.useGL && (raspitex_start(&state.raspitex_state) != 0))
             goto error;
@@ -1808,12 +1901,14 @@ int main(int argc, const char **argv)
             char *use_filename = NULL;      // Temporary filename while image being written
             char *final_filename = NULL;    // Name that file gets once writing complete
 
-            frame = state.frameStart - 1;
+            //frame = state.frameStart - 1;
+            frame = state.frameStart;
 
             while (keep_looping)
             {
                keep_looping = wait_for_next_frame(&state, &frame);
 
+               /*            moved to create filenames datetime
                if (state.datetime)
                {
                   time_t rawtime;
@@ -1832,6 +1927,7 @@ int main(int argc, const char **argv)
                   frame *= 100;
                   frame += timeinfo->tm_sec;
                }
+*/
                if (state.timestamp)
                {
                   frame = (int)time(NULL);
@@ -1847,8 +1943,16 @@ int main(int argc, const char **argv)
                   else
                   {
                      vcos_assert(use_filename == NULL && final_filename == NULL);
-                     status = create_filenames(&final_filename, &use_filename, state.common_settings.filename, frame);
-                     if (status  != MMAL_SUCCESS)
+                     if (state.datetime)
+                     {
+                        status = create_filenames_datetime(&final_filename, &use_filename, state.common_settings.filename);
+                     }
+                     else
+                     {
+                        status = create_filenames(&final_filename, &use_filename, state.common_settings.filename, frame);
+                     }
+
+                     if (status != MMAL_SUCCESS)
                      {
                         vcos_log_error("Unable to create filenames");
                         goto error;
@@ -2069,5 +2173,4 @@ error:
 
    return exit_code;
 }
-
 
