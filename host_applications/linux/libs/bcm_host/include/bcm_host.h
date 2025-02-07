@@ -43,8 +43,19 @@ int32_t graphics_get_display_size( const uint16_t display_number,
                                                     uint32_t *width,
                                                     uint32_t *height);
 
+/* These functions refer to the peripherals that all Pi's share,
+ * which may differ from the physical peripheral address on the
+ * peripheral datasheet. For example, on the BCM2711,
+ * bcm_host_get_peripheral_address() returns a value 0x0200_0000 bytes higher
+ * than the "main peripheral" physical addresses from its datasheet.
+ * On the BCM2711, this is because the first 0x0200_0000 bytes in the "main
+ * peripherals" block are reserved for BCM2711-specific addresses.
+ * Source:
+ * https://github.com/raspberrypi/linux/blob/a90998a3e549911234f9f707050858b98b71360f/arch/arm/boot/dts/bcm2711.dtsi#L34
+ */
 unsigned bcm_host_get_peripheral_address(void);
 unsigned bcm_host_get_peripheral_size(void);
+
 unsigned bcm_host_get_sdram_address(void);
 
 #include "interface/vmcs_host/vc_dispmanx.h"
