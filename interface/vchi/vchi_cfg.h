@@ -40,7 +40,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /* Required alignment of base addresses for bulk transfer, if unaligned transfers are not enabled */
 /* Really determined by the message driver, and should be available from a run-time call. */
 #ifndef VCHI_BULK_ALIGN
-#   if __VCCOREVER__ >= 0x04000000
+#   if defined(__VCCOREVER__) && __VCCOREVER__ >= 0x04000000
 #       define VCHI_BULK_ALIGN 32 // Allows for the need to do cache cleans
 #   else
 #       define VCHI_BULK_ALIGN 16
@@ -51,7 +51,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /* May be less than or greater than VCHI_BULK_ALIGN */
 /* Really determined by the message driver, and should be available from a run-time call. */
 #ifndef VCHI_BULK_GRANULARITY
-#   if __VCCOREVER__ >= 0x04000000
+#   if defined(__VCCOREVER__) && __VCCOREVER__ >= 0x04000000
 #       define VCHI_BULK_GRANULARITY 32 // Allows for the need to do cache cleans
 #   else
 #       define VCHI_BULK_GRANULARITY 16
