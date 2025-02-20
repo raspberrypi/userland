@@ -40,7 +40,7 @@ set (COMMON_SOURCES
    RaspiGPS.c
    libgps_loader.c)
 
-if(NOT ARM64)
+if(NOT ARM64 AND NOT AMD64)
   set (EGL_LIBS brcmGLESv2 brcmEGL)
   set (EGL_SOURCES RaspiTex.c RaspiTexUtil.c tga.c)
   set (GL_SCENE_SOURCES
