@@ -19,5 +19,5 @@ add_library(bcm_host ${SHARED} bcm_host.c)
 
 target_link_libraries(bcm_host vcos vchostif)
 
-install(TARGETS bcm_host DESTINATION lib)
+install(TARGETS bcm_host DESTINATION ${LIBDIR})
 

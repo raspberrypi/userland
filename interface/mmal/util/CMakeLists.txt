@@ -12,7 +12,7 @@ add_library (mmal_util ${LIBRARY_TYPE}
 
 target_link_libraries (mmal_util vcos)
 
-install(TARGETS mmal_util DESTINATION lib)
+install(TARGETS mmal_util DESTINATION ${LIBDIR})
 install(FILES
    mmal_component_wrapper.h
    mmal_connection.h

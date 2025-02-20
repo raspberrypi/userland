@@ -16,7 +16,7 @@ add_subdirectory(client)
 
 target_link_libraries(mmal mmal_core mmal_util mmal_vc_client vcos mmal_components)
 
-install(TARGETS mmal DESTINATION lib)
+install(TARGETS mmal DESTINATION ${LIBDIR})
 install(FILES
    mmal.h
    mmal_buffer.h
