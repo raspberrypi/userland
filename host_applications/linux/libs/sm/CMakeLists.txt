@@ -14,5 +14,5 @@ add_library(vcsm ${SHARED} user-vcsm.c)
 
 target_link_libraries(vcsm vcos)
 
-install(TARGETS vcsm DESTINATION lib)
+install(TARGETS vcsm DESTINATION ${LIBDIR})
 install(FILES user-vcsm.h DESTINATION include/interface/vcsm)

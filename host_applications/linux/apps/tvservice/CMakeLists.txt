@@ -4,4 +4,4 @@ target_link_libraries(tvservice vchostif bcm_host)
 
 install(TARGETS tvservice
         RUNTIME DESTINATION bin)
-install(FILES tvservice.1 DESTINATION man/man1)
+install(FILES tvservice.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)

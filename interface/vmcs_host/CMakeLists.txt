@@ -32,5 +32,5 @@ target_link_libraries(vchostif vchiq_arm vcos)
 
 #target_link_libraries(bufman WFC)
 
-install(TARGETS ${INSTALL_TARGETS} DESTINATION lib)
+install(TARGETS ${INSTALL_TARGETS} DESTINATION ${LIBDIR})
 

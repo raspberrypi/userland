@@ -43,4 +43,4 @@ endif ()
 
 
 #install(FILES ${HEADERS} DESTINATION include)
-install(TARGETS vcos DESTINATION lib)
+install(TARGETS vcos DESTINATION ${LIBDIR})
