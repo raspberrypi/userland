@@ -58,7 +58,7 @@ struct sync_job_s {
 
 struct gpu_callback_s {
   // callback to call when complete (can be NULL)
-  void (*func)();
+  void (*func)(void*);
   void *cookie;
 };
 
