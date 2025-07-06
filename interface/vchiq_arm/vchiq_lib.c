@@ -537,7 +537,7 @@ vchiq_bulk_receive_handle(VCHIQ_SERVICE_HANDLE_T handle,
    int size,
    void *userdata,
    VCHIQ_BULK_MODE_T mode,
-   int (*copy_pagelist)())
+   int (*copy_pagelist)(char *vcptr, const struct pagelist_struct *pagelist))
 {
    VCHIQ_SERVICE_T *service = find_service_by_handle(handle);
    VCHIQ_QUEUE_BULK_TRANSFER_T args;
